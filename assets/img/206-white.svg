@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" role="img" aria-labelledby="title desc">
+  <title id="title">Stylized white Peugeot 206 hatchback</title>
+  <desc id="desc">A custom vector illustration of a white compact hatchback on a dark, cinematic background.</desc>
+  <defs>
+    <linearGradient id="paint" x1="0" y1="0" x2="0.12" y2="1"><stop stop-color="#fff"/><stop offset=".36" stop-color="#e8edf4"/><stop offset=".72" stop-color="#aebbc9"/><stop offset="1" stop-color="#eef3f7"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9ae7ff"/><stop offset=".34" stop-color="#22384e"/><stop offset="1" stop-color="#0a1220"/></linearGradient>
+    <linearGradient id="tire" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#343b48"/><stop offset=".55" stop-color="#06080d"/><stop offset="1" stop-color="#252c37"/></linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#1be1ff" stop-opacity="0"/><stop offset=".5" stop-color="#1be1ff" stop-opacity=".36"/><stop offset="1" stop-color="#1be1ff" stop-opacity="0"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-40%" width="140%" height="190%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+  <ellipse cx="510" cy="376" rx="365" ry="28" fill="#020610" opacity=".9" filter="url(#shadow)"/>
+  <ellipse cx="510" cy="375" rx="340" ry="8" fill="url(#floor)"/>
+  <g transform="translate(52 12)">
+    <path d="M113 284 131 238 185 217 249 151Q270 126 307 123L539 118Q577 118 600 143L661 202 755 228Q795 239 812 275L823 307Q826 321 810 328L77 330Q57 326 67 306L80 292Z" fill="#121b29" opacity=".8"/>
+    <path d="M124 273 147 237 199 218 265 156Q282 139 308 137L534 132Q566 132 585 152L646 211 747 235Q777 242 791 272L801 299Q805 312 786 319L93 320Q76 317 84 300Z" fill="url(#paint)" stroke="#f8fbff" stroke-width="4"/>
+    <path d="M276 158Q289 146 310 145L393 144 393 211 225 211Z" fill="url(#glass)" stroke="#8a9aab" stroke-width="3"/>
+    <path d="M409 144 530 142Q556 142 572 160L620 211 409 211Z" fill="url(#glass)" stroke="#8a9aab" stroke-width="3"/>
+    <path d="M395 143 395 282" stroke="#657487" stroke-width="4" opacity=".7"/>
+    <path d="M624 216 739 241Q766 248 779 270L692 268 658 247Z" fill="#d0d8e2" opacity=".6"/>
+    <path d="M110 279 83 295Q79 305 91 307L132 306 148 285Z" fill="#1d2938"/>
+    <path d="M111 281 145 278 132 298 91 300Z" fill="#e5f7ff" stroke="#7bdcff" stroke-width="2"/>
+    <path d="M103 287 139 284" stroke="#fff" stroke-width="4" filter="url(#glow)"/>
+    <path d="M739 249 780 263 790 280 755 280Z" fill="#f4fbff" stroke="#c6d3e1" stroke-width="2"/>
+    <path d="M746 254 780 266" stroke="#ff5b77" stroke-width="5"/>
+    <path d="M157 239 222 226 640 225 704 242" fill="none" stroke="#ffffff" stroke-width="4" opacity=".6"/>
+    <path d="M195 316 731 316" stroke="#8a99a9" stroke-width="4" opacity=".6"/>
+    <path d="M274 230 265 275M565 229 588 275" stroke="#758397" stroke-width="3"/>
+    <path d="M338 237h63M341 242h55" stroke="#95a1b0" stroke-width="3" stroke-linecap="round"/>
+    <path d="M451 239h62M454 244h56" stroke="#95a1b0" stroke-width="3" stroke-linecap="round"/>
+    <path d="M96 307 784 308" stroke="#faffff" stroke-width="3" opacity=".8"/>
+    <g transform="translate(235 303)">
+      <circle r="53" fill="url(#tire)" stroke="#526070" stroke-width="4"/>
+      <circle r="37" fill="#c2ccd8" stroke="#f3f8fc" stroke-width="4"/>
+      <circle r="28" fill="#536273"/>
+      <circle r="21" fill="#dce4ec"/>
+      <circle r="7" fill="#576779"/>
+      <g stroke="#66768a" stroke-width="5" stroke-linecap="round"><path d="M0-24V-10M0 10V24M-24 0h14M10 0h14M-17-17l10 10M7 7l10 10M17-17 7-7M-7 7l-10 10"/></g>
+    </g>
+    <g transform="translate(665 303)">
+      <circle r="53" fill="url(#tire)" stroke="#526070" stroke-width="4"/>
+      <circle r="37" fill="#c2ccd8" stroke="#f3f8fc" stroke-width="4"/>
+      <circle r="28" fill="#536273"/>
+      <circle r="21" fill="#dce4ec"/>
+      <circle r="7" fill="#576779"/>
+      <g stroke="#66768a" stroke-width="5" stroke-linecap="round"><path d="M0-24V-10M0 10V24M-24 0h14M10 0h14M-17-17l10 10M7 7l10 10M17-17 7-7M-7 7l-10 10"/></g>
+    </g>
+    <path d="M156 266Q180 258 200 260M584 263Q612 259 636 265" stroke="#fff" stroke-width="3" opacity=".5"/>
+    <path d="M167 326Q213 342 276 334M610 334Q668 342 721 325" stroke="#1f2937" stroke-width="5" opacity=".65"/>
+  </g>
+</svg>

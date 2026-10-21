@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d17">
+  <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
+  <title>206 Garage · دفتر هوشمند خودرو</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/206-white.svg">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script defer src="assets/js/app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <div class="grid-floor" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="topbar container">
+    <a class="brand" href="#top" aria-label="206 Garage home">
+      <span class="brand-mark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5 29.5 9 21l8-3 6-7h9l7 8 4 3 1 8-4 3H8z"/><path d="M13 21h9v-6m3 6h10l-5-6h-5"/><circle cx="15" cy="32" r="4"/><circle cx="34" cy="32" r="4"/></svg></span>
+      <span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>PERSONAL VEHICLE OS</small></span>
+    </a>
+    <nav class="top-nav" aria-label="ناوبری اصلی">
+      <a href="#overview">نمای کلی</a><a href="#maintenance">سرویس‌ها</a><a href="#analytics">تحلیل هزینه</a><a href="#activity">دفتر وقایع</a>
+    </nav>
+    <div class="top-actions">
+      <span id="connectionBadge" class="status-badge"><i></i> در حال اتصال</span>
+      <button id="refreshButton" class="icon-button" type="button" aria-label="تازه‌سازی داده‌ها" title="تازه‌سازی"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.7-2L20 12M4 12l2.2 5a7 7 0 0 0 11.7-2"/></svg></button>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <section class="hero panel" id="overview">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR CAR. EVERY DETAIL. ONE TIMELINE.</div>
+        <h1>دفتر هوشمند<br><span>پژو ۲۰۶</span></h1>
+        <p class="hero-lead">هر کیلومتر، هر لیتر، هر سرویس و هر هزینه؛ ثبت‌شده در تلگرام، مرتب در گیت‌هاب، قابل بررسی در یک داشبورد زنده.</p>
+        <div class="hero-tags"><span>PEUGEOT</span><span>206 TYPE 2</span><span>MODEL YEAR 1387</span><span class="tag-live"><i></i> TELEGRAM LINK</span></div>
+        <div class="hero-actions"><a class="primary-button" href="#activity"><span>⌁</span> مشاهده دفتر وقایع</a><button class="secondary-button" id="copyHelpButton" type="button">کپی نمونه دستورها <span>↗</span></button></div>
+        <div class="hero-meta"><span class="tiny-pulse"></span><span id="lastUpdated">در انتظار اولین ثبت اطلاعات</span><span class="meta-divider"></span><span>زمان محلی: ایران · Asia/Tehran</span></div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-orbit orbit-a"></div><div class="hero-orbit orbit-b"></div>
+        <div class="visual-chip chip-top"><span class="chip-icon">◉</span><span><small>VEHICLE STATUS</small><b>MONITORING</b></span></div>
+        <img class="car-art" src="assets/img/206-white.svg" alt="تصویر برداری‌شده از یک پژو ۲۰۶ سفید" fetchpriority="high">
+        <div class="visual-caption"><span class="caption-label">VEHICLE PROFILE</span><strong>PEUGEOT 206 <em>II</em></strong><span class="caption-line"></span><small>WHITE · HATCHBACK · 1387</small></div>
+        <div class="visual-chip chip-bottom"><span class="chip-ring">✓</span><span><small>DATA PIPELINE</small><b>TELEGRAM → GITHUB</b></span></div>
+        <div class="visual-coordinate">REMOTE TELEMETRY <span>·</span> GARAGE / 01</div>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="overviewTitle">
+      <div class="section-heading"><div><span class="section-kicker">LIVE SNAPSHOT / 01</span><h2 id="overviewTitle">نمای کلی خودرو</h2></div><span class="section-note">محاسبه‌شده از رویدادهای ثبت‌شده</span></div>
+      <div class="stats-grid">
+        <article class="stat-card stat-odometer hover-tilt"><div class="stat-top"><span class="stat-label">کارکرد فعلی</span><span class="stat-icon icon-cyan">⌁</span></div><div class="stat-value" id="statOdometer">—</div><div class="stat-unit">کیلومتر</div><div class="stat-foot"><span class="mini-dot cyan"></span><span id="statOdometerFoot">ابتدا کیلومترشمار را ثبت کن</span></div><div class="stat-decoration">KM</div></article>
+        <article class="stat-card hover-tilt"><div class="stat-top"><span class="stat-label">هزینه ماه جاری</span><span class="stat-icon icon-violet">◈</span></div><div class="stat-value compact" id="statCost">—</div><div class="stat-unit">تومان</div><div class="stat-foot"><span class="mini-dot violet"></span><span id="statCostFoot">شامل هزینه‌های ثبت‌شده</span></div><div class="stat-decoration">IRR</div></article>
+        <article class="stat-card hover-tilt"><div class="stat-top"><span class="stat-label">سوخت ماه جاری</span><span class="stat-icon icon-orange">⛽</span></div><div class="stat-value" id="statFuel">—</div><div class="stat-unit">لیتر بنزین</div><div class="stat-foot"><span class="mini-dot orange"></span><span id="statFuelFoot">— بار سوخت‌گیری</span></div><div class="stat-decoration">L</div></article>
+        <article class="stat-card hover-tilt"><div class="stat-top"><span class="stat-label">وضعیت نگهداری</span><span class="stat-icon icon-green">✳</span></div><div class="stat-value" id="statDue">—</div><div class="stat-unit">موعد نزدیک یا عقب‌افتاده</div><div class="stat-foot"><span class="mini-dot green"></span><span id="statDueFoot">بر اساس سرویس‌های ثبت‌شده</span></div><div class="stat-decoration">CARE</div></article>
+      </div>
+    </section>
+
+    <section class="section-block" id="maintenance" aria-labelledby="maintenanceTitle">
+      <div class="section-heading"><div><span class="section-kicker">PREVENTIVE CARE / 02</span><h2 id="maintenanceTitle">تقویم نگهداری و مصرفی‌ها</h2></div><span class="section-note">پیشرفت تا سرویس بعدی</span></div>
+      <div id="serviceGrid" class="service-grid"><div class="empty-state shimmer">در حال محاسبه موعد سرویس‌ها…</div></div>
+      <div class="notice-strip"><span class="notice-symbol">i</span><p>بازه‌های اولیه در فایل <code>data/config.json</code> قابل تغییرند و از دفترچه دقیق خودرو یا وضعیت واقعی قطعه معتبرتر نیستند. برای تسمه تایم، ترمز، لاستیک و موارد ایمنی، تأیید تعمیرکار را در اولویت بگذار.</p></div>
+    </section>
+
+    <section class="section-block" id="analytics" aria-labelledby="analyticsTitle">
+      <div class="section-heading"><div><span class="section-kicker">COST INTELLIGENCE / 03</span><h2 id="analyticsTitle">تحلیل هزینه و رانندگی</h2></div><div class="range-switch" role="group" aria-label="بازه نمودار"><button class="range-button active" data-range="6" type="button">۶ ماه</button><button class="range-button" data-range="12" type="button">۱۲ ماه</button></div></div>
+      <div class="analytics-grid">
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">MONTHLY EXPENSES</span><h3>هزینه‌های ماهانه</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="costChart" class="chart-wrap"><div class="empty-state">با ثبت هزینه‌ها، نمودار اینجا ساخته می‌شود.</div></div><div class="chart-footer"><span>مجموع بازه انتخابی</span><strong id="costChartTotal">—</strong></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">FUEL & DISTANCE</span><h3>سوخت و مسافت ثبت‌شده</h3></div><span class="chart-tag chart-tag-cyan"><i></i> L / KM</span></div><div id="fuelChart" class="chart-wrap"><div class="empty-state">هنوز داده‌ای برای تحلیل سوخت وجود ندارد.</div></div><div class="chart-footer"><span>سوخت در بازه انتخابی</span><strong id="fuelChartTotal">—</strong></div></article>
+      </div>
+      <div class="insights-grid">
+        <article class="insight-card panel"><div class="insight-icon">⛽</div><div><span class="card-overline">FUEL INTELLIGENCE</span><h3>مصرف واقعی سوخت</h3><p id="fuelInsight">برای به‌دست‌آوردن مصرف تقریبی در لیتر بر ۱۰۰ کیلومتر، حداقل دو سوخت‌گیری با علامت «باک کامل» و کیلومتر ثبت‌شده لازم است.</p></div></article>
+        <article class="insight-card panel"><div class="insight-icon purple">◈</div><div><span class="card-overline">COST BREAKDOWN</span><h3>بیشترین دسته هزینه</h3><p id="topCostInsight">پس از ثبت چند هزینه، پرتکرارترین دسته هزینه نمایش داده می‌شود.</p></div></article>
+        <article class="insight-card panel"><div class="insight-icon green">↗</div><div><span class="card-overline">DRIVING SUMMARY</span><h3>الگوی رانندگی</h3><p id="driveInsight">مسافت‌ها را با «امروز ۴۰ کیلومتر رانندگی کردم» یا دستور /trip ثبت کن.</p></div></article>
+      </div>
+    </section>
+
+    <section class="section-block" id="activity" aria-labelledby="activityTitle">
+      <div class="section-heading"><div><span class="section-kicker">VEHICLE JOURNAL / 04</span><h2 id="activityTitle">دفتر وقایع خودرو</h2></div><div class="export-actions"><button id="exportCsv" class="secondary-button small" type="button">خروجی CSV <span>↓</span></button><button id="exportJson" class="secondary-button small" type="button">خروجی JSON <span>↓</span></button></div></div>
+      <div class="journal-panel panel">
+        <div class="journal-toolbar"><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="searchInput" type="search" placeholder="جست‌وجو در توضیحات، هزینه‌ها، سرویس‌ها…" autocomplete="off"></label><label class="filter-select"><span>نوع رویداد</span><select id="typeFilter"><option value="all">همه رویدادها</option><option value="odometer">کیلومترشمار</option><option value="trip">مسافت</option><option value="fuel">سوخت‌گیری</option><option value="service">سرویس</option><option value="part">قطعه</option><option value="expense">هزینه</option><option value="fine">جریمه</option><option value="wash">کارواش</option><option value="issue">خرابی</option><option value="repair">تعمیر</option><option value="note">یادداشت</option></select></label><label class="filter-select month-select"><span>ماه</span><select id="monthFilter"><option value="all">تمام ماه‌ها</option></select></label></div>
+        <div class="journal-summary"><span id="resultCount">۰ رویداد</span><span id="journalRange">همه اطلاعات ثبت‌شده در مخزن GitHub</span></div>
+        <div id="eventList" class="event-list"><div class="empty-state">هنوز رویدادی ثبت نشده است. بعد از اتصال ربات، هر پیام ثبت‌شده اینجا ظاهر می‌شود.</div></div>
+        <div class="journal-bottom"><span id="journalBottomNote">داده‌های جدید با تازه‌سازی یا بارگیری مجدد صفحه نمایش داده می‌شوند.</span><button id="loadMoreButton" class="secondary-button small" type="button" hidden>نمایش بیشتر <span>⌄</span></button></div>
+      </div>
+    </section>
+
+    <section class="section-block two-column-block" aria-label="جریمه‌ها و خرابی‌ها">
+      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">TRAFFIC / 05</span><h2>وضعیت جریمه‌ها</h2></div><span class="mini-heading-icon orange">!</span></div><div id="fineSummary" class="mini-list"><div class="empty-state">جریمه‌ای ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="fineTotals">مجموع بدهی: —</span><span class="tag-outline">FINE TRACKER</span></div></article>
+      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">REPAIR LOG / 06</span><h2>خرابی‌ها و تعمیرات</h2></div><span class="mini-heading-icon red">⌁</span></div><div id="issueSummary" class="mini-list"><div class="empty-state">خرابی ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="issueTotals">خرابی باز: —</span><span class="tag-outline">MAINTENANCE LOG</span></div></article>
+    </section>
+
+    <section class="section-block workflow-banner panel">
+      <div class="workflow-mark"><span>↳</span><div class="workflow-dot dot-telegram">✈</div><div class="workflow-connector"></div><div class="workflow-dot dot-github">⌘</div><div class="workflow-connector"></div><div class="workflow-dot dot-pages">▧</div></div>
+      <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
+      <a class="secondary-button" href="#top">بازگشت به بالا ↑</a>
+    </section>
+
+    <footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span></div><span class="footer-version">GARAGE OS <b>v1.0.0</b></span></footer>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>
+</body>
+</html>

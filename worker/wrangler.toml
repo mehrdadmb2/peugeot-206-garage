@@ -1,0 +1,16 @@
+name = "peugeot-206-garage-bot"
+main = "src/index.js"
+compatibility_date = "2026-10-21"
+workers_dev = true
+
+[vars]
+GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
+GITHUB_REPO = "peugeot-206-garage"
+GITHUB_BRANCH = "main"
+
+[triggers]
+# 06:00 Tehran is 02:30 UTC (Iran currently uses UTC+03:30 without seasonal clock changes).
+crons = ["30 2 * * *"]
+
+[observability]
+enabled = true
