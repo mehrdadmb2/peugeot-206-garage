@@ -1,94 +1,102 @@
-# 🚘 206 Garage — Peugeot 206 Vehicle OS
+# 🚘 206 Garage — Peugeot 206 SD Vehicle OS
 
-**Your personal vehicle log, maintenance tracker, fuel monitor, and expense dashboard.**
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-dashboard-40e5f4?style=for-the-badge&logo=github)](https://mehrdadmb2.github.io/peugeot-206-garage/)
+[![Cloudflare Workers](https://img.shields.io/badge/API-Cloudflare%20Workers-f38020?style=for-the-badge&logo=cloudflare)](https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-%40Peugeot206GarageBot-26a5e4?style=for-the-badge&logo=telegram)](https://t.me/Peugeot206GarageBot)
+[![Request Driven](https://img.shields.io/badge/Runtime-request--driven-16a34a?style=for-the-badge)](#request-driven-design)
 
-206 Garage is a Telegram-powered vehicle management system built for a Peugeot 206 Type 2 (2008). It combines a Telegram bot, Cloudflare Workers, GitHub as the event store, and GitHub Pages as a visual dashboard.
+**A personal vehicle journal for the white 2008 Peugeot 206 SD sedan.** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
 
-Record mileage, fuel, maintenance, repairs, fines, and expenses through Telegram. Every successful write is committed to GitHub, and stored events are used to generate reports and calculate maintenance deadlines.
+> Private-use project. Do not store personal routes, home addresses, plate numbers, or secrets in a public repository.
 
-## ✨ Features
+## Table of contents
 
-- **Instant event persistence:** Write vehicle events to GitHub using the Contents API. A successful registration response is sent only after the relevant GitHub writes complete.
-- **Request-driven architecture:** The Worker runs when it receives an HTTP request or Telegram webhook. No Cron trigger is required for normal logging or on-demand reports.
-- **Persian and English input:** Supports Persian and English digits, common vehicle terminology, amounts, and natural-language descriptions.
-- **Odometer tracking:** Record current mileage and trip distances, with estimates based on available readings.
-- **Fuel tracking:** Log liters, price, odometer, and full-tank refueling events. Estimate consumption when sufficient full-tank records exist.
-- **Maintenance management:** Record oil changes, filters, timing-belt work, inspections, and other service events. Configure distance- and time-based intervals.
-- **Repairs and issues:** Register vehicle problems and record their resolution.
-- **Fines and expenses:** Track unpaid fines, record payments, and categorize vehicle spending.
-- **Reports and exports:** Request daily, weekly, or monthly summaries, fuel statistics, upcoming maintenance, recent events, and CSV exports.
-- **Responsive dashboard:** Explore event history, costs, fuel trends, maintenance status, and statistics through GitHub Pages.
-- **Authenticated external API:** Allow authorized applications to submit records or request reports without embedding credentials in the public website.
+- [Architecture](#architecture)
+- [Features](#features)
+- [Repository layout](#repository-layout)
+- [Deploy GitHub Pages](#deploy-github-pages)
+- [Deploy the Worker](#deploy-the-worker)
+- [Connect Telegram webhook without any script file](#connect-telegram-webhook-without-any-script-file)
+- [Bot commands](#bot-commands)
+- [API](#api)
+- [Data model and units](#data-model-and-units)
+- [Troubleshooting](#troubleshooting)
+- [Security](#security)
 
-## 🧱 Architecture
+## Architecture
 
 ```text
-Telegram Bot / External Client
-             |
-             v
-Cloudflare Worker
-  - Request validation
-  - Command parsing
-  - Persian digit normalization
-  - Vehicle calculations
-  - Report generation
-             |
-             v
-GitHub Contents API
-  - data/logs/YYYY-MM.json
-  - data/index.json
-  - data/config.json
-             |
-             v
-GitHub Pages Dashboard
-  - KPIs and charts
-  - Maintenance deadlines
-  - Fuel and expense reports
-  - Journal and exports
+Telegram / authorized HTTP client
+                 |
+                 v
+       Cloudflare Worker
+       parse -> validate -> calculate
+                 |
+                 v
+       GitHub Contents API
+       data/logs/YYYY-MM.json
+       data/index.json
+                 |
+                 v
+       GitHub Pages dashboard
 ```
 
-### Storage model
+## Features
+
+- Responsive Persian-first dashboard with separate views for overview, maintenance, fuel, analytics, expenses, fines/issues, journal, and API/help.
+- Request-driven Worker: no Cron trigger is required for event recording, queries, or on-demand reports.
+- GitHub-backed event persistence; a successful event response is returned only after the write operations complete.
+- Persian and English digits; common Persian/English command aliases.
+- Odometer, trip distance, fuel liters and full-tank flag, cost, service intervals, repairs, fines and payments, washes, notes and CSV export.
+- Jalali-friendly timestamps and `Asia/Tehran` handling.
+- Dashboard refresh, search/filter, charts, and CSV/JSON downloads.
+- Custom sedan illustration and favicon for the 206 SD profile.
+
+## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `data/index.json` | Month index and last-update metadata |
-| `data/logs/YYYY-MM.json` | Vehicle events organized by event month |
-| `data/config.json` | Vehicle details and configurable service intervals |
-| `worker/src/index.js` | Worker routes, Telegram processing, persistence, and reports |
-| `worker/wrangler.toml` | Worker deployment configuration |
-| `worker/scripts/set-webhook.mjs` | Telegram webhook and initial command-menu setup |
-| `worker/tests/worker.test.mjs` | Automated Worker tests |
+| `index.html` | GitHub Pages application shell |
+| `assets/css/style.css` | Responsive styling and animation |
+| `assets/js/app.js` | Dashboard rendering, charts, filters, exports |
+| `assets/img/206-white.svg` | Local 206 SD illustration |
+| `assets/img/favicon.svg` | Browser tab icon |
+| `site.webmanifest` | Installable-site metadata |
+| `data/config.json` | Vehicle profile and editable service intervals |
+| `data/index.json` | List of months available to the dashboard |
+| `data/logs/YYYY-MM.json` | Monthly event log; created by the Worker on first event |
+| `worker/src/index.js` | Worker, Telegram handler, GitHub persistence, API |
+| `worker/wrangler.toml` | Worker name and repository configuration |
+| `worker/package.json` | Test and Wrangler scripts |
+| `worker/tests/worker.test.mjs` | Local route/security tests |
 
-Event files use JSON so that the records remain structured and can be processed by the Worker and dashboard.
+## Deploy GitHub Pages
 
-## 🚀 Deployment
+1. Push the repository contents to the `main` branch. `index.html` must be at the repository root.
+2. Open **Settings → Pages**.
+3. Select **Deploy from a branch**, branch `main`, folder `/(root)`, then Save.
+4. Wait for the Pages deployment to finish.
+5. Open <https://mehrdadmb2.github.io/peugeot-206-garage/> and hard-refresh with `Ctrl+F5`.
+6. Verify that `data/index.json`, `data/config.json`, `assets/img/206-white.svg`, `assets/img/favicon.svg`, `assets/css/style.css`, and `assets/js/app.js` all return HTTP 200 when opened under the Pages URL.
 
-### Requirements
+The dashboard reads static JSON files from the Pages origin. It does not contain GitHub or Telegram tokens. The initial `data/index.json` intentionally contains an empty month list until the first record is committed.
 
-- A GitHub repository with the project files on the `main` branch.
-- Node.js LTS and npm.
-- A Cloudflare account with permission to deploy Workers.
-- A Telegram bot token obtained from [@BotFather](https://t.me/BotFather).
-- A GitHub fine-grained token with `Contents: Read and write` access to this repository.
+## Deploy the Worker
 
-### 1. Install dependencies
+Requirements: supported Node.js LTS, npm, a Cloudflare account, and Wrangler authentication.
 
-Open Windows Command Prompt and navigate to the Worker directory:
+Run these commands in **PowerShell or CMD** from the repository directory:
 
-```cmd
-cd /d "%USERPROFILE%\Documents\peugeot-206-garage\worker"
+```powershell
+cd .\worker
 npm install
 npm test
 npx wrangler login
 ```
 
-Adjust the directory path if the repository is stored elsewhere.
+Configure secrets interactively:
 
-### 2. Configure Worker secrets
-
-Register the following secrets using Wrangler:
-
-```cmd
+```powershell
 npx wrangler secret put GITHUB_TOKEN
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
@@ -96,228 +104,225 @@ npx wrangler secret put ALLOWED_TELEGRAM_USER_ID
 npx wrangler secret put API_ACCESS_TOKEN
 ```
 
-| Secret | Description |
-|---|---|
-| `GITHUB_TOKEN` | GitHub token with permission to read and write repository contents |
-| `TELEGRAM_BOT_TOKEN` | Private token issued by BotFather |
-| `TELEGRAM_WEBHOOK_SECRET` | Random secret used to validate Telegram webhook requests |
-| `ALLOWED_TELEGRAM_USER_ID` | Numeric Telegram user ID permitted to operate the bot |
-| `API_ACCESS_TOKEN` | Separate strong token for external API clients |
+Secret meanings:
 
-Never commit these values to GitHub. Do not include them in `index.html`, dashboard JavaScript, screenshots, or public documentation.
+- `GITHUB_TOKEN`: fine-grained GitHub token restricted to this repository, with **Contents: Read and write**.
+- `TELEGRAM_BOT_TOKEN`: token from BotFather.
+- `TELEGRAM_WEBHOOK_SECRET`: random 32-byte hex value used to validate Telegram's webhook header.
+- `ALLOWED_TELEGRAM_USER_ID`: your numeric Telegram user ID, not your username and not the bot ID.
+- `API_ACCESS_TOKEN`: a different strong token for authorized external API requests.
 
-### 3. Deploy the Worker
+To create a random secret in PowerShell:
 
-```cmd
+```powershell
+[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
+```
+
+Run it twice for two different secrets. Store the first as `TELEGRAM_WEBHOOK_SECRET`, the second as `API_ACCESS_TOKEN`.
+
+Deploy:
+
+```powershell
 npx wrangler deploy
 ```
 
-The deployment URL is shown by Wrangler. The configured Worker name is `peugeot-206-garage-bot`.
+Check the Worker:
 
-### 4. Configure the Telegram webhook
-
-In the same Command Prompt session, from the Worker directory, set the environment variables:
-
-```cmd
-set "BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN"
-set "WORKER_URL=https://peugeot-206-garage-bot.game-developer-mb.workers.dev"
-set "WEBHOOK_SECRET=YOUR_TELEGRAM_WEBHOOK_SECRET"
-node scripts\set-webhook.mjs
+```powershell
+Invoke-RestMethod "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health" | ConvertTo-Json -Depth 6
 ```
 
-Replace the placeholders with actual values. `WEBHOOK_SECRET` must match the secret saved as `TELEGRAM_WEBHOOK_SECRET` in Cloudflare.
+A healthy response should report `ok: true`, `mode: request-driven`, and configured booleans. These booleans indicate whether secret values are present, not whether credentials are valid against external services.
 
-A successful script response confirms that Telegram accepted the webhook configuration and command-menu setup.
+## Connect Telegram webhook without any script file
 
-### 5. Publish GitHub Pages
+**Important:** use a plain URL. Do not include Markdown link syntax such as `[https://...](https://...)` in a variable. That syntax is documentation formatting, not part of the URL, and can cause Telegram to reject the webhook with a DNS resolution error.
 
-In the repository, open **Settings → Pages**.
+Open PowerShell and paste the complete block below. It does not create or require any file. Enter the real BotFather token and the exact `TELEGRAM_WEBHOOK_SECRET` value saved in Cloudflare when prompted.
 
-Choose `Deploy from a branch`, then select:
+```powershell
+$tokenSecure = Read-Host "BotFather bot token" -AsSecureString
+$BOT_TOKEN = [System.Net.NetworkCredential]::new("", $tokenSecure).Password
+$secretSecure = Read-Host "Exact TELEGRAM_WEBHOOK_SECRET from Cloudflare" -AsSecureString
+$WEBHOOK_SECRET = [System.Net.NetworkCredential]::new("", $secretSecure).Password
+$WORKER_URL = "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/telegram"
 
-- Branch: `main`
-- Folder: `/(root)`
+if ($WEBHOOK_SECRET -notmatch '^[A-Za-z0-9_-]{1,256}$') { throw "Invalid Telegram webhook secret format." }
 
-Save the configuration. The entry point `index.html` must be located at the repository root.
+# Check that the Worker host resolves from this computer before asking Telegram to register it.
+$workerHost = ([uri]$WORKER_URL).DnsSafeHost
+Resolve-DnsName $workerHost -ErrorAction Stop | Select-Object Name, Type, IPAddress
 
-The expected project URL is:
+$payload = @{
+  url = $WORKER_URL
+  secret_token = $WEBHOOK_SECRET
+  allowed_updates = @("message", "callback_query")
+  drop_pending_updates = $false
+} | ConvertTo-Json -Depth 5
 
-`https://mehrdadmb2.github.io/peugeot-206-garage/`
-
-## 💬 Telegram commands
-
-| Command | Description |
-|---|---|
-| `/start` | Introduction and quick help |
-| `/help` | Command reference and examples |
-| `/id` | Show numeric Telegram user and chat IDs |
-| `/km 156000` | Record current odometer |
-| `/trip 85` | Record a trip distance |
-| `/fuel 20l cost=700000 toman km=156200 full` | Log a full-tank refueling event |
-| `/service oil cost=900000 toman km=156000` | Record a service |
-| `/part air_filter km=156000` | Record a component |
-| `/interval engine_oil 4000 180` | Configure distance and time intervals |
-| `/due` | Calculate upcoming maintenance |
-| `/summary today` | Daily report |
-| `/summary week` | Weekly report |
-| `/summary month` | Monthly report |
-| `/config` | View vehicle and maintenance settings |
-| `/fuelstats` | Fuel usage and consumption report |
-| `/fine 500000 toman speeding` | Register a fine |
-| `/fines` | List fines and payment status |
-| `/paid a1b2c3d4` | Mark a fine as paid using its event ID |
-| `/wash 180000 toman` | Record a car wash |
-| `/repair suspension cost=450000 toman` | Resolve the most recent open issue or record a repair |
-| `/expense 250000 toman parking` | Record an additional expense |
-| `/note inspect tires next visit` | Save a vehicle note |
-| `/latest` | Show recent events |
-| `/export` | Export the current month's events as CSV |
-| `/export 2026-10` | Export a specific month |
-
-The bot also accepts supported natural-language entries. Examples:
-
-```text
-امروز با کیلومتر ۱۵۶۲۸۰ به خانه برگشتم
-۲۰ لیتر بنزین زدم، ۷۰۰ هزار تومان، کیلومتر ۱۵۶۲۰۰ و باک کامل
-روغن موتور را عوض کردم، هزینه ۹۰۰ هزار تومان، کیلومتر ۱۵۶۰۰۰
-خرابی: صدای جلوبندی
-تعمیر شد: جلوبندی، هزینه ۴۵۰ هزار تومان
-جریمه سرعت ۵۰۰ هزار تومان
-کارواش ۱۸۰ هزار تومان
+$result = Invoke-RestMethod -Method Post `
+  -Uri ("https://api.telegram.org/bot{0}/setWebhook" -f $BOT_TOKEN) `
+  -ContentType "application/json; charset=utf-8" `
+  -Body $payload
+$result | ConvertTo-Json -Depth 5
 ```
 
-Input recognition is best-effort. For important records, use an explicit command and include the relevant mileage, amount, and currency. Ambiguous messages should not be treated as successfully registered events.
+Expected result: `ok: true`, `result: true`. If `Resolve-DnsName` fails, stop there and check the Worker hostname, Cloudflare deployment, DNS/network/VPN settings. If the local DNS test passes but Telegram reports `Failed to resolve host`, verify the URL is exactly the plain HTTPS URL above and that the deployed hostname is active and publicly resolvable.
 
-`/undo` is intentionally disabled to prevent accidental deletion. Correcting or deleting existing records requires a separate, explicit data-management workflow.
+Verify the webhook in the same PowerShell window:
 
-## 📊 External API
-
-The Worker can also be called by other applications.
-
-### Record a natural-language event
-
-```http
-POST /api/v1/record
-Authorization: Bearer YOUR_API_ACCESS_TOKEN
-Content-Type: application/json
+```powershell
+$info = Invoke-RestMethod -Method Get -Uri ("https://api.telegram.org/bot{0}/getWebhookInfo" -f $BOT_TOKEN)
+$info.result | Select-Object url, pending_update_count, last_error_date, last_error_message, allowed_updates | Format-List
 ```
 
-Example JSON:
+Then message the bot with `/start`. If it does not reply, open **Cloudflare Dashboard → Workers & Pages → `peugeot-206-garage-bot` → Logs** and inspect the request at the time you sent the message.
 
-```json
-{
-  "text": "20l fuel, cost 700000 toman, km 156200"
-}
+### Set the Telegram command menu without a file
+
+This is optional; the command menu does not implement bot logic by itself. Run in the same PowerShell session:
+
+```powershell
+$commands = @(
+  @{command="start";description="شروع و معرفی ربات"},
+  @{command="help";description="راهنمای فرمان‌ها"},
+  @{command="id";description="شناسه عددی کاربر"},
+  @{command="km";description="ثبت کیلومترشمار"},
+  @{command="trip";description="ثبت مسافت"},
+  @{command="fuel";description="ثبت سوخت‌گیری"},
+  @{command="service";description="ثبت سرویس"},
+  @{command="part";description="ثبت قطعه مصرفی"},
+  @{command="interval";description="تنظیم فاصله سرویس"},
+  @{command="due";description="موعد سرویس‌ها"},
+  @{command="summary";description="گزارش هزینه و مسافت"},
+  @{command="fuelstats";description="آمار سوخت"},
+  @{command="fine";description="ثبت جریمه"},
+  @{command="fines";description="فهرست جریمه‌ها"},
+  @{command="paid";description="ثبت پرداخت جریمه"},
+  @{command="wash";description="ثبت کارواش"},
+  @{command="repair";description="ثبت تعمیر"},
+  @{command="expense";description="ثبت هزینه متفرقه"},
+  @{command="note";description="یادداشت خودرو"},
+  @{command="latest";description="آخرین رویدادها"},
+  @{command="export";description="خروجی CSV"}
+)
+$menu = @{commands=$commands} | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post `
+  -Uri ("https://api.telegram.org/bot{0}/setMyCommands" -f $BOT_TOKEN) `
+  -ContentType "application/json; charset=utf-8" -Body $menu | ConvertTo-Json -Depth 5
 ```
 
-### Available endpoints
+## Bot commands
 
-| Method | Endpoint | Purpose |
+| Command | Example | Purpose |
 |---|---|---|
-| `GET` | `/health` | Public Worker health information |
-| `GET` | `/` | API information and endpoint overview |
+| `/start`, `/help` | `/help` | Introduction and help |
+| `/id` | `/id` | Show numeric user/chat IDs |
+| `/km` | `/km 156321` | Record current odometer |
+| `/trip` | `/trip 85` | Record distance driven |
+| `/fuel` | `/fuel 20l cost=700000 toman km=156321 full` | Record refueling |
+| `/service` | `/service oil cost=900000 toman km=156321` | Record maintenance |
+| `/part` | `/part air_filter km=156321` | Record a component |
+| `/interval` | `/interval engine_oil 4000 180` | Set km/day interval |
+| `/due` | `/due` | Calculate due maintenance now |
+| `/summary` | `/summary week` | Summary report |
+| `/fuelstats` | `/fuelstats` | Fuel statistics |
+| `/fine` | `/fine 500000 toman speeding` | Record a fine |
+| `/fines` | `/fines` | List fines |
+| `/paid` | `/paid EVENT_ID` | Mark a fine as paid |
+| `/wash` | `/wash 180000 toman` | Record car wash |
+| `/repair` | `/repair suspension cost=450000 toman` | Resolve an open issue / record repair |
+| `/expense` | `/expense 250000 toman parking` | Other expense |
+| `/note` | `/note inspect tires next visit` | Save a note |
+| `/latest` | `/latest` | Recent events |
+| `/export` | `/export 2026-10` | Export a month as CSV |
+| `/config` | `/config` | Vehicle/service configuration |
+
+The bot supports common aliases and Persian digits, but natural-language parsing is best-effort. For important records, use an explicit command and include amount, currency, and odometer where applicable. Do not assume an ambiguous sentence was recorded unless the bot confirms it.
+
+## API
+
+All `/api/v1/*` endpoints require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`. The health route is public.
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/health` | Health and configuration presence |
+| `GET` | `/` | API guide |
 | `POST` | `/telegram` | Telegram webhook |
-| `POST` | `/api/v1/record` | Register an event or process a command |
-| `POST` | `/api/v1/command` | Command/record endpoint alias |
-| `GET` | `/api/v1/overview` | Aggregated vehicle statistics |
-| `GET` | `/api/v1/events?type=fuel&limit=100` | Read event history |
-| `GET` | `/api/v1/due` | Calculate maintenance deadlines |
-| `GET` | `/api/v1/config` | Read vehicle and interval configuration |
-| `GET` | `/api/v1/export?month=2026-10` | Export monthly events as CSV |
+| `POST` | `/api/v1/record` | Register natural-language text or typed event |
+| `POST` | `/api/v1/command` | Command alias |
+| `GET` | `/api/v1/overview` | Aggregated statistics |
+| `GET` | `/api/v1/events?month=YYYY-MM&type=fuel&limit=100` | Read filtered events |
+| `GET` | `/api/v1/due` | Maintenance deadlines |
+| `GET` | `/api/v1/config` | Vehicle and interval configuration |
+| `GET` | `/api/v1/export?month=2026-10` | CSV export |
 
-All `/api/v1/*` endpoints require a valid bearer token, including API reads. The `/health` route is separate and does not expose secret values.
+Example PowerShell API request (replace the token in memory; never commit it):
 
-### Typed event example
-
-```json
-{
-  "type": "fuel",
-  "title": "سوخت‌گیری",
-  "description": "20 liters; full tank",
-  "occurredAt": "2026-10-21T18:30:00+03:30",
-  "odometerKm": 156200,
-  "liters": 20,
-  "costRial": 7000000,
-  "fullTank": true
-}
+```powershell
+$apiSecure = Read-Host "API_ACCESS_TOKEN" -AsSecureString
+$API_TOKEN = [System.Net.NetworkCredential]::new("", $apiSecure).Password
+$body = @{ text = "20l fuel, cost 700000 toman, km 156321 full" } | ConvertTo-Json
+Invoke-RestMethod -Method Post `
+  -Uri "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" `
+  -Headers @{ Authorization = "Bearer $API_TOKEN" } `
+  -ContentType "application/json" -Body $body | ConvertTo-Json -Depth 6
 ```
 
-For typed events, `costRial` is expressed in Iranian rials. The example represents 700,000 tomans.
+## Data model and units
 
-## 🔧 Maintenance configuration
+- The vehicle profile is **Peugeot 206 SD, white, model year 1387 (2008/09)**. Verify exact engine and trim from the vehicle documents; do not infer it from body style alone.
+- Time zone: `Asia/Tehran`.
+- Costs are stored as integer Iranian **rials** (`costRial`) and displayed as **tomans** by dividing by ten.
+- The `occurredAt` timestamp represents event time; `createdAt` represents record creation time.
+- Monthly log files are selected by event date, and `data/index.json` lists the available months.
+- Fuel consumption estimates need enough consistent odometer/full-tank entries; partial data may not produce a reliable L/100 km result.
+- Service intervals are editable reminders, not manufacturer guarantees. Verify timing belt, brakes, fluids, and oil intervals against the exact engine, maintenance history, and a qualified mechanic.
 
-Service intervals are stored in `data/config.json` and can be adjusted through the bot.
+## Request-driven design
 
-For example:
+There is no scheduled Worker handler in this project. Incoming Telegram updates and API calls trigger work. Reports such as `/due` are calculated when requested. Automatic messages at a fixed time require a scheduler or another service to initiate a request; they are intentionally not part of this request-only configuration.
 
-```text
-/interval engine_oil 4000 180
-```
+## Troubleshooting
 
-This configures a 4,000 km distance interval and a 180-day time interval for engine oil.
+| Symptom | Check |
+|---|---|
+| Telegram says `Failed to resolve host` | URL must be plain text, not Markdown; verify Worker hostname and public DNS. |
+| `/health` fails | Worker may not be deployed at that hostname; check Wrangler output and Cloudflare dashboard. |
+| Webhook returns 403 | `TELEGRAM_WEBHOOK_SECRET` must match the value supplied to `setWebhook`. |
+| Bot says access denied | `ALLOWED_TELEGRAM_USER_ID` must equal your numeric Telegram user ID. |
+| Bot does not reply | Inspect `getWebhookInfo`, Cloudflare Worker logs, token, and allowed user ID. |
+| `configured.github` is false | Check `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO`. |
+| GitHub read/write fails | Check token expiry, repository scope, `Contents: Read and write`, branch `main`, and GitHub API errors. |
+| Dashboard says data failed | Check Pages deployment and direct HTTP access to `data/index.json` and `data/config.json`. |
+| Car image or icon missing | Verify `assets/img/206-white.svg` and `assets/img/favicon.svg` return HTTP 200. |
+| Changes do not appear | Wait for Pages deployment, then press `Ctrl+F5`; the dashboard is a static site. |
 
-Maintenance deadlines are estimates calculated from the available service history and odometer records. Initial interval values are configurable reminders, not guaranteed manufacturer specifications. Verify the correct intervals against the vehicle's exact engine, components, service history, and maintenance documentation.
+## Tests
 
-## ⏱️ Request-driven operation
+From the `worker` directory:
 
-Normal event registration, reading, calculations, and report generation happen when a request arrives.
-
-There is no scheduled Worker handler in this configuration.
-
-This means:
-
-- Telegram messages trigger the Worker immediately.
-- Authorized API requests trigger the Worker immediately.
-- `/due` calculates maintenance status when requested.
-- GitHub writes are awaited before a successful registration response is returned.
-
-An unsolicited daily reminder cannot be delivered at a specified time without a separate scheduler or an external service that initiates a request. That functionality is intentionally outside this request-driven design.
-
-## 🛡️ Security and privacy
-
-- Use a fine-grained GitHub token restricted to this repository.
-- Keep all Worker secrets outside the published website.
-- Allow only the intended Telegram numeric user ID to operate the private bot.
-- Keep the API access token private and use it only in trusted clients.
-- Review Worker logs for failed writes and authorization errors.
-- Avoid storing home addresses, personal routes, or other sensitive information in public logs.
-
-**Important:** If this repository is public, the JSON event history is publicly accessible. GitHub Pages content is also public in the standard public-site configuration. Choose the repository's visibility with this in mind.
-
-## 🧪 Testing
-
-Run the automated tests from the Worker directory:
-
-```cmd
+```powershell
 npm test
+npm run check
 ```
 
-The tests exercise the Worker using mocked GitHub and Telegram requests; they do not prove that real account tokens or deployed services work.
+These local tests verify key routing and authorization behavior with mocked requests. They do not prove that deployed Cloudflare secrets, Telegram credentials, or GitHub permissions are valid. Perform one real `/km` record and confirm a new commit in `data/logs/YYYY-MM.json` and `data/index.json` before relying on the system.
 
-After deployment, verify the integration in this order:
+## Security
 
-1. Request `/health`.
-2. Send `/start` and `/help` to the Telegram bot.
-3. Register one real odometer reading.
-4. Confirm that `data/logs/YYYY-MM.json` and `data/index.json` have new commits.
-5. Open GitHub Pages and refresh the dashboard.
+- Restrict the GitHub fine-grained token to this repository and only the permissions needed.
+- Keep all secrets in Cloudflare Worker secrets or local shell memory, never in GitHub files or the public dashboard.
+- The Telegram bot is restricted by numeric user ID; configure the correct ID.
+- A public repository exposes all committed vehicle events. Use a private repository if the records are personal, and confirm that your GitHub Pages setup supports your repository visibility and plan.
+- GitHub Contents API writes may conflict under simultaneous requests or hit rate limits. If a write fails, verify the repository before retrying to avoid duplicate records.
 
-A GitHub commit may complete before the updated public Pages build becomes visible. Dashboard publication is separate from the Worker write operation.
+## Links
 
-## ⚠️ Operational limitations
-
-GitHub Contents API is the persistence layer. Each event typically requires a write to its monthly event file and another write to the month index. This is deliberately simple and auditable, but high request volumes can encounter GitHub API rate limits or concurrent-write conflicts.
-
-If GitHub rejects a write, do not assume the event was safely stored just because Telegram received a message. Inspect the repository and Worker logs before retrying a potentially duplicated record.
-
-This project is a personal vehicle recordkeeping system. Its service reminders and consumption estimates do not replace mechanical inspection, the vehicle's maintenance documentation, or professional advice.
-
----
-
-**Repository:** [mehrdadmb2/peugeot-206-garage](https://github.com/mehrdadmb2/peugeot-206-garage)
-
-**Worker:** `peugeot-206-garage-bot`
-
-**Telegram bot:** [@Peugeot206GarageBot](https://t.me/Peugeot206GarageBot)
-
-**Dashboard:** [GitHub Pages](https://mehrdadmb2.github.io/peugeot-206-garage/)
+- Repository: <https://github.com/mehrdadmb2/peugeot-206-garage>
+- Dashboard: <https://mehrdadmb2.github.io/peugeot-206-garage/>
+- Worker health: <https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health>
+- Telegram: <https://t.me/Peugeot206GarageBot>
+- Telegram Bot API: <https://core.telegram.org/bots/api>
+- Cloudflare Workers secrets: <https://developers.cloudflare.com/workers/configuration/secrets/>
+- GitHub Contents API: <https://docs.github.com/en/rest/repos/contents>

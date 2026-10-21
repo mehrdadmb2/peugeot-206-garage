@@ -2,27 +2,112 @@
   "schemaVersion": 1,
   "vehicle": {
     "make": "Peugeot",
-    "model": "206 Type 2",
+    "model": "206 SD",
     "modelYear": 1387,
     "color": "White",
     "fuel": "Petrol",
     "engine": "TU3 (verify exact engine/trim from vehicle documents)",
-    "label": "206 Type 2 · 1387"
+    "label": "206 SD · 1387",
+    "bodyStyle": "sedan"
   },
   "currency": "IRR",
   "timezone": "Asia/Tehran",
   "serviceIntervals": {
-    "engine_oil": { "label": "روغن موتور", "intervalKm": 5000, "intervalDays": 180, "mode": "replace", "category": "service", "note": "فاصله اولیه قابل تنظیم؛ با دفترچه و شرایط واقعی خودرو تطبیق بده." },
-    "oil_filter": { "label": "فیلتر روغن", "intervalKm": 5000, "intervalDays": 180, "mode": "replace", "category": "service", "note": "معمولاً همراه روغن ثبت شود؛ فاصله دقیق را با تعمیرکار/دفترچه بررسی کن." },
-    "air_filter": { "label": "فیلتر هوا", "intervalKm": 10000, "intervalDays": 365, "mode": "replace", "category": "service", "note": "بسته به گردوغبار و نوع فیلتر قابل تغییر است." },
-    "cabin_filter": { "label": "فیلتر کابین", "intervalKm": 10000, "intervalDays": 365, "mode": "replace", "category": "service", "note": "در صورت نداشتن/متفاوت بودن تجهیز خودرو، غیرفعال یا اصلاح شود." },
-    "fuel_filter": { "label": "فیلتر بنزین", "intervalKm": 20000, "intervalDays": 730, "mode": "replace", "category": "service", "note": "فاصله قطعی به مشخصات دقیق خودرو و قطعه وابسته است." },
-    "spark_plugs": { "label": "شمع موتور", "intervalKm": 20000, "intervalDays": 730, "mode": "replace", "category": "service", "note": "نوع شمع و فاصله تعویض را با مشخصات موتور تطبیق بده." },
-    "timing_belt": { "label": "تسمه تایم (بررسی/تعویض)", "intervalKm": 50000, "intervalDays": 1460, "mode": "replace", "category": "critical", "note": "تنظیم اولیه محافظه‌کارانه و غیررسمی است؛ مشخصات موتور و سابقه تسمه را حتماً با متخصص بررسی کن." },
-    "coolant": { "label": "مایع خنک‌کننده", "intervalKm": 40000, "intervalDays": 730, "mode": "replace", "category": "service", "note": "نوع مایع و بازه سرویس باید مطابق مشخصات فنی باشد." },
-    "brake_fluid": { "label": "روغن ترمز", "intervalKm": 0, "intervalDays": 730, "mode": "replace", "category": "critical", "note": "زمان‌بندی اولیه؛ کیفیت مایع و مشخصات سازنده ملاک نهایی است." },
-    "brake_inspection": { "label": "بازدید لنت و ترمز", "intervalKm": 10000, "intervalDays": 180, "mode": "inspect", "category": "critical", "note": "یادآور بازدید است، نه الزام تعویض لنت." },
-    "tyre_inspection": { "label": "بازدید لاستیک و فشار باد", "intervalKm": 5000, "intervalDays": 30, "mode": "inspect", "category": "safety", "note": "فشار باد را در حالت سرد و طبق برچسب خودرو تنظیم کن." },
-    "battery_check": { "label": "بررسی باتری", "intervalKm": 0, "intervalDays": 365, "mode": "inspect", "category": "service", "note": "بسته به عمر و وضعیت باتری قابل تغییر است." }
+    "engine_oil": {
+      "label": "روغن موتور",
+      "intervalKm": 5000,
+      "intervalDays": 180,
+      "mode": "replace",
+      "category": "service",
+      "note": "فاصله اولیه قابل تنظیم؛ با دفترچه و شرایط واقعی خودرو تطبیق بده."
+    },
+    "oil_filter": {
+      "label": "فیلتر روغن",
+      "intervalKm": 5000,
+      "intervalDays": 180,
+      "mode": "replace",
+      "category": "service",
+      "note": "معمولاً همراه روغن ثبت شود؛ فاصله دقیق را با تعمیرکار/دفترچه بررسی کن."
+    },
+    "air_filter": {
+      "label": "فیلتر هوا",
+      "intervalKm": 10000,
+      "intervalDays": 365,
+      "mode": "replace",
+      "category": "service",
+      "note": "بسته به گردوغبار و نوع فیلتر قابل تغییر است."
+    },
+    "cabin_filter": {
+      "label": "فیلتر کابین",
+      "intervalKm": 10000,
+      "intervalDays": 365,
+      "mode": "replace",
+      "category": "service",
+      "note": "در صورت نداشتن/متفاوت بودن تجهیز خودرو، غیرفعال یا اصلاح شود."
+    },
+    "fuel_filter": {
+      "label": "فیلتر بنزین",
+      "intervalKm": 20000,
+      "intervalDays": 730,
+      "mode": "replace",
+      "category": "service",
+      "note": "فاصله قطعی به مشخصات دقیق خودرو و قطعه وابسته است."
+    },
+    "spark_plugs": {
+      "label": "شمع موتور",
+      "intervalKm": 20000,
+      "intervalDays": 730,
+      "mode": "replace",
+      "category": "service",
+      "note": "نوع شمع و فاصله تعویض را با مشخصات موتور تطبیق بده."
+    },
+    "timing_belt": {
+      "label": "تسمه تایم (بررسی/تعویض)",
+      "intervalKm": 50000,
+      "intervalDays": 1460,
+      "mode": "replace",
+      "category": "critical",
+      "note": "تنظیم اولیه محافظه‌کارانه و غیررسمی است؛ مشخصات موتور و سابقه تسمه را حتماً با متخصص بررسی کن."
+    },
+    "coolant": {
+      "label": "مایع خنک‌کننده",
+      "intervalKm": 40000,
+      "intervalDays": 730,
+      "mode": "replace",
+      "category": "service",
+      "note": "نوع مایع و بازه سرویس باید مطابق مشخصات فنی باشد."
+    },
+    "brake_fluid": {
+      "label": "روغن ترمز",
+      "intervalKm": 0,
+      "intervalDays": 730,
+      "mode": "replace",
+      "category": "critical",
+      "note": "زمان‌بندی اولیه؛ کیفیت مایع و مشخصات سازنده ملاک نهایی است."
+    },
+    "brake_inspection": {
+      "label": "بازدید لنت و ترمز",
+      "intervalKm": 10000,
+      "intervalDays": 180,
+      "mode": "inspect",
+      "category": "critical",
+      "note": "یادآور بازدید است، نه الزام تعویض لنت."
+    },
+    "tyre_inspection": {
+      "label": "بازدید لاستیک و فشار باد",
+      "intervalKm": 5000,
+      "intervalDays": 30,
+      "mode": "inspect",
+      "category": "safety",
+      "note": "فشار باد را در حالت سرد و طبق برچسب خودرو تنظیم کن."
+    },
+    "battery_check": {
+      "label": "بررسی باتری",
+      "intervalKm": 0,
+      "intervalDays": 365,
+      "mode": "inspect",
+      "category": "service",
+      "note": "بسته به عمر و وضعیت باتری قابل تغییر است."
+    }
   }
 }
