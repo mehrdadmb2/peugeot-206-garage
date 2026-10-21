@@ -18,9 +18,25 @@
   let toastTimer = null;
 
   document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('click', event => {
+      const tab = event.target.closest('[data-tab]');
+      if (tab) { event.preventDefault(); activateTab(tab.dataset.tab); return; }
+      const anchor = event.target.closest('a[href^="#"]');
+      if (anchor) {
+        const id = anchor.getAttribute('href').slice(1);
+        const target = id ? document.getElementById(id) : null;
+        const pane = target?.closest('[data-view-pane]');
+        if (pane) { event.preventDefault(); activateTab(pane.dataset.viewPane); }
+        else if (id === 'top') { event.preventDefault(); activateTab('overview'); }
+      }
+    });
     $('#refreshButton').addEventListener('click', () => loadDashboard(true));
     $('#exportCsv').addEventListener('click', exportCsv);
     $('#exportJson').addEventListener('click', exportJson);
+    $('#exportCsvAll').addEventListener('click', exportCsvAll);
+    $('#exportJsonAll').addEventListener('click', exportJsonAll);
+    $('#expenseCsv').addEventListener('click', exportExpensesCsv);
+    $('#copyApiExample').addEventListener('click', copyApiExample);
     $('#searchInput').addEventListener('input', updateJournal);
     $('#typeFilter').addEventListener('change', updateJournal);
     $('#monthFilter').addEventListener('change', updateJournal);
@@ -36,6 +52,7 @@
       catch { showToast('کپی خودکار در این مرورگر در دسترس نیست.'); }
     });
     initTilt();
+    activateTab('overview', false);
     loadDashboard(false);
   });
 
@@ -83,6 +100,8 @@
       if (userInitiated) showToast('بارگیری ناموفق بود؛ اتصال یا مسیر فایل‌های JSON را بررسی کن.');
     } finally {
       refreshButton.classList.remove('is-loading');
+      const boot = $('#bootScreen');
+      if (boot) { boot.classList.add('boot-screen-hidden'); setTimeout(() => boot.remove(), 700); }
     }
   }
 
@@ -92,6 +111,25 @@
     renderAnalytics();
     updateJournal();
     renderFinesAndIssues();
+    renderOverviewExtras();
+    renderFuelPage();
+    renderExpensePage();
+    renderTrafficDetails();
+    renderSettingsPage();
+  }
+
+  function activateTab(name, scroll = true) {
+    const valid = ['overview','maintenance','fuel','analytics','expenses','traffic','journal','settings'];
+    const target = valid.includes(name) ? name : 'overview';
+    $$('[data-view-pane]').forEach(pane => pane.classList.toggle('active', pane.dataset.viewPane === target));
+    $$('[data-tab]').forEach(item => {
+      const active = item.dataset.tab === target;
+      item.classList.toggle('active', active);
+      if (item.classList.contains('app-tab')) item.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (item.tagName === 'A') { if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); }
+    });
+    if (scroll) window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (target === 'analytics') requestAnimationFrame(renderAnalytics);
   }
 
   function setConnection(status) {
@@ -217,7 +255,7 @@
       const bh = (d[key] / max) * plotH;
       const x = left + i * slot + (slot - barW) / 2;
       const y = top + plotH - bh;
-      return `<g><title>${escapeHtml(d.month)}: ${moneyText(d[key])} تومان</title><rect class="bar-expense" x="${x}" y="${y}" width="${barW}" height="${Math.max(0,bh)}" rx="5"/><text class="axis-text" x="${x+barW/2}" y="${height-10}" text-anchor="middle">${escapeHtml(d.label)}</text></g>`;
+      return `<g><title>${escapeHtml(d.month)}: ${formatNumber(d[key], 1)} ${escapeHtml(options.unit || 'تومان')}</title><rect class="bar-expense" x="${x}" y="${y}" width="${barW}" height="${Math.max(0,bh)}" rx="5"/><text class="axis-text" x="${x+barW/2}" y="${height-10}" text-anchor="middle">${escapeHtml(d.label)}</text></g>`;
     }).join('');
     return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار میله‌ای هزینه‌های ماهانه"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#71f0f7"/><stop offset="1" stop-color="#2f79d7" stop-opacity=".56"/></linearGradient></defs>${lines}${bars}</svg>`;
   }
@@ -256,6 +294,121 @@
     const totalDistance = datasets.reduce((s,d)=>s+d.distance,0);
     const activeMonths = datasets.filter(d=>d.distance>0).length;
     $('#driveInsight').textContent = totalDistance ? `در ${formatNumber(activeMonths)} ماه از بازه انتخابی، ${formatNumber(totalDistance)} کیلومتر مسافت ثبت شده است. اگر فقط کارکرد کیلومترشمار را ثبت کرده باشی، مسافت بین ثبت‌ها جداگانه قابل تخمین است.` : 'مسافتی در بازه انتخابی محاسبه نشده؛ ثبت کیلومترشمار در چند نوبت روز یا استفاده از /trip تحلیل را دقیق‌تر می‌کند.';
+  }
+
+  function renderOverviewExtras() {
+    const recent = state.events.slice().sort((a,b)=>eventEpoch(b)-eventEpoch(a)).slice(0,4);
+    $('#recentEvents').innerHTML = recent.length ? recent.map(event => {
+      const cost = Number(event.costRial) > 0 ? `${moneyText(Number(event.costRial)/10)} تومان` : event.liters != null ? `${formatNumber(event.liters,1)} لیتر` : event.odometerKm != null ? `${formatNumber(event.odometerKm)} km` : 'ثبت اطلاعات';
+      return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(event.title || typeLabels[event.type] || 'رویداد')}</div><div class="mini-row-desc">${escapeHtml((event.description || '').slice(0,72))}</div><div class="mini-row-meta">${escapeHtml(event.jalaliDate || event.date || '—')} · ${escapeHtml(event.time || '')}</div></div><div class="mini-row-value">${escapeHtml(cost)}</div></div>`;
+    }).join('') : '<div class="empty-state">هنوز رویدادی ثبت نشده است؛ از ربات اولین کیلومتر یا سوخت‌گیری را ثبت کن.</div>';
+    const due = calculateDue(state.events, state.config, calculateOdometer(state.events));
+    const alerts = [];
+    due.filter(item=>item.overdue).forEach(item=>alerts.push({kind:'danger',title:`${item.label} عقب‌افتاده`,detail:item.leftKm!=null?`${formatNumber(Math.abs(item.leftKm))} کیلومتر از موعد گذشته`: 'موعد زمانی گذشته است'}));
+    due.filter(item=>!item.overdue).forEach(item=>alerts.push({kind:'warn',title:`${item.label} نزدیک موعد`,detail:item.leftKm!=null?`${formatNumber(Math.max(0,item.leftKm))} کیلومتر باقی مانده`: `${formatNumber(Math.max(0,item.leftDays||0))} روز باقی مانده`}));
+    state.events.filter(e=>e.type==='issue' && e.status!=='fixed').slice(-3).reverse().forEach(e=>alerts.push({kind:'danger',title:'خرابی باز',detail:(e.description||e.title||'نیازمند بررسی').slice(0,90)}));
+    $('#overviewAlerts').innerHTML = alerts.length ? alerts.slice(0,5).map(a=>`<div class="alert-row ${a.kind}"><span class="alert-mark">${a.kind==='danger'?'!':'◷'}</span><div><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.detail)}</small></div></div>`).join('') : '<div class="empty-state">در داده‌های ثبت‌شده هشدار فوری پیدا نشد. این بررسی فقط به رویدادهایی وابسته است که ثبت کرده‌ای.</div>';
+  }
+
+  function getFuelConsumption() {
+    const fuel = state.events.filter(e => e.type === 'fuel');
+    const full = fuel.filter(e => e.fullTank && Number.isFinite(Number(e.odometerKm)) && e.odometerKm !== null).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+    if (full.length < 2) return null;
+    const a = full[full.length-2], b = full[full.length-1];
+    const km = Number(b.odometerKm) - Number(a.odometerKm);
+    const liters = fuel.filter(e=>eventEpoch(e)>eventEpoch(a)&&eventEpoch(e)<=eventEpoch(b)).reduce((n,e)=>n+(Number(e.liters)||0),0);
+    if (!(km > 0) || !(liters > 0) || km > 5000) return null;
+    return { value: liters / km * 100, km, liters, from: a, to: b };
+  }
+
+  function renderFuelPage() {
+    const fuel = state.events.filter(e=>e.type==='fuel').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
+    const totalLiters = sum(fuel,e=>e.liters);
+    const totalCost = sum(fuel,e=>e.costRial)/10;
+    const nowMonth = localDateString(new Date()).slice(0,7);
+    const monthFuel = fuel.filter(e=>String(e.date||e.occurredAt||'').slice(0,7)===nowMonth);
+    $('#fuelPageLiters').textContent = formatNumber(totalLiters,1);
+    $('#fuelPageLitersFoot').textContent = `${formatNumber(monthFuel.reduce((n,e)=>n+(Number(e.liters)||0),0),1)} لیتر در ماه جاری`;
+    $('#fuelPageCost').textContent = compactMoney(totalCost);
+    $('#fuelPageCostFoot').textContent = `${formatNumber(fuel.length)} ثبت سوخت‌گیری`;
+    $('#fuelPageStops').textContent = formatNumber(fuel.length);
+    $('#fuelPageStopsFoot').textContent = `${formatNumber(fuel.filter(e=>e.fullTank).length)} بار باک کامل علامت خورده`;
+    const consumption = getFuelConsumption();
+    $('#fuelPageEfficiency').textContent = consumption ? formatNumber(consumption.value,1) : '—';
+    $('#fuelPageEfficiencyFoot').textContent = consumption ? `بر پایه ${formatNumber(consumption.km)} کیلومتر بین دو باک کامل` : 'به دو سوخت‌گیری کامل با کیلومتر نیاز است';
+    const months = getMonthKeys(nowMonth,Math.max(6,state.range)).map(month=>({month,label:monthShort(month),liters:sum(fuel.filter(e=>String(e.date||e.occurredAt||'').slice(0,7)===month),e=>e.liters)}));
+    $('#fuelOnlyChart').innerHTML = barChart(months,'liters',{unit:'لیتر',empty:'در این بازه هنوز سوخت‌گیری ثبت نشده است.'});
+    $('#fuelEventList').innerHTML = fuel.length ? fuel.slice(0,8).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.jalaliDate||e.date||'—')} · ${formatNumber(e.liters,1)} لیتر</div><div class="mini-row-desc">${escapeHtml((e.description||'سوخت‌گیری').slice(0,95))}</div><div class="mini-row-meta">${e.odometerKm!=null?`${formatNumber(e.odometerKm)} km`:'بدون کیلومتر'}${e.fullTank?' · باک کامل':''}</div></div><div class="mini-row-value">${Number(e.costRial)>0?`${moneyText(Number(e.costRial)/10)} ت`:'—'}</div></div>`).join('') : '<div class="empty-state">سوخت‌گیری ثبت نشده است. نمونه: <code>20l fuel cost=700000 toman km=156200 full</code></div>';
+  }
+
+  function expenseCategoryName(event) {
+    if (event.type==='fuel') return 'سوخت';
+    if (event.type==='service') return 'سرویس و نگهداری';
+    if (event.type==='part') return 'قطعات';
+    if (event.type==='wash') return 'شست‌وشو';
+    if (event.type==='fine') return 'جریمه پرداخت‌شده';
+    if (event.type==='issue'||event.type==='repair') return 'تعمیرات';
+    return 'هزینه متفرقه';
+  }
+
+  function renderExpensePage() {
+    const expenses = state.events.filter(e=>isActualExpense(e) && Number(e.costRial)>0).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
+    const allTotal = sum(expenses,e=>e.costRial)/10;
+    const month = localDateString(new Date()).slice(0,7);
+    const monthRows = expenses.filter(e=>expenseDate(e).slice(0,7)===month);
+    const monthTotal = sum(monthRows,e=>e.costRial)/10;
+    const largest = expenses.slice().sort((a,b)=>(Number(b.costRial)||0)-(Number(a.costRial)||0))[0];
+    $('#expensePageTotal').textContent = compactMoney(allTotal);
+    $('#expensePageTotalFoot').textContent = `${formatNumber(expenses.length)} رویداد با هزینه‌ی حساب‌شده`;
+    $('#expensePageMonthly').textContent = compactMoney(monthTotal);
+    $('#expensePageMonthlyFoot').textContent = `${formatNumber(monthRows.length)} هزینه در ماه جاری`;
+    $('#expensePageLargest').textContent = largest ? compactMoney(Number(largest.costRial)/10) : '—';
+    $('#expensePageLargestFoot').textContent = largest ? `${escapeHtml(largest.title||typeLabels[largest.type]||'رویداد')} · ${escapeHtml(largest.jalaliDate||largest.date||'')}` : 'هنوز هزینه‌ای ثبت نشده';
+    const byCategory = {};
+    expenses.forEach(e=>{const key=expenseCategoryName(e);byCategory[key]=(byCategory[key]||0)+(Number(e.costRial)||0)/10;});
+    const categories = Object.entries(byCategory).sort((a,b)=>b[1]-a[1]);
+    $('#expensePageCategories').textContent = formatNumber(categories.length);
+    const monthly = getMonthKeys(month,Math.max(6,state.range)).map(key=>({month:key,label:monthShort(key),cost:sum(expenses.filter(e=>expenseDate(e).slice(0,7)===key),e=>e.costRial)/10}));
+    $('#expenseMonthlyChart').innerHTML = barChart(monthly,'cost',{unit:'تومان',empty:'در ماه‌های انتخابی هزینه‌ای ثبت نشده است.'});
+    $('#expenseCategoryChart').innerHTML = categories.length ? categories.map(([name,value])=>`<div class="category-row"><div class="category-row-head"><span>${escapeHtml(name)}</span><b>${escapeHtml(moneyText(value))} تومان</b></div><div class="category-track"><span style="width:${clamp(value/(categories[0][1]||1)*100,0,100)}%"></span></div><small>${formatNumber(allTotal?value/allTotal*100:0,1)}٪ از کل هزینه‌های حساب‌شده</small></div>`).join('') : '<div class="empty-state">با ثبت هزینه، تحلیل دسته‌ها در این بخش ظاهر می‌شود.</div>';
+    $('#expenseEventList').innerHTML = expenses.length ? expenses.slice(0,12).map(e=>`<div class="expense-row"><span class="expense-type-icon">${typeIcons[e.type]||'◈'}</span><div class="expense-row-main"><b>${escapeHtml(e.title||typeLabels[e.type]||'هزینه')}</b><small>${escapeHtml(e.jalaliDate||e.date||'—')} · ${escapeHtml(e.description||'').slice(0,100)}</small></div><span class="expense-row-category">${escapeHtml(expenseCategoryName(e))}</span><strong>${moneyText(Number(e.costRial)/10)} <small>تومان</small></strong></div>`).join('') : '<div class="empty-state">هیچ هزینه‌ی پرداخت‌شده‌ای ثبت نشده است.</div>';
+  }
+
+  function renderTrafficDetails() {
+    const unpaid = state.events.filter(e=>e.type==='fine'&&!e.paid).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
+    $('#unpaidFinesList').innerHTML = unpaid.length ? unpaid.slice(0,10).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description||'جریمه')}</div><div class="mini-row-meta">ID ${escapeHtml(String(e.id).slice(0,8))} · ${escapeHtml(e.jalaliDate||e.date||'—')}</div></div><div class="mini-row-value">${moneyText(Number(e.costRial||0)/10)} تومان</div></div>`).join('') : '<div class="empty-state">جریمه‌ی پرداخت‌نشده‌ای ثبت نشده است.</div>';
+    const open = state.events.filter(e=>e.type==='issue'&&e.status!=='fixed').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
+    $('#openIssuesList').innerHTML = open.length ? open.slice(0,10).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.title||'خرابی ثبت‌شده')}</div><div class="mini-row-desc">${escapeHtml((e.description||'').slice(0,100))}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate||e.date||'—')} · ID ${escapeHtml(String(e.id).slice(0,8))}</div></div><div class="mini-row-value negative">باز</div></div>`).join('') : '<div class="empty-state">خرابی بازی ثبت نشده است.</div>';
+  }
+
+  function renderSettingsPage() {
+    const config = state.config || {};
+    const entries = Object.entries(config.serviceIntervals || {});
+    $('#settingsServiceTable').innerHTML = entries.length ? `<div class="settings-service-head"><span>سرویس / قطعه</span><span>بازه</span></div>`+entries.map(([key,item])=>`<div class="settings-service-row"><div><b>${escapeHtml(item.label||key)}</b><small>${escapeHtml(key)}</small></div><span>${Number(item.intervalKm)?`${formatNumber(item.intervalKm)} km`:''}${Number(item.intervalDays)?` · ${formatNumber(item.intervalDays)} روز`:''}</span></div>`).join('') : '<div class="empty-state">فایل config.json بارگیری نشده است.</div>';
+  }
+
+  async function copyApiExample() {
+    const sample = 'curl -X POST "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" ^\n  -H "Authorization: Bearer YOUR_API_ACCESS_TOKEN" ^\n  -H "Content-Type: application/json" ^\n  -d "{\\"text\\":\\"20l fuel, cost 700000 toman, km 156200\\"}"';
+    try { await navigator.clipboard.writeText(sample); showToast('نمونه درخواست CMD کپی شد؛ توکن آزمایشی را با Secret خودت جایگزین کن.'); }
+    catch { showToast('کپی خودکار در این مرورگر فعال نیست؛ نمونه را از صفحه انتخاب و کپی کن.'); }
+  }
+
+  function exportCsvAll() {
+    if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
+    const keys = ['id','type','title','description','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank'];
+    const csv = [keys.join(','), ...state.events.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
+    downloadBlob(`206-garage-all-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('CSV کامل همه‌ی رویدادها آماده شد.');
+  }
+  function exportJsonAll() {
+    if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
+    downloadBlob(`206-garage-all-${localDateString(new Date())}.json`,JSON.stringify({exportedAt:new Date().toISOString(),vehicle:state.config?.vehicle||{},events:state.events},null,2),'application/json;charset=utf-8'); showToast('JSON کامل همه‌ی رویدادها آماده شد.');
+  }
+  function exportExpensesCsv() {
+    const rows = state.events.filter(e=>isActualExpense(e)&&Number(e.costRial)>0);
+    if (!rows.length) { showToast('هزینه‌ای برای خروجی وجود ندارد.'); return; }
+    const keys=['id','type','title','description','occurredAt','jalaliDate','odometerKm','costRial','paid','paidAt','resolvedAt'];
+    const csv=[keys.join(','),...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
+    downloadBlob(`206-garage-expenses-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('خروجی هزینه‌های قابل محاسبه آماده شد.');
   }
 
   function updateJournal() {

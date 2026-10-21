@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#080d17">
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
-  <link rel="icon" type="image/svg+xml" href="assets/img/206-white.svg">
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="assets/css/style.css">
   <script defer src="assets/js/app.js"></script>
 </head>
@@ -21,8 +21,8 @@
       <span class="brand-mark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5 29.5 9 21l8-3 6-7h9l7 8 4 3 1 8-4 3H8z"/><path d="M13 21h9v-6m3 6h10l-5-6h-5"/><circle cx="15" cy="32" r="4"/><circle cx="34" cy="32" r="4"/></svg></span>
       <span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>PERSONAL VEHICLE OS</small></span>
     </a>
-    <nav class="top-nav" aria-label="ناوبری اصلی">
-      <a href="#overview">نمای کلی</a><a href="#maintenance">سرویس‌ها</a><a href="#analytics">تحلیل هزینه</a><a href="#activity">دفتر وقایع</a>
+    <nav class="top-nav" aria-label="ناوبری سریع">
+      <a href="#overview" data-tab="overview" class="active">نمای کلی</a><a href="#maintenance" data-tab="maintenance">نگهداری</a><a href="#analytics" data-tab="analytics">تحلیل</a><a href="#activity" data-tab="journal">دفتر وقایع</a>
     </nav>
     <div class="top-actions">
       <span id="connectionBadge" class="status-badge"><i></i> در حال اتصال</span>
@@ -30,8 +30,26 @@
     </div>
   </header>
 
-  <main id="top" class="container">
-    <section class="hero panel" id="overview">
+
+  <nav class="app-tabs container" aria-label="بخش‌های دفتر خودرو">
+    <button type="button" class="app-tab active" data-tab="overview" aria-selected="true"><span>◈</span><b>داشبورد</b><small>Overview</small></button>
+    <button type="button" class="app-tab" data-tab="maintenance" aria-selected="false"><span>⚙</span><b>سرویس‌ها</b><small>Maintenance</small></button>
+    <button type="button" class="app-tab" data-tab="fuel" aria-selected="false"><span>⛽</span><b>سوخت</b><small>Fuel</small></button>
+    <button type="button" class="app-tab" data-tab="analytics" aria-selected="false"><span>⌁</span><b>تحلیل</b><small>Analytics</small></button>
+    <button type="button" class="app-tab" data-tab="expenses" aria-selected="false"><span>◉</span><b>هزینه‌ها</b><small>Expenses</small></button>
+    <button type="button" class="app-tab" data-tab="traffic" aria-selected="false"><span>⚑</span><b>جریمه و خرابی</b><small>Traffic & Repairs</small></button>
+    <button type="button" class="app-tab" data-tab="journal" aria-selected="false"><span>▤</span><b>دفتر وقایع</b><small>Journal</small></button>
+    <button type="button" class="app-tab" data-tab="settings" aria-selected="false"><span>⌘</span><b>راهنما و API</b><small>Settings</small></button>
+  </nav>
+  <div id="bootScreen" class="boot-screen" role="status" aria-live="polite">
+    <div class="boot-brand"><span class="boot-logo">206</span><span><b>GARAGE OS</b><small>VEHICLE DATA SYSTEM</small></span></div>
+    <div class="boot-rotor"><i></i><i></i><i></i><span>206</span></div>
+    <h1>در حال اتصال به دفتر خودرو</h1><p>خواندن رویدادها از GitHub · محاسبه‌ی کارکرد و موعد سرویس‌ها</p>
+    <div class="boot-progress"><span></span></div><small class="boot-status">SECURE DATA PIPELINE / ASIA-TEHRAN</small>
+  </div>
+  <main id="top" class="container dashboard-main">
+    <div class="view-pane active" data-view-pane="overview" id="page-overview">
+<section class="hero panel" id="overview">
       <div class="hero-copy">
         <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR CAR. EVERY DETAIL. ONE TIMELINE.</div>
         <h1>دفتر هوشمند<br><span>پژو ۲۰۶</span></h1>
@@ -49,8 +67,7 @@
         <div class="visual-coordinate">REMOTE TELEMETRY <span>·</span> GARAGE / 01</div>
       </div>
     </section>
-
-    <section class="section-block" aria-labelledby="overviewTitle">
+<section class="section-block" aria-labelledby="overviewTitle">
       <div class="section-heading"><div><span class="section-kicker">LIVE SNAPSHOT / 01</span><h2 id="overviewTitle">نمای کلی خودرو</h2></div><span class="section-note">محاسبه‌شده از رویدادهای ثبت‌شده</span></div>
       <div class="stats-grid">
         <article class="stat-card stat-odometer hover-tilt"><div class="stat-top"><span class="stat-label">کارکرد فعلی</span><span class="stat-icon icon-cyan">⌁</span></div><div class="stat-value" id="statOdometer">—</div><div class="stat-unit">کیلومتر</div><div class="stat-foot"><span class="mini-dot cyan"></span><span id="statOdometerFoot">ابتدا کیلومترشمار را ثبت کن</span></div><div class="stat-decoration">KM</div></article>
@@ -59,14 +76,34 @@
         <article class="stat-card hover-tilt"><div class="stat-top"><span class="stat-label">وضعیت نگهداری</span><span class="stat-icon icon-green">✳</span></div><div class="stat-value" id="statDue">—</div><div class="stat-unit">موعد نزدیک یا عقب‌افتاده</div><div class="stat-foot"><span class="mini-dot green"></span><span id="statDueFoot">بر اساس سرویس‌های ثبت‌شده</span></div><div class="stat-decoration">CARE</div></article>
       </div>
     </section>
-
-    <section class="section-block" id="maintenance" aria-labelledby="maintenanceTitle">
+      <section class="section-block overview-extra-grid" aria-label="خلاصه و هشدارهای تازه">
+        <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">RECENT SIGNALS / LIVE</span><h2>آخرین ثبت‌ها</h2></div><span class="mini-heading-icon">↗</span></div><div id="recentEvents" class="mini-list"><div class="empty-state">در انتظار داده‌های GitHub…</div></div><button class="secondary-button small" data-tab="journal" type="button">مشاهده کل دفتر وقایع ←</button></article>
+        <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">VEHICLE HEALTH / ALERTS</span><h2>هشدارهای مهم</h2></div><span class="mini-heading-icon red">!</span></div><div id="overviewAlerts" class="mini-list"><div class="empty-state">بعد از بارگیری داده‌ها هشدارها محاسبه می‌شوند.</div></div><button class="secondary-button small" data-tab="maintenance" type="button">بازکردن تقویم سرویس ←</button></article>
+      </section>
+    </div>
+    <div class="view-pane" data-view-pane="maintenance" id="page-maintenance">
+<section class="section-block" id="maintenance" aria-labelledby="maintenanceTitle">
       <div class="section-heading"><div><span class="section-kicker">PREVENTIVE CARE / 02</span><h2 id="maintenanceTitle">تقویم نگهداری و مصرفی‌ها</h2></div><span class="section-note">پیشرفت تا سرویس بعدی</span></div>
       <div id="serviceGrid" class="service-grid"><div class="empty-state shimmer">در حال محاسبه موعد سرویس‌ها…</div></div>
       <div class="notice-strip"><span class="notice-symbol">i</span><p>بازه‌های اولیه در فایل <code>data/config.json</code> قابل تغییرند و از دفترچه دقیق خودرو یا وضعیت واقعی قطعه معتبرتر نیستند. برای تسمه تایم، ترمز، لاستیک و موارد ایمنی، تأیید تعمیرکار را در اولویت بگذار.</p></div>
     </section>
-
-    <section class="section-block" id="analytics" aria-labelledby="analyticsTitle">
+    </div>
+    <div class="view-pane" data-view-pane="fuel" id="page-fuel">
+      <section class="page-intro panel"><div><span class="section-kicker">FUEL TELEMETRY / 03</span><h1>مرکز تحلیل سوخت</h1><p>ثبت لیتر، مبلغ، کیلومتر و باک کامل؛ مقایسه‌ی ماهانه و تخمین مصرف از روی داده‌های واقعی.</p></div><span class="intro-emblem">⛽</span></section>
+      <section class="section-block"><div class="stats-grid fuel-stats-grid">
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">لیتر ثبت‌شده</span><span class="stat-icon icon-orange">⛽</span></div><div id="fuelPageLiters" class="stat-value">۰</div><div class="stat-unit">لیتر در کل سوابق</div><div id="fuelPageLitersFoot" class="stat-foot">—</div><div class="stat-decoration">L</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">هزینه سوخت</span><span class="stat-icon icon-violet">◈</span></div><div id="fuelPageCost" class="stat-value compact">۰</div><div class="stat-unit">تومان در کل سوابق</div><div id="fuelPageCostFoot" class="stat-foot">—</div><div class="stat-decoration">IRR</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">دفعات سوخت‌گیری</span><span class="stat-icon icon-cyan">↗</span></div><div id="fuelPageStops" class="stat-value">۰</div><div class="stat-unit">ثبت‌های سوخت</div><div id="fuelPageStopsFoot" class="stat-foot">—</div><div class="stat-decoration">LOG</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">مصرف تخمینی</span><span class="stat-icon icon-green">◉</span></div><div id="fuelPageEfficiency" class="stat-value">—</div><div class="stat-unit">لیتر در ۱۰۰ کیلومتر</div><div id="fuelPageEfficiencyFoot" class="stat-foot">فقط با داده‌ی کافی و باک کامل</div><div class="stat-decoration">L/100</div></article>
+      </div></section>
+      <section class="section-block analytics-grid fuel-detail-grid">
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">MONTHLY VOLUME</span><h3>حجم سوخت‌گیری ماهانه</h3></div><span class="chart-tag chart-tag-orange"><i></i> لیتر</span></div><div id="fuelOnlyChart" class="chart-wrap"><div class="empty-state">پس از ثبت سوخت‌گیری، نمودار ساخته می‌شود.</div></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">REFUEL HISTORY</span><h3>آخرین سوخت‌گیری‌ها</h3></div><span class="chart-tag"><i></i> LIVE LOG</span></div><div id="fuelEventList" class="mini-list fuel-event-list"><div class="empty-state">رویدادی ثبت نشده است.</div></div></article>
+      </section>
+      <section class="notice-strip"><span class="notice-symbol">i</span><p>مصرف لیتر در ۱۰۰ کیلومتر تنها وقتی قابل اتکاست که کیلومترشمار در سوخت‌گیری‌ها ثبت شده باشد و دست‌کم دو سوخت‌گیری متوالی باک کامل داشته باشی؛ عدد ناقص یا حدسی نمایش داده نمی‌شود.</p></section>
+    </div>
+    <div class="view-pane" data-view-pane="analytics" id="page-analytics">
+<section class="section-block" id="analytics" aria-labelledby="analyticsTitle">
       <div class="section-heading"><div><span class="section-kicker">COST INTELLIGENCE / 03</span><h2 id="analyticsTitle">تحلیل هزینه و رانندگی</h2></div><div class="range-switch" role="group" aria-label="بازه نمودار"><button class="range-button active" data-range="6" type="button">۶ ماه</button><button class="range-button" data-range="12" type="button">۱۲ ماه</button></div></div>
       <div class="analytics-grid">
         <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">MONTHLY EXPENSES</span><h3>هزینه‌های ماهانه</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="costChart" class="chart-wrap"><div class="empty-state">با ثبت هزینه‌ها، نمودار اینجا ساخته می‌شود.</div></div><div class="chart-footer"><span>مجموع بازه انتخابی</span><strong id="costChartTotal">—</strong></div></article>
@@ -78,8 +115,31 @@
         <article class="insight-card panel"><div class="insight-icon green">↗</div><div><span class="card-overline">DRIVING SUMMARY</span><h3>الگوی رانندگی</h3><p id="driveInsight">مسافت‌ها را با «امروز ۴۰ کیلومتر رانندگی کردم» یا دستور /trip ثبت کن.</p></div></article>
       </div>
     </section>
-
-    <section class="section-block" id="activity" aria-labelledby="activityTitle">
+    </div>
+    <div class="view-pane" data-view-pane="expenses" id="page-expenses">
+      <section class="page-intro panel"><div><span class="section-kicker">COST LEDGER / 05</span><h1>مرکز هزینه‌های خودرو</h1><p>هزینه‌های ثبت‌شده و پرداخت‌شده، تفکیک دسته‌ها، روند ماهانه و خروجی قابل انتقال به اکسل.</p></div><span class="intro-emblem">◈</span></section>
+      <section class="section-block"><div class="stats-grid expense-stats-grid">
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">کل هزینه پرداخت‌شده</span><span class="stat-icon icon-violet">◈</span></div><div id="expensePageTotal" class="stat-value compact">۰</div><div class="stat-unit">تومان · کل سوابق</div><div id="expensePageTotalFoot" class="stat-foot">جریمه پرداخت‌نشده محاسبه نمی‌شود.</div><div class="stat-decoration">IRR</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">هزینه ماه جاری</span><span class="stat-icon icon-cyan">▦</span></div><div id="expensePageMonthly" class="stat-value compact">۰</div><div class="stat-unit">تومان</div><div id="expensePageMonthlyFoot" class="stat-foot">—</div><div class="stat-decoration">MONTH</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">گران‌ترین ثبت</span><span class="stat-icon icon-orange">↗</span></div><div id="expensePageLargest" class="stat-value compact">—</div><div id="expensePageLargestFoot" class="stat-foot">—</div><div class="stat-decoration">TOP</div></article>
+        <article class="stat-card"><div class="stat-top"><span class="stat-label">دسته‌های هزینه</span><span class="stat-icon icon-green">◉</span></div><div id="expensePageCategories" class="stat-value">۰</div><div class="stat-unit">دسته دارای هزینه</div><div class="stat-foot">از رویدادهای مالی ثبت‌شده</div><div class="stat-decoration">TYPE</div></article>
+      </div></section>
+      <section class="section-block analytics-grid">
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">SPENDING TREND</span><h3>روند هزینه در ماه‌ها</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="expenseMonthlyChart" class="chart-wrap"><div class="empty-state">هنوز داده‌ی مالی ثبت نشده است.</div></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">CATEGORY BREAKDOWN</span><h3>تفکیک هزینه‌ها</h3></div><span class="chart-tag chart-tag-cyan"><i></i> درصد از کل</span></div><div id="expenseCategoryChart" class="category-breakdown"><div class="empty-state">با ثبت هزینه‌ها دسته‌ها نمایش داده می‌شوند.</div></div></article>
+      </section>
+      <section class="section-block"><div class="section-heading"><div><span class="section-kicker">RECENT PAYMENTS</span><h2>آخرین هزینه‌های قابل محاسبه</h2></div><div class="export-actions"><button id="expenseCsv" class="secondary-button small" type="button">خروجی هزینه‌ها CSV ↓</button></div></div><div id="expenseEventList" class="expense-event-list panel"><div class="empty-state">هزینه‌ای ثبت نشده است.</div></div></section>
+      <section class="notice-strip"><span class="notice-symbol">i</span><p>برای گزارش حسابداری، پرداخت جریمه در تاریخ پرداخت و تعمیر خرابی در تاریخ رفع خرابی شمرده می‌شود. جریمه‌ی پرداخت‌نشده بدهی است، نه هزینه‌ی پرداخت‌شده.</p></section>
+    </div>
+    <div class="view-pane" data-view-pane="traffic" id="page-traffic">
+<section class="section-block two-column-block" aria-label="جریمه‌ها و خرابی‌ها">
+      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">TRAFFIC / 05</span><h2>وضعیت جریمه‌ها</h2></div><span class="mini-heading-icon orange">!</span></div><div id="fineSummary" class="mini-list"><div class="empty-state">جریمه‌ای ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="fineTotals">مجموع بدهی: —</span><span class="tag-outline">FINE TRACKER</span></div></article>
+      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">REPAIR LOG / 06</span><h2>خرابی‌ها و تعمیرات</h2></div><span class="mini-heading-icon red">⌁</span></div><div id="issueSummary" class="mini-list"><div class="empty-state">خرابی ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="issueTotals">خرابی باز: —</span><span class="tag-outline">MAINTENANCE LOG</span></div></article>
+    </section>
+      <section class="section-block traffic-detail-grid"><article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">UNPAID FINES</span><h2>فقط پرداخت‌نشده‌ها</h2></div><span class="mini-heading-icon orange">!</span></div><div id="unpaidFinesList" class="mini-list"><div class="empty-state">داده‌ها پس از اتصال نمایش داده می‌شوند.</div></div></article><article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">OPEN REPAIRS</span><h2>خرابی‌های باز</h2></div><span class="mini-heading-icon red">⚠</span></div><div id="openIssuesList" class="mini-list"><div class="empty-state">داده‌ها پس از اتصال نمایش داده می‌شوند.</div></div></article></section>
+    </div>
+    <div class="view-pane" data-view-pane="journal" id="page-journal">
+<section class="section-block" id="activity" aria-labelledby="activityTitle">
       <div class="section-heading"><div><span class="section-kicker">VEHICLE JOURNAL / 04</span><h2 id="activityTitle">دفتر وقایع خودرو</h2></div><div class="export-actions"><button id="exportCsv" class="secondary-button small" type="button">خروجی CSV <span>↓</span></button><button id="exportJson" class="secondary-button small" type="button">خروجی JSON <span>↓</span></button></div></div>
       <div class="journal-panel panel">
         <div class="journal-toolbar"><label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="searchInput" type="search" placeholder="جست‌وجو در توضیحات، هزینه‌ها، سرویس‌ها…" autocomplete="off"></label><label class="filter-select"><span>نوع رویداد</span><select id="typeFilter"><option value="all">همه رویدادها</option><option value="odometer">کیلومترشمار</option><option value="trip">مسافت</option><option value="fuel">سوخت‌گیری</option><option value="service">سرویس</option><option value="part">قطعه</option><option value="expense">هزینه</option><option value="fine">جریمه</option><option value="wash">کارواش</option><option value="issue">خرابی</option><option value="repair">تعمیر</option><option value="note">یادداشت</option></select></label><label class="filter-select month-select"><span>ماه</span><select id="monthFilter"><option value="all">تمام ماه‌ها</option></select></label></div>
@@ -88,21 +148,33 @@
         <div class="journal-bottom"><span id="journalBottomNote">داده‌های جدید با تازه‌سازی یا بارگیری مجدد صفحه نمایش داده می‌شوند.</span><button id="loadMoreButton" class="secondary-button small" type="button" hidden>نمایش بیشتر <span>⌄</span></button></div>
       </div>
     </section>
-
-    <section class="section-block two-column-block" aria-label="جریمه‌ها و خرابی‌ها">
-      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">TRAFFIC / 05</span><h2>وضعیت جریمه‌ها</h2></div><span class="mini-heading-icon orange">!</span></div><div id="fineSummary" class="mini-list"><div class="empty-state">جریمه‌ای ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="fineTotals">مجموع بدهی: —</span><span class="tag-outline">FINE TRACKER</span></div></article>
-      <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">REPAIR LOG / 06</span><h2>خرابی‌ها و تعمیرات</h2></div><span class="mini-heading-icon red">⌁</span></div><div id="issueSummary" class="mini-list"><div class="empty-state">خرابی ثبت نشده است.</div></div><div class="mini-panel-foot"><span id="issueTotals">خرابی باز: —</span><span class="tag-outline">MAINTENANCE LOG</span></div></article>
-    </section>
-
-    <section class="section-block workflow-banner panel">
+      <section class="section-block"><article class="panel journal-export-panel"><div><span class="section-kicker">PORTABLE DATA / EXPORT</span><h2>نسخه‌ی قابل انتقال از سوابق</h2><p>CSV برای Excel و JSON برای پشتیبان/پردازش برنامه‌نویسی مناسب است.</p></div><div class="export-actions"><button id="exportCsvAll" class="secondary-button small" type="button">CSV کامل ↓</button><button id="exportJsonAll" class="secondary-button small" type="button">JSON کامل ↓</button></div></article></section>
+    </div>
+    <div class="view-pane" data-view-pane="settings" id="page-settings">
+      <section class="page-intro panel"><div><span class="section-kicker">SYSTEM CONTROL / 08</span><h1>راهنما، تنظیمات و API</h1><p>این صفحه راهنمای استفاده از ربات و اتصال برنامه‌های دیگر به Worker است. هیچ توکن محرمانه‌ای در سایت قرار نمی‌گیرد.</p></div><span class="intro-emblem">⌘</span></section>
+      <section class="section-block settings-grid">
+        <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">SERVICE CONFIGURATION</span><h2>بازه‌های نگهداری فعلی</h2></div><span class="mini-heading-icon">⚙</span></div><div id="settingsServiceTable" class="settings-service-table"><div class="empty-state">در حال خواندن config.json…</div></div><div class="mini-panel-foot"><span>منبع: data/config.json</span><span class="tag-outline">EDIT VIA BOT</span></div></article>
+        <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">DIRECT CONNECTOR</span><h2>API مستقل Cloudflare Worker</h2></div><span class="mini-heading-icon">⌁</span></div><p class="api-intro">برای ثبت از هر برنامه‌ی دیگر از درخواست POST استفاده کن. Worker فقط هنگام دریافت درخواست فعال می‌شود؛ داده را به GitHub می‌نویسد و بعد پاسخ می‌دهد.</p><div class="api-endpoint"><small>POST · STORE</small><code>https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record</code></div><div class="api-endpoint"><small>GET · OVERVIEW</small><code>/api/v1/overview</code></div><div class="api-endpoint"><small>GET · EVENTS</small><code>/api/v1/events?month=YYYY-MM</code></div><div class="api-endpoint"><small>GET · DUE ITEMS</small><code>/api/v1/due</code></div><div class="api-endpoint"><small>GET · CSV EXPORT</small><code>/api/v1/export?month=YYYY-MM</code></div><pre class="api-code"><code>curl -X POST "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" ^
+  -H "Authorization: Bearer YOUR_API_ACCESS_TOKEN" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"text\":\"20l fuel, cost 700000 toman, km 156200\"}"</code></pre><button type="button" id="copyApiExample" class="secondary-button small">کپی نمونه CMD ↗</button><div class="security-note"><b>امنیت:</b> `API_ACCESS_TOKEN` فقط به‌صورت Cloudflare Worker Secret ثبت می‌شود. آن را در GitHub، HTML، اسکرین‌شات یا درخواست‌های قابل مشاهده قرار نده.</div></article>
+      </section>
+      <section class="section-block"><div class="section-heading"><div><span class="section-kicker">COMMAND PLAYBOOK</span><h2>نمونه‌های سریع برای تلگرام</h2></div><span class="section-note">فارسی، انگلیسی و عددهای محلی</span></div><div class="command-grid">
+        <article class="command-card"><span>◉ KM</span><code>/km 156000</code><p>ثبت کیلومترشمار مطلق؛ برای اصلاح محاسبه‌ی مسافت.</p></article>
+        <article class="command-card"><span>⛽ FUEL</span><code>/fuel 20l cost=700000 toman km=156200 full</code><p>سوخت‌گیری، مقدار، هزینه و کیلومتر؛ full برای باک کامل.</p></article>
+        <article class="command-card"><span>⚙ SERVICE</span><code>/service oil cost=900000 toman km=156000</code><p>ثبت سرویس و محاسبه‌ی موعد بعدی از بازه‌ی تنظیم‌شده.</p></article>
+        <article class="command-card"><span>⏱ INTERVAL</span><code>/interval engine_oil 4000 180</code><p>تنظیم فاصله کیلومتری و زمانی برای هر قطعه‌ی شناخته‌شده.</p></article>
+        <article class="command-card"><span>▦ REPORT</span><code>/summary week</code><p>خلاصه‌ی مسافت، سوخت، هزینه‌ی پرداخت‌شده و جریمه‌ی باز.</p></article>
+        <article class="command-card"><span>⇩ EXPORT</span><code>/export 2026-10</code><p>فایل CSV ماه مشخص؛ برای همه ماه‌ها از داشبورد JSON/CSV استفاده کن.</p></article>
+      </div></section>
+    </div>
+<section class="section-block workflow-banner panel">
       <div class="workflow-mark"><span>↳</span><div class="workflow-dot dot-telegram">✈</div><div class="workflow-connector"></div><div class="workflow-dot dot-github">⌘</div><div class="workflow-connector"></div><div class="workflow-dot dot-pages">▧</div></div>
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <a class="secondary-button" href="#top">بازگشت به بالا ↑</a>
     </section>
-
-    <footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span></div><span class="footer-version">GARAGE OS <b>v1.0.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span></div><span class="footer-version">GARAGE OS <b>v2.0.0</b></span></footer>
   </main>
-
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>
 </body>

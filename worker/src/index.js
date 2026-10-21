@@ -1,4 +1,4 @@
-const API_VERSION = "2026-03-10";
+const API_VERSION = "2022-11-28";
 const TZ = "Asia/Tehran";
 const FILE_INDEX = "data/index.json";
 const FILE_CONFIG = "data/config.json";
@@ -22,15 +22,38 @@ const SERVICE_ALIASES = {
 const SERVICE_START_WORDS = ["تعویض", "عوض کردم", "عوض شد", "عوضش کردم", "سرویس کردم", "سرویس شد", "بررسی کردم", "بازدید کردم", "چک کردم", "تعویض کردم"];
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/") {
-      return json({ ok: true, service: "Peugeot 206 Garage Bot", version: "1.0.0", timezone: TZ, endpoints: ["/health", "/telegram"] });
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) return corsResponse(new Response(null, { status: 204 }));
+
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/api")) {
+      return json({
+        ok: true,
+        service: "206 Garage API",
+        version: "2.0.0",
+        timezone: TZ,
+        mode: "request-driven",
+        writes: "GitHub Contents API commits are awaited before a successful response; no Cron/periodic trigger is required.",
+        endpoints: {
+          health: "GET /health",
+          telegramWebhook: "POST /telegram",
+          record: "POST /api/v1/record (Authorization: Bearer <API_ACCESS_TOKEN>, JSON {text:'...' } or typed event)",
+          overview: "GET /api/v1/overview (authorized)",
+          events: "GET /api/v1/events?month=YYYY-MM&type=fuel&limit=100 (authorized)",
+          due: "GET /api/v1/due (authorized)",
+          config: "GET /api/v1/config (authorized)",
+          export: "GET /api/v1/export?month=YYYY-MM (authorized CSV)"
+        }
+      });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "Peugeot 206 Garage Bot", time: nowTehran().iso, configured: Boolean(env.TELEGRAM_BOT_TOKEN && env.GITHUB_TOKEN && env.ALLOWED_TELEGRAM_USER_ID) });
+      return json({ ok: true, service: "206 Garage API", version: "2.0.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+        telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
+        github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
+        externalApi: Boolean(env.API_ACCESS_TOKEN)
+      }, scheduler: "not required; no scheduled handler" });
     }
-    if (request.method === "POST" && url.pathname === "/telegram") {
+    if (url.pathname === "/telegram" && request.method === "POST") {
       if (!env.TELEGRAM_WEBHOOK_SECRET || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) {
         return new Response("forbidden", { status: 403 });
       }
@@ -42,23 +65,117 @@ export default {
         return new Response("ok", { status: 200 });
       } catch (error) {
         console.error("telegram update failed", error?.stack || error);
-        // Return 200 to avoid endless Telegram webhook retries for a poison update.
-        // A user-facing failure notice is attempted by the handler when possible.
+        // Return 200 for an unrecoverable update so Telegram does not create a retry storm.
         return new Response("handled", { status: 200 });
       }
     }
-    return json({ ok: false, error: "not_found" }, 404);
-  },
-
-  async scheduled(controller, env, ctx) {
-    try {
-      await runDueReminders(env);
-    } catch (error) {
-      console.error("scheduled reminder failure", error?.stack || error);
-      throw error;
+    if (url.pathname.startsWith("/api/v1/")) {
+      if (!isApiAuthorized(request, env)) return corsResponse(json({ ok: false, error: "unauthorized", message: "Set the API_ACCESS_TOKEN Worker secret and send it as Authorization: Bearer <token>." }, 401));
+      try {
+        const result = await handleExternalApi(request, url, env);
+        return corsResponse(result);
+      } catch (error) {
+        console.error("external api request failed", error?.stack || error);
+        return corsResponse(json({ ok: false, error: "request_failed", message: safePublicError(error) }, 500));
+      }
     }
+    return json({ ok: false, error: "not_found", hint: "Open / or /api for the API guide." }, 404);
   }
 };
+
+function isApiAuthorized(request, env) {
+  const expected = String(env.API_ACCESS_TOKEN || "");
+  if (expected.length < 24) return false;
+  const header = request.headers.get("Authorization") || "";
+  const bearer = header.match(/^Bearer\s+(.+)$/i)?.[1] || request.headers.get("X-API-Token") || "";
+  if (bearer.length !== expected.length) return false;
+  let difference = 0;
+  for (let i = 0; i < expected.length; i++) difference |= bearer.charCodeAt(i) ^ expected.charCodeAt(i);
+  return difference === 0;
+}
+
+function corsResponse(response) {
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Token");
+  headers.set("Access-Control-Max-Age", "86400");
+  headers.set("Cache-Control", "no-store, max-age=0");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function safePublicError(error) {
+  const message = String(error?.message || "Unknown error");
+  if (/token|authorization|bearer|secret/i.test(message)) return "Check Worker secrets and GitHub repository permissions.";
+  return message.slice(0, 260);
+}
+
+async function handleExternalApi(request, url, env) {
+  const path = url.pathname.replace(/\/+$/, "") || "/";
+  if (request.method === "GET" && path === "/api/v1/health") return json({ ok: true, time: nowTehran().iso, timezone: TZ, mode: "request-driven" });
+  if (request.method === "GET" && path === "/api/v1/overview") {
+    const [events, config, index] = await Promise.all([loadAllEvents(env), readConfig(env), readJsonFile(FILE_INDEX, env, { months: [], updatedAt: null })]);
+    const currentOdo = calculateCurrentOdometer(events);
+    const currentMonth = nowTehran().date.slice(0, 7);
+    const monthEvents = events.filter(e => String(e.date || e.occurredAt || "").slice(0, 7) === currentMonth);
+    const actualCosts = events.filter(e => Number(e.costRial) > 0 && (e.type !== "fine" || Boolean(e.paid)));
+    const unpaidFines = events.filter(e => e.type === "fine" && !e.paid);
+    const openIssues = events.filter(e => e.type === "issue" && e.status !== "fixed");
+    const due = calculateDueItems(events, config, currentOdo, nowTehran());
+    return json({ ok: true, vehicle: config.vehicle || {}, timezone: TZ, updatedAt: index.updatedAt || null, eventCount: events.length, currentOdometerKm: currentOdo, currentMonth, currentMonthEventCount: monthEvents.length, totalCostRial: actualCosts.reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthCostRial: actualCosts.filter(e => accountingDateForApi(e).slice(0,7) === currentMonth).reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthFuelLiters: monthEvents.filter(e=>e.type === "fuel").reduce((n,e)=>n+(Number(e.liters)||0),0), unpaidFineCount: unpaidFines.length, unpaidFineRial: unpaidFines.reduce((n,e)=>n+(Number(e.costRial)||0),0), openIssueCount: openIssues.length, dueItems: due, months: index.months || [] });
+  }
+  if (request.method === "GET" && path === "/api/v1/events") {
+    const month = url.searchParams.get("month");
+    const type = url.searchParams.get("type");
+    const limit = Math.max(1, Math.min(2000, Number(url.searchParams.get("limit")) || 500));
+    let events = month ? (await getMonth(month, env)).events || [] : await loadAllEvents(env);
+    if (type && type !== "all") events = events.filter(e => e.type === type);
+    if (url.searchParams.get("order") === "asc") events.sort((a,b)=>String(a.occurredAt).localeCompare(String(b.occurredAt)));
+    else events.sort((a,b)=>String(b.occurredAt).localeCompare(String(a.occurredAt)));
+    return json({ ok: true, count: events.length, returned: Math.min(events.length, limit), month: month || null, type: type || "all", events: events.slice(0, limit) });
+  }
+  if (request.method === "GET" && path === "/api/v1/due") {
+    const [events, config] = await Promise.all([loadAllEvents(env), readConfig(env)]);
+    return json({ ok: true, currentOdometerKm: calculateCurrentOdometer(events), dueItems: calculateDueItems(events, config, calculateCurrentOdometer(events), nowTehran()), caveat: "Configured intervals are reminders, not a replacement for the vehicle manual or a mechanic's inspection." });
+  }
+  if (request.method === "GET" && path === "/api/v1/config") return json({ ok: true, config: await readConfig(env) });
+  if (request.method === "GET" && path === "/api/v1/export") {
+    const month = url.searchParams.get("month") || nowTehran().date.slice(0, 7);
+    const data = await getMonth(month, env);
+    const csv = eventsToCsv(data.events || []);
+    return new Response("\uFEFF" + csv, { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename=\"206-garage-${month}.csv\"`, "cache-control": "no-store" } });
+  }
+  if (request.method === "POST" && (path === "/api/v1/record" || path === "/api/v1/command")) {
+    let payload;
+    try { payload = await request.json(); } catch { return json({ ok: false, error: "invalid_json", message: "Send a JSON object." }, 400); }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return json({ ok: false, error: "invalid_payload" }, 400);
+    let reply;
+    if (typeof (payload.text ?? payload.message) === "string") {
+      const text = String(payload.text ?? payload.message).trim();
+      if (!text) return json({ ok: false, error: "empty_text" }, 400);
+      const fakeMessage = { date: Math.floor(Date.now()/1000), from: { id: "external-api" }, chat: { id: "external-api" } };
+      reply = await processMessage(text, fakeMessage, env);
+    } else if (typeof payload.type === "string") {
+      const allowed = new Set(["odometer","trip","fuel","service","part","expense","fine","wash","issue","repair","note"]);
+      if (!allowed.has(payload.type)) return json({ ok: false, error: "unsupported_event_type", allowed: [...allowed] }, 400);
+      const input = { ...payload, type: payload.type, title: String(payload.title || eventTypeLabel(payload.type)), description: String(payload.description || "External API event").slice(0,2000), occurredAt: payload.occurredAt || nowTehran().iso };
+      for (const key of ["odometerKm","distanceKm","liters","costRial"]) if (input[key] !== undefined && input[key] !== null) {
+        const n = Number(input[key]); if (!Number.isFinite(n) || n < 0) return json({ ok: false, error: "invalid_numeric_field", field: key }, 400); input[key] = n;
+      }
+      reply = { text: await saveEvent(input, env) };
+    } else return json({ ok: false, error: "missing_text_or_type", example: { text: "20l بنزین زدم، هزینه 700 هزار تومان، کیلومتر 156200" } }, 400);
+    // State-changing commands have completed their GitHub Contents API writes before processMessage/saveEvent resolves.
+    const replyText = String(reply?.text || "درخواست پردازش شد.");
+    const persisted = /✅ ثبت شد:|چند مورد سرویس از پیام تشخیص داده شد و جداگانه ثبت شد|بازه .+ ذخیره شد|پرداخت جریمه ثبت شد|خرابی بسته شد/i.test(replyText);
+    if (reply?.document) return json({ ok: false, error: "use_csv_endpoint", message: "برای دریافت CSV از GET /api/v1/export?month=YYYY-MM استفاده کن." }, 400);
+    return json({ ok: true, persisted, source: "github", reply: replyText, filename: reply?.filename || null, note: "در رویدادهای تغییردهنده، پاسخ موفق پس از پایان commitهای GitHub ارسال می‌شود؛ گزارش‌ها فقط داده‌های ذخیره‌شده را می‌خوانند." });
+  }
+  return json({ ok: false, error: "not_found", allowed: ["GET /api/v1/overview","GET /api/v1/events","GET /api/v1/due","GET /api/v1/config","GET /api/v1/export","POST /api/v1/record"] }, 404);
+}
+
+function accountingDateForApi(event) {
+  return String(event.type === "fine" && event.paid && event.paidAt ? event.paidAt : event.type === "issue" && event.resolvedAt && Number(event.repairCostRial) > 0 ? event.resolvedAt : event.occurredAt || event.date || "");
+}
 
 async function handleTelegramUpdate(update, env) {
   const message = update?.message;
@@ -84,8 +201,78 @@ async function handleTelegramUpdate(update, env) {
   }
 }
 
+const COMMAND_ALIASES = {
+  start: "start", begin: "start", شروع: "start", help: "help", commands: "help", command: "help", راهنما: "help", کمک: "help", دستورها: "help",
+  id: "id", شناسه: "id", km: "km", odo: "km", odometer: "km", mileage: "km", کارکرد: "km", کیلومتر: "km",
+  trip: "trip", drive: "trip", distance: "trip", مسافت: "trip", سفر: "trip",
+  fuel: "fuel", petrol: "fuel", gas: "fuel", refuel: "fuel", بنزین: "fuel", سوخت: "fuel",
+  service: "service", maintenance: "service", سرویس: "service", part: "part", قطعه: "part",
+  interval: "interval", reminder: "interval", بازه: "interval", فاصله: "interval",
+  due: "due", upcoming: "due", service_due: "due", سرویسها: "due", سرویس_ها: "due", موعد: "due",
+  summary: "summary", report: "summary", stats: "summary", گزارش: "summary", خلاصه: "summary",
+  config: "config", settings: "config", تنظیمات: "config",
+  fines: "fines", fine: "fine", جریمهها: "fines", جریمه_ها: "fines", جریمه: "fine", خلافی: "fines",
+  paid: "paid", payfine: "paid", pay: "paid", پرداخت: "paid", پرداخت_جریمه: "paid",
+  export: "export", csv: "export", خروجی: "export", دانلود: "export",
+  wash: "wash", cleaning: "wash", carwash: "wash", شستشو: "wash", کارواش: "wash",
+  repair: "repair", fixed: "repair", تعمیر: "repair", رفع: "repair",
+  expense: "expense", cost: "expense", هزینه: "expense",
+  note: "note", memo: "note", یادداشت: "note",
+  latest: "latest", recent: "latest", آخرین: "latest",
+  fuelstats: "fuelstats", fuel_stats: "fuelstats", consumption: "fuelstats", مصرف: "fuelstats",
+  undo: "undo"
+};
+const KNOWN_COMMANDS = new Set(Object.values(COMMAND_ALIASES));
+function canonicalizeCommand(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^\/([^\s@]+)(?:@[^\s]+)?([\s\S]*)$/);
+  if (!match) return { text: raw, unknown: false };
+  const command = normalizeIntentText(match[1]).replace(/[\s-]+/g, "_");
+  const aliasCompact = command.replace(/_/g, "");
+  const canonical = COMMAND_ALIASES[command] || COMMAND_ALIASES[aliasCompact];
+  if (!canonical || !KNOWN_COMMANDS.has(canonical)) return { text: raw, unknown: true, command: match[1] };
+  return { text: `/${canonical}${match[2] || ""}`, unknown: false };
+}
+function normalizeIntentText(value) {
+  return normalizeDigits(String(value || "").normalize("NFKC"))
+    .replace(/[يى]/g, "ی").replace(/ك/g, "ک").replace(/[ۀة]/g, "ه")
+    .replace(/[\u064B-\u065F\u0670]/g, "").replace(/[\u200c\u200d]/g, " ")
+    .replace(/[ـ]/g, "").replace(/[؛;]/g, " ").replace(/[،]/g, ",")
+    .replace(/\s+/g, " ").trim().toLowerCase();
+}
+function telegramHtml(value) {
+  const lines = String(value || "").slice(0, 3300).split("\n");
+  let firstContentSeen = false;
+  const escape = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const rendered = lines.map(original => {
+    const line = original.trimEnd();
+    if (!line.trim()) return "";
+    const safe = escape(line);
+    if (!firstContentSeen) { firstContentSeen = true; return `<b>${safe}</b>`; }
+    const commandMatch = line.match(/^\s*(\/[a-zA-Z0-9_]+)(?:\s+(.*))?$/);
+    if (commandMatch) {
+      const commandAndArgs = line.trim();
+      const delimiter = commandAndArgs.search(/\s+[—-]\s+/);
+      if (delimiter >= 0) {
+        const command = commandAndArgs.slice(0, delimiter).trim();
+        const description = commandAndArgs.slice(delimiter).replace(/^\s+[—-]\s+/, "");
+        return `<code>${escape(command)}</code> — ${escape(description)}`;
+      }
+      return `<code>${safe.trim()}</code>`;
+    }
+    const idLine = line.match(/^(شناسه|ID|کد|کیلومتر ثبت\s*شده|موعد کیلومتری بعدی)\s*:\s*(.*)$/i);
+    if (idLine) return `<b>${escape(idLine[1])}:</b> <code>${escape(idLine[2])}</code>`;
+    if (/^(?:⚠️|⛔|💡|📌|نکته[:：])/u.test(line)) return `<blockquote>${safe}</blockquote>`;
+    return safe.replace(/`([^`]{1,140})`/g, (_, code) => `<code>${escape(code)}</code>`);
+  });
+  return rendered.join("\n");
+}
+
 async function processMessage(text, message, env) {
-  const lower = text.toLowerCase();
+  const parsedCommand = canonicalizeCommand(text);
+  text = parsedCommand.text;
+  if (parsedCommand.unknown) return { text: `دستور «/${parsedCommand.command}» شناخته نشد. راهنمای کامل و نمونه‌های ثبت را پایین ببین:\n\n${helpText()}`, keyboard: true };
+  const lower = normalizeIntentText(text);
   const fromDate = new Date((message.date || Math.floor(Date.now() / 1000)) * 1000);
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/id\b/i.test(text)) return { text: `شناسه تلگرام شما: ${message.from.id}\nشناسه گفتگو: ${message.chat.id}`, keyboard: false };
@@ -151,7 +338,7 @@ async function processMessage(text, message, env) {
   const km = extractOdometer(text);
   const money = extractMoneyRial(text);
   const liters = parseLiters(text);
-  const isFuel = /بنزین|سوخت.?گیری|پمپ\s*بنزین|\bpetrol\b|\bfuel\b|\d+(?:\.\d+)?\s*l\b/i.test(lower) && liters > 0;
+  const isFuel = /بنزین|سوخت.?گیری|پمپ\s*بنزین|باک\s*(?:زدم|پر)|\bpetrol\b|\brefuel(?:led|ing)?\b|\bfuel\b|\bfilled\s*(?:up|the\s*tank)\b|\bgas(?:oline)?\b|\d+(?:\.\d+)?\s*l\b/i.test(lower) && liters > 0;
   if (isFuel) {
     return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: text, liters, costRial: money, odometerKm: km, fullTank: /\bfull\b|باک\s*را\s*پر|باک\s*کامل|پر\s*کردم/i.test(text), occurredAt, sourceText: text }, env), keyboard: true };
   }
@@ -161,13 +348,13 @@ async function processMessage(text, message, env) {
   }
   if (/پرداخت.*جریمه|جریمه.*پرداخت|خلافی.*پرداخت|جریمه.*تسویه/i.test(lower)) return { text: await markFinePaid(text.replace(/.*?(?:شناسه|id)\s*/i, "").trim(), env), keyboard: false };
   if (/شستم|کارواش|شست.?وشو|واکس|نظافت/i.test(lower)) return { text: await saveEvent({ type: "wash", title: "شست‌وشوی خودرو", description: text, costRial: money, odometerKm: km, occurredAt, sourceText: text }, env), keyboard: true };
-  if (SERVICE_START_WORDS.some(w => lower.includes(w)) || /روغن موتور.*(عوض|تعویض)|فیلتر.*(عوض|تعویض)|تسمه تایم.*(عوض|تعویض)/i.test(lower)) {
+  if (SERVICE_START_WORDS.some(w => lower.includes(normalizeIntentText(w))) || /روغن موتور.*(عوض|تعویض)|فیلتر.*(عوض|تعویض)|تسمه تایم.*(عوض|تعویض)|\b(?:changed|replaced|renewed|serviced|service done|oil change|maintenance done)\b/i.test(lower)) {
     return { text: await recordServiceOrPart(text, "service", occurredAt, env), keyboard: true };
   }
-  if (/خراب|صدای|نشتی|لرزش|چکه|چراغ چک|عیب|مشکل|روشن نمی.?شود|داغ کرد|جوش آورد/i.test(lower) && !/درست شد|تعمیر شد|رفع شد/i.test(lower)) {
+  if (/خراب|صدای|نشتی|لرزش|چکه|چراغ چک|عیب|مشکل|روشن نمی.?شود|داغ کرد|جوش آورد|\bbroken\b|\bnoise\b|\bleak(?:ing)?\b|\bvibration\b|\bcheck engine\b|\bissue\b|\bproblem\b|\boverheat(?:ed|ing)?\b/i.test(lower) && !/درست شد|تعمیر شد|رفع شد|\bfixed\b|\brepaired\b|\bresolved\b/i.test(lower)) {
     return { text: await saveEvent({ type: "issue", title: "ثبت خرابی/ایراد", description: text, odometerKm: km, costRial: money, status: "open", occurredAt, sourceText: text }, env), keyboard: true };
   }
-  if (/درست شد|تعمیر شد|رفع شد|تعمیر کردم|مشکل حل شد/i.test(lower)) return { text: await recordRepair(text, occurredAt, env), keyboard: true };
+  if (/درست شد|تعمیر شد|رفع شد|تعمیر کردم|مشکل حل شد|\bfixed\b|\brepaired\b|\bresolved\b|\bissue\s*fixed\b/i.test(lower)) return { text: await recordRepair(text, occurredAt, env), keyboard: true };
   if (/(کیلومتر|کارکرد|\bkm\b|\bodo\b)/i.test(lower) && km && !/مسافت|طی کردم|رانندگی|رفتم|کار کردم|راه رفتم/i.test(lower)) {
     return { text: await saveEvent({ type: "odometer", title: "ثبت کیلومترشمار", description: text, odometerKm: km, occurredAt, sourceText: text }, env), keyboard: true };
   }
@@ -178,10 +365,14 @@ async function processMessage(text, message, env) {
   if (money && /هزینه|پرداخت|خریدم|خرید|مکانیک|یدک|قطعه|پارکینگ|عوارض|تعمیر/i.test(lower)) {
     return { text: await saveEvent({ type: "expense", title: "هزینه خودرو", description: text, costRial: money, odometerKm: km, occurredAt, sourceText: text }, env), keyboard: true };
   }
-  if (km && /برگشتم|رسیدم|خانه|پارک کردم|ماشین شده|کارکرد ماشین/i.test(lower)) {
+  if (km && /برگشتم|رسیدم|خانه|پارک کردم|ماشین شده|کارکرد ماشین|\barrived\b|\bback home\b|\bgot home\b|\bcurrent odometer\b|\bodo(?:meter)?\s*(?:is|:)?\b/i.test(lower)) {
     return { text: await saveEvent({ type: "odometer", title: "ثبت کیلومترشمار", description: text, odometerKm: km, occurredAt, sourceText: text }, env), keyboard: true };
   }
-  return { text: await saveEvent({ type: "note", title: "یادداشت خودرو", description: text, odometerKm: km, costRial: money, occurredAt, sourceText: text }, env), keyboard: true };
+  if (/^(?:\/note\b|یادداشت(?:\s*[:：])?|note\s*[:：]|memo\s*[:：])/i.test(text.trim())) {
+    const note = text.replace(/^(?:\/note|یادداشت|note|memo)\s*[:：]?/i, "").trim();
+    return { text: await saveEvent({ type: "note", title: "یادداشت خودرو", description: note || text, odometerKm: km, costRial: money, occurredAt, sourceText: text }, env), keyboard: true };
+  }
+  return { text: `متن دریافت شد، اما نوع رویداد با اطمینان تشخیص داده نشد؛ برای جلوگیری از ثبت اشتباه، آن را ذخیره نکردم.\n\nمی‌توانی بنویسی «یادداشت: ...» یا یکی از نمونه‌های راهنما را استفاده کنی.\n\n${helpText()}`, keyboard: true };
 }
 
 function helpText() {
@@ -209,7 +400,9 @@ function helpText() {
 /paid 8f31 — پرداخت جریمه با شناسه
 /export — فایل CSV ماه جاری؛ /export 2026-09 — ماه مشخص
 /config — بازه‌های نگهداری
-/latest — رویدادهای اخیر\n\n💡 عدد فارسی/انگلیسی، تاریخ شمسی/میلادی، «هزار/میلیون»، تومان/ریال، km و l پشتیبانی می‌شود. اگر کیلومتر یا مبلغ مبهم باشد، پاسخ ربات را بررسی کن.`;
+/latest — رویدادهای اخیر\n\n💡 عدد فارسی/عربی/انگلیسی، فاصله‌گذاری متفاوت، تاریخ شمسی/میلادی، «هزار/میلیون»، تومان/ریال، km و l پشتیبانی می‌شود. نام‌های رایج فارسی و انگلیسی نیز شناسایی می‌شوند. اگر متن مبهم باشد، برای جلوگیری از داده اشتباه ذخیره نمی‌شود.
+
+📡 API مستقیم Worker: برای ثبت از سامانه دیگر، POST /api/v1/record با هدر Authorization: Bearer <API_ACCESS_TOKEN> و بدنه JSON مثل {"text":"20l fuel, cost 700000 toman, km 156200"}. هر ثبت پس از commit در GitHub تأیید می‌شود.`;
 }
 
 async function recordServiceOrPart(rawText, type, occurredAt, env) {
@@ -281,7 +474,7 @@ async function saveEvent(input, env) {
     paid: input.type === "fine" ? Boolean(input.paid) : undefined,
     paidAt: null,
     status: input.status || (input.type === "issue" ? "open" : undefined),
-    metadata: {}
+    metadata: { source: input.source || "telegram-or-api" }
   };
   if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
     event.odometerKm = latestOdo;
@@ -667,7 +860,7 @@ function base64ToUtf8(text) {
 
 async function sendText(env, chatId, text, keyboard = false) {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN secret is missing.");
-  const body = { chat_id: chatId, text: String(text).slice(0, 4000), disable_web_page_preview: true };
+  const body = { chat_id: chatId, text: telegramHtml(text), parse_mode: "HTML", disable_web_page_preview: true };
   if (keyboard) body.reply_markup = { keyboard: [[{ text: "/km" }, { text: "/summary" }, { text: "/due" }], [{ text: "/fuelstats" }, { text: "/fines" }, { text: "/export" }]], resize_keyboard: true, is_persistent: true };
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
@@ -694,20 +887,19 @@ function eventsToCsv(events) {
 function extractMoneyRial(text) {
   const source = normalizeDigits(String(text || ""));
   const patterns = [
-    /(?:هزینه|مبلغ|قیمت|جریمه|پرداخت|cost|price|fine|amount|مجموع)\s*(?:[:=]|حدود|مبلغ)?\s*([\d][\d,._]*)(?:\s*(هزار|میلیون|هزارتومان|میلیونتومان))?\s*(تومان|تومن|تومن|ریال|rial|toman|tomans)?/i,
-    /([\d][\d,._]*)\s*(هزار|میلیون)?\s*(تومان|تومن|ریال|rial|toman|tomans)/i
+    /(?:هزینه|مبلغ|قیمت|جریمه|پرداخت|cost|price|fine|amount|مجموع|قیمتش)\s*(?:[:=]|حدود|مبلغ)?\s*([\d][\d,._]*)(?:\s*(هزار|میلیون|k|m))?\s*(تومان|تومن|ریال|rial|toman|tomans)?/i,
+    /([\d][\d,._]*)\s*(هزار|میلیون|k|m)?\s*(تومان|تومن|ریال|rial|toman|tomans)/i
   ];
   for (const pattern of patterns) {
     const match = source.match(pattern);
-    if (match) {
-      let amount = parseNumericToken(match[1]);
-      if (!Number.isFinite(amount)) continue;
-      const multiplier = /میلیون/.test(match[2] || "") ? 1000000 : /هزار/.test(match[2] || "") ? 1000 : 1;
-      amount *= multiplier;
-      const unit = (match[3] || "تومان").toLowerCase();
-      if (/ریال|rial/.test(unit)) return Math.round(amount);
-      return Math.round(amount * 10);
-    }
+    if (!match) continue;
+    let amount = parseNumericToken(match[1]);
+    if (!Number.isFinite(amount)) continue;
+    const multiplier = /میلیون|^m$/i.test(match[2] || "") ? 1000000 : /هزار|^k$/i.test(match[2] || "") ? 1000 : 1;
+    amount *= multiplier;
+    const unit = (match[3] || "تومان").toLowerCase();
+    if (/ریال|rial/.test(unit)) return Math.round(amount);
+    return Math.round(amount * 10);
   }
   return null;
 }

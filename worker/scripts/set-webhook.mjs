@@ -1,52 +1,48 @@
 const token = process.env.BOT_TOKEN;
-const workerUrl = (process.env.WORKER_URL || '').replace(/\/+$/, '');
+const workerUrl = (process.env.WORKER_URL || "").replace(/\/$/, "");
 const secret = process.env.WEBHOOK_SECRET;
 
 if (!token || !workerUrl || !secret) {
-  console.error('Missing variables. Set BOT_TOKEN, WORKER_URL and WEBHOOK_SECRET in CMD, then run: node scripts/set-webhook.mjs');
+  console.error("Missing required environment variables: BOT_TOKEN, WORKER_URL, WEBHOOK_SECRET");
+  console.error("Use CMD: set \"BOT_TOKEN=...\" then set \"WORKER_URL=https://...workers.dev\" and set \"WEBHOOK_SECRET=...\"");
   process.exit(1);
 }
-if (!/^https:\/\//i.test(workerUrl)) {
-  console.error('WORKER_URL must start with https://');
-  process.exit(1);
-}
-if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) {
-  console.error('WEBHOOK_SECRET must contain only A-Z, a-z, 0-9, underscore or hyphen (max 256 chars).');
-  process.exit(1);
-}
+if (!/^https:\/\//i.test(workerUrl)) throw new Error("WORKER_URL must start with https://");
+if (!/^[A-Za-z0-9_-]{20,256}$/.test(secret)) throw new Error("WEBHOOK_SECRET must be 20–256 characters using A-Z, a-z, 0-9, _ or -.");
 
-async function telegram(method, body) {
+async function telegram(method, payload) {
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
   });
-  const data = await response.json();
-  if (!response.ok || !data.ok) throw new Error(`${method} failed: ${JSON.stringify(data)}`);
-  return data;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`${method} failed (${response.status}): ${data.description || "Telegram API error"}`);
+  return data.result;
 }
 
-try {
-  const webhook = await telegram('setWebhook', {
-    url: `${workerUrl}/telegram`,
-    secret_token: secret,
-    allowed_updates: ['message'],
-    drop_pending_updates: false
-  });
-  console.log('Webhook:', webhook.description || 'configured');
-  const commands = [
-    ['start', 'شروع و نمایش راهنما'], ['help', 'راهنمای کامل و مثال‌ها'], ['id', 'شناسه تلگرام'],
-    ['km', 'ثبت کیلومترشمار فعلی'], ['trip', 'ثبت مسافت طی‌شده'], ['fuel', 'ثبت سوخت‌گیری'],
-    ['service', 'ثبت سرویس و قطعه مصرفی'], ['part', 'ثبت قطعه'], ['interval', 'تغییر بازه سرویس'],
-    ['due', 'موعد سرویس‌های بعدی'], ['summary', 'گزارش هزینه و استفاده'], ['fuelstats', 'آمار بنزین و مصرف'],
-    ['fines', 'فهرست جریمه‌ها'], ['paid', 'ثبت پرداخت جریمه'], ['repair', 'ثبت تعمیر یا رفع خرابی'],
-    ['wash', 'ثبت کارواش'], ['expense', 'ثبت هزینه متفرقه'], ['note', 'یادداشت خودرو'],
-    ['export', 'دریافت خروجی CSV'], ['config', 'تنظیمات سرویس‌ها'], ['latest', 'آخرین رویدادها']
-  ].map(([command, description]) => ({ command, description }));
-  const registered = await telegram('setMyCommands', { commands });
-  console.log('Bot commands:', registered.description || 'registered');
-  console.log(`Done. Send /start to your bot. Webhook URL: ${workerUrl}/telegram`);
-} catch (error) {
-  console.error(error.message || error);
-  process.exit(1);
-}
+const result = await telegram("setWebhook", {
+  url: `${workerUrl}/telegram`,
+  secret_token: secret,
+  allowed_updates: ["message"],
+  drop_pending_updates: false,
+  max_connections: 20
+});
+await telegram("setMyCommands", {
+  commands: [
+    { command: "start", description: "شروع و معرفی 206 Garage" },
+    { command: "help", description: "فهرست کامل دستورها" },
+    { command: "id", description: "نمایش شناسه تلگرام" },
+    { command: "km", description: "ثبت کیلومترشمار خودرو" },
+    { command: "trip", description: "ثبت مسافت طی‌شده" },
+    { command: "fuel", description: "ثبت بنزین و هزینه سوخت" },
+    { command: "service", description: "ثبت سرویس و قطعه" },
+    { command: "due", description: "موعد سرویس‌ها و هشدارها" },
+    { command: "summary", description: "گزارش روز، هفته یا ماه" },
+    { command: "fuelstats", description: "گزارش سوخت و مصرف" },
+    { command: "fines", description: "جریمه‌های ثبت‌شده" },
+    { command: "export", description: "خروجی CSV" },
+    { command: "latest", description: "آخرین رویدادهای ثبت‌شده" }
+  ]
+});
+console.log(JSON.stringify({ ok: true, webhookUrl: result.url, pendingUpdateCount: result.pending_update_count, allowedUpdates: result.allowed_updates }, null, 2));

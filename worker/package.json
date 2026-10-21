@@ -1,15 +1,16 @@
 {
   "name": "peugeot-206-garage-worker",
-  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "version": "2.1.0",
+  "description": "Request-driven Telegram and GitHub vehicle log for Peugeot 206",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail",
-    "test": "node test/smoke.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "webhook": "node scripts/set-webhook.mjs"
   },
   "devDependencies": {
-    "wrangler": "^4.44.0"
+    "wrangler": "^4.0.0"
   }
 }
