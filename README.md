@@ -1,146 +1,233 @@
-# 206 Garage · Peugeot 206 Vehicle OS
+# 🚘 206 Garage — Peugeot 206 Vehicle OS
 
-دفتر هوشمند و شخصی خودروی پژو ۲۰۶ مدل ۱۳۸۷ با ربات تلگرام، Cloudflare Worker و داشبورد چندبخشی GitHub Pages.
+**Your personal vehicle log, maintenance tracker, fuel monitor, and expense dashboard.**
 
-## معماری و اصل ذخیره‌سازی
+206 Garage is a Telegram-powered vehicle management system built for a Peugeot 206 Type 2 (2008). It combines a Telegram bot, Cloudflare Workers, GitHub as the event store, and GitHub Pages as a visual dashboard.
 
-- **همه‌ی عملیات درخواست‌محور هستند.** Worker به‌محض دریافت Webhook تلگرام یا HTTP API اجرا می‌شود؛ هیچ Cron، Trigger دوره‌ای یا سرویس همیشه‌روشن برای ثبت عادی لازم نیست.
-- برای رویداد جدید، Worker ابتدا فایل ماه رویداد (`data/logs/YYYY-MM.json`) و سپس فهرست ماه‌ها/زمان آخرین تغییر (`data/index.json`) را با GitHub Contents API می‌نویسد. پاسخ موفق ثبت، پس از پایان هر دو commit برمی‌گردد. اگر نوشتن GitHub ناموفق شود، پاسخ موفق ثبت داده نمی‌شود.
-- گزارش‌های ربات و API داده‌ی ذخیره‌شده در GitHub را می‌خوانند؛ داشبورد Pages فایل‌های JSON منتشرشده را می‌خواند. ممکن است نمایش عمومی Pages پس از commit کمی دیرتر به‌روزرسانی شود؛ خود ثبت Worker منتظر پایان نوشتن GitHub می‌ماند.
-- یادآورهای پیش‌دستانه که بدون هیچ درخواست و در یک زمان مشخص خودشان پیام بفرستند، با Worker کاملاً request-driven ممکن نیستند. در این معماری `/due`، `/summary` و هر درخواست دیگر در لحظه، موعدها را محاسبه می‌کند. برای اعلان خودکار زمان‌بندی‌شده باید عمداً Cron یا سرویس زمان‌بندی جداگانه اضافه شود؛ در این نسخه وجود ندارد.
-- مخزن حاوی سوابق عمومی است اگر visibility روی Public باشد. اطلاعات حساس، نشانی‌ها یا جزئیات قابل شناسایی را ثبت نکن.
+Record mileage, fuel, maintenance, repairs, fines, and expenses through Telegram. Every successful write is committed to GitHub, and stored events are used to generate reports and calculate maintenance deadlines.
 
-## نام‌ها
+## ✨ Features
 
-- Repository: `peugeot-206-garage`
-- Worker: `peugeot-206-garage-bot`
-- Bot display name: `206 Garage | دفتر هوشمند خودرو`
-- Telegram username هدف: `@Peugeot206GarageBot` (از قبل توسط مالک معرفی شده است)
-- خودرو در تنظیمات: Peugeot 206 Type 2، مدل ۱۳۸۷. Type 2 هاچ‌بک است؛ 206 SD سدان است. تصویر سینمایی SD فقط پس‌زمینه است و تصویر برداری صفحه نمای هاچ‌بک دارد.
+- **Instant event persistence:** Write vehicle events to GitHub using the Contents API. A successful registration response is sent only after the relevant GitHub writes complete.
+- **Request-driven architecture:** The Worker runs when it receives an HTTP request or Telegram webhook. No Cron trigger is required for normal logging or on-demand reports.
+- **Persian and English input:** Supports Persian and English digits, common vehicle terminology, amounts, and natural-language descriptions.
+- **Odometer tracking:** Record current mileage and trip distances, with estimates based on available readings.
+- **Fuel tracking:** Log liters, price, odometer, and full-tank refueling events. Estimate consumption when sufficient full-tank records exist.
+- **Maintenance management:** Record oil changes, filters, timing-belt work, inspections, and other service events. Configure distance- and time-based intervals.
+- **Repairs and issues:** Register vehicle problems and record their resolution.
+- **Fines and expenses:** Track unpaid fines, record payments, and categorize vehicle spending.
+- **Reports and exports:** Request daily, weekly, or monthly summaries, fuel statistics, upcoming maintenance, recent events, and CSV exports.
+- **Responsive dashboard:** Explore event history, costs, fuel trends, maintenance status, and statistics through GitHub Pages.
+- **Authenticated external API:** Allow authorized applications to submit records or request reports without embedding credentials in the public website.
 
-## 1. بارگذاری فایل‌ها در GitHub
-
-محتویات پروژه را در ریشه‌ی مخزن `mehrdadmb2/peugeot-206-garage` قرار بده؛ فایل `index.html` باید مستقیماً در ریشه باشد. در `Settings → Pages` گزینه‌ی `Deploy from a branch`، شاخه‌ی `main` و مسیر `/(root)` را انتخاب کن.
-
-فایل‌های مهم:
+## 🧱 Architecture
 
 ```text
-index.html
-site.webmanifest
-assets/css/style.css
-assets/js/app.js
-assets/img/favicon.svg
-assets/img/206-white.svg
-assets/img/206-sd-garage.webp
-data/config.json
-data/index.json
-data/logs/
-worker/src/index.js
-worker/wrangler.toml
-worker/package.json
-worker/scripts/set-webhook.mjs
-worker/tests/worker.test.mjs
+Telegram Bot / External Client
+             |
+             v
+Cloudflare Worker
+  - Request validation
+  - Command parsing
+  - Persian digit normalization
+  - Vehicle calculations
+  - Report generation
+             |
+             v
+GitHub Contents API
+  - data/logs/YYYY-MM.json
+  - data/index.json
+  - data/config.json
+             |
+             v
+GitHub Pages Dashboard
+  - KPIs and charts
+  - Maintenance deadlines
+  - Fuel and expense reports
+  - Journal and exports
 ```
 
-## 2. ساخت GitHub token
+### Storage model
 
-در تنظیمات GitHub یک Fine-grained personal access token بساز که فقط به مخزن `mehrdadmb2/peugeot-206-garage` دسترسی داشته باشد و **Contents: Read and write** داشته باشد. توکن را در فایل، HTML، README، GitHub Actions، یا پیام‌های قابل مشاهده قرار نده.
+| Path | Purpose |
+|---|---|
+| `data/index.json` | Month index and last-update metadata |
+| `data/logs/YYYY-MM.json` | Vehicle events organized by event month |
+| `data/config.json` | Vehicle details and configurable service intervals |
+| `worker/src/index.js` | Worker routes, Telegram processing, persistence, and reports |
+| `worker/wrangler.toml` | Worker deployment configuration |
+| `worker/scripts/set-webhook.mjs` | Telegram webhook and initial command-menu setup |
+| `worker/tests/worker.test.mjs` | Automated Worker tests |
 
-## 3. نصب و انتشار Cloudflare Worker در Windows CMD
+Event files use JSON so that the records remain structured and can be processed by the Worker and dashboard.
 
-Node.js نسخه‌ی پشتیبانی‌شده و npm را نصب داشته باش. CMD (نه PowerShell) را باز کن:
+## 🚀 Deployment
+
+### Requirements
+
+- A GitHub repository with the project files on the `main` branch.
+- Node.js LTS and npm.
+- A Cloudflare account with permission to deploy Workers.
+- A Telegram bot token obtained from [@BotFather](https://t.me/BotFather).
+- A GitHub fine-grained token with `Contents: Read and write` access to this repository.
+
+### 1. Install dependencies
+
+Open Windows Command Prompt and navigate to the Worker directory:
 
 ```cmd
-cd path\to\peugeot-206-garage\worker
+cd /d "%USERPROFILE%\Documents\peugeot-206-garage\worker"
 npm install
 npm test
 npx wrangler login
+```
+
+Adjust the directory path if the repository is stored elsewhere.
+
+### 2. Configure Worker secrets
+
+Register the following secrets using Wrangler:
+
+```cmd
 npx wrangler secret put GITHUB_TOKEN
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
 npx wrangler secret put ALLOWED_TELEGRAM_USER_ID
 npx wrangler secret put API_ACCESS_TOKEN
+```
+
+| Secret | Description |
+|---|---|
+| `GITHUB_TOKEN` | GitHub token with permission to read and write repository contents |
+| `TELEGRAM_BOT_TOKEN` | Private token issued by BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Random secret used to validate Telegram webhook requests |
+| `ALLOWED_TELEGRAM_USER_ID` | Numeric Telegram user ID permitted to operate the bot |
+| `API_ACCESS_TOKEN` | Separate strong token for external API clients |
+
+Never commit these values to GitHub. Do not include them in `index.html`, dashboard JavaScript, screenshots, or public documentation.
+
+### 3. Deploy the Worker
+
+```cmd
 npx wrangler deploy
 ```
 
-هر `secret put` به‌صورت تعاملی مقدار جداگانه می‌گیرد. مقادیر:
+The deployment URL is shown by Wrangler. The configured Worker name is `peugeot-206-garage-bot`.
 
-- `GITHUB_TOKEN`: توکن با مجوز Contents read/write برای همان مخزن.
-- `TELEGRAM_BOT_TOKEN`: توکن واقعی BotFather؛ آن را با هیچ‌کس به اشتراک نگذار.
-- `TELEGRAM_WEBHOOK_SECRET`: یک مقدار تصادفی ۲۰ تا ۲۵۶ کاراکتری با حروف انگلیسی، اعداد، `_` یا `-`؛ برای ساخت دستی از مولد رمز امن استفاده کن.
-- `ALLOWED_TELEGRAM_USER_ID`: شناسه‌ی عددی حساب تلگرام مجاز. Bot خصوصی است و شناسه‌ی کاربر باید دقیقاً با آن برابر باشد.
-- `API_ACCESS_TOKEN`: یک رمز تصادفی جداگانه و قوی با حداقل ۳۲ کاراکتر؛ فقط برای API غیرتلگرامی است.
+### 4. Configure the Telegram webhook
 
-مالک/نام مخزن/شاخه در `worker/wrangler.toml` تنظیم شده‌اند. اگر نام یا شاخه تغییر کرد آن فایل را قبل از deploy اصلاح کن. این Worker هیچ بخش `[triggers]` ندارد و هیچ `scheduled()` handler تعریف نمی‌کند.
-
-## 4. اتصال Webhook و منوی فرمان‌های تلگرام
-
-بعد از deploy، URL منتشرشده را از خروجی Wrangler بردار. در همان پنجره‌ی CMD مقدارها را تنظیم کن (مقادیر واقعی خودت را وارد کن):
+In the same Command Prompt session, from the Worker directory, set the environment variables:
 
 ```cmd
-set "BOT_TOKEN=توکن_واقعی_BotFather"
+set "BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN"
 set "WORKER_URL=https://peugeot-206-garage-bot.game-developer-mb.workers.dev"
-set "WEBHOOK_SECRET=همان_Telegram_Webhook_Secret"
-node scripts/set-webhook.mjs
+set "WEBHOOK_SECRET=YOUR_TELEGRAM_WEBHOOK_SECRET"
+node scripts\set-webhook.mjs
 ```
 
-اگر URL نهایی Worker متفاوت بود، همان URL را وارد کن. اسکریپت Webhook و منوی دستورهای BotFather را ثبت می‌کند. پس از آن `/start` و `/help` را در تلگرام امتحان کن.
+Replace the placeholders with actual values. `WEBHOOK_SECRET` must match the secret saved as `TELEGRAM_WEBHOOK_SECRET` in Cloudflare.
 
-## 5. فرمان‌ها و ورودی طبیعی
+A successful script response confirms that Telegram accepted the webhook configuration and command-menu setup.
 
-```text
-/km 156000
-/trip 85
-/fuel 20l cost=700000 toman km=156200 full
-/service engine_oil cost=900000 toman km=156000
-/interval engine_oil 4000 180
-/due
-/summary week
-/fuelstats
-/fines
-/paid a1b2c3d4
-/wash 180000 toman
-/repair جلوبندی cost=450000 toman
-/export 2026-10
-```
+### 5. Publish GitHub Pages
 
-پیام ساده نیز پشتیبانی می‌شود:
+In the repository, open **Settings → Pages**.
+
+Choose `Deploy from a branch`, then select:
+
+- Branch: `main`
+- Folder: `/(root)`
+
+Save the configuration. The entry point `index.html` must be located at the repository root.
+
+The expected project URL is:
+
+`https://mehrdadmb2.github.io/peugeot-206-garage/`
+
+## 💬 Telegram commands
+
+| Command | Description |
+|---|---|
+| `/start` | Introduction and quick help |
+| `/help` | Command reference and examples |
+| `/id` | Show numeric Telegram user and chat IDs |
+| `/km 156000` | Record current odometer |
+| `/trip 85` | Record a trip distance |
+| `/fuel 20l cost=700000 toman km=156200 full` | Log a full-tank refueling event |
+| `/service oil cost=900000 toman km=156000` | Record a service |
+| `/part air_filter km=156000` | Record a component |
+| `/interval engine_oil 4000 180` | Configure distance and time intervals |
+| `/due` | Calculate upcoming maintenance |
+| `/summary today` | Daily report |
+| `/summary week` | Weekly report |
+| `/summary month` | Monthly report |
+| `/config` | View vehicle and maintenance settings |
+| `/fuelstats` | Fuel usage and consumption report |
+| `/fine 500000 toman speeding` | Register a fine |
+| `/fines` | List fines and payment status |
+| `/paid a1b2c3d4` | Mark a fine as paid using its event ID |
+| `/wash 180000 toman` | Record a car wash |
+| `/repair suspension cost=450000 toman` | Resolve the most recent open issue or record a repair |
+| `/expense 250000 toman parking` | Record an additional expense |
+| `/note inspect tires next visit` | Save a vehicle note |
+| `/latest` | Show recent events |
+| `/export` | Export the current month's events as CSV |
+| `/export 2026-10` | Export a specific month |
+
+The bot also accepts supported natural-language entries. Examples:
 
 ```text
 امروز با کیلومتر ۱۵۶۲۸۰ به خانه برگشتم
-امروز ۲۰ لیتر بنزین زدم، ۷۰۰ هزار تومان، کیلومتر ۱۵۶۲۰۰ و باک کامل
-روغن موتور و فیلتر روغن را عوض کردم، هزینه ۱ میلیون تومان، کیلومتر ۱۵۶۲۰۰
+۲۰ لیتر بنزین زدم، ۷۰۰ هزار تومان، کیلومتر ۱۵۶۲۰۰ و باک کامل
+روغن موتور را عوض کردم، هزینه ۹۰۰ هزار تومان، کیلومتر ۱۵۶۰۰۰
 خرابی: صدای جلوبندی
+تعمیر شد: جلوبندی، هزینه ۴۵۰ هزار تومان
 جریمه سرعت ۵۰۰ هزار تومان
-پرداخت جریمه با شناسه a1b2c3d4
 کارواش ۱۸۰ هزار تومان
-note: صدای غیرعادی را در مراجعه بعدی بررسی کنم
 ```
 
-ارقام فارسی/عربی و انگلیسی نرمال می‌شوند. برای ورود تاریخ/ساعت دستی، زمان دقیق و منطقه‌ی زمانی ایران را ذکر کن؛ زمان پیش‌فرض از زمان پیام تلگرام و `Asia/Tehran` استفاده می‌کند. عبارت‌های آزاد ذاتاً می‌توانند مبهم باشند؛ برای موردهای حیاتی از فرمان صریح مثل `/km`، `/fuel` و `/service` استفاده کن. دستور ناشناخته‌ی اسلش دیگر بی‌صدا به یادداشت تبدیل نمی‌شود و راهنما را می‌فرستد. برای یادداشت آزاد از `note:` یا `/note` استفاده کن.
+Input recognition is best-effort. For important records, use an explicit command and include the relevant mileage, amount, and currency. Ambiguous messages should not be treated as successfully registered events.
 
-### واحد پول
+`/undo` is intentionally disabled to prevent accidental deletion. Correcting or deleting existing records requires a separate, explicit data-management workflow.
 
-مقادیر رویدادهای داخل فایل JSON خام با نام `costRial` در ریال ذخیره می‌شوند و داشبورد آن را بر ۱۰ تقسیم می‌کند تا تومان نمایش بدهد. در ورودی طبیعی، بهتر است واحد «تومان» یا «ریال» را صریح بنویسی. برای API تایپ‌شده، `costRial` باید عدد ریالی باشد.
+## 📊 External API
 
-### سرویس‌ها و یادآورها
+The Worker can also be called by other applications.
 
-بازه‌ها در `data/config.json` فقط مقدارهای اولیه‌اند؛ فاصله‌ی نهایی سرویس را بر اساس دفترچه/نوع موتور، کیفیت قطعه، شرایط رانندگی و متخصص تنظیم کن. مثلاً `/interval engine_oil 4000 180` فاصله‌ی یادآوری را به ۴۰۰۰ کیلومتر یا ۱۸۰ روز تنظیم می‌کند. محاسبه بر اساس آخرین سرویس ثبت‌شده و کیلومترهای واردشده است و جایگزین بررسی فنی نیست.
+### Record a natural-language event
 
-## 6. REST API برای هر برنامه‌ی دیگر
-
-برای ثبت از برنامه، دستگاه، فرم یا اسکریپت (بدون ارسال از تلگرام)، هدر `Authorization: Bearer <API_ACCESS_TOKEN>` و JSON ارسال کن. همه‌ی درخواست‌های API به‌صورت زنده اجرا می‌شوند و بعد از commit برمی‌گردند.
-
-**ثبت پیام با همان parser تلگرام:**
-
-```cmd
-curl.exe -X POST "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" ^
-  -H "Authorization: Bearer YOUR_API_ACCESS_TOKEN" ^
-  -H "Content-Type: application/json" ^
-  --data-binary "{\"text\":\"20l fuel, cost 700000 toman, km 156200\"}"
+```http
+POST /api/v1/record
+Authorization: Bearer YOUR_API_ACCESS_TOKEN
+Content-Type: application/json
 ```
 
-**ثبت رویداد تایپ‌شده:**
+Example JSON:
+
+```json
+{
+  "text": "20l fuel, cost 700000 toman, km 156200"
+}
+```
+
+### Available endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Public Worker health information |
+| `GET` | `/` | API information and endpoint overview |
+| `POST` | `/telegram` | Telegram webhook |
+| `POST` | `/api/v1/record` | Register an event or process a command |
+| `POST` | `/api/v1/command` | Command/record endpoint alias |
+| `GET` | `/api/v1/overview` | Aggregated vehicle statistics |
+| `GET` | `/api/v1/events?type=fuel&limit=100` | Read event history |
+| `GET` | `/api/v1/due` | Calculate maintenance deadlines |
+| `GET` | `/api/v1/config` | Read vehicle and interval configuration |
+| `GET` | `/api/v1/export?month=2026-10` | Export monthly events as CSV |
+
+All `/api/v1/*` endpoints require a valid bearer token, including API reads. The `/health` route is separate and does not expose secret values.
+
+### Typed event example
 
 ```json
 {
@@ -155,44 +242,82 @@ curl.exe -X POST "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/a
 }
 ```
 
-در رویداد تایپ‌شده `costRial` ریال است؛ مثال فوق هفت میلیون ریال (۷۰۰ هزار تومان) است.
+For typed events, `costRial` is expressed in Iranian rials. The example represents 700,000 tomans.
 
-| Endpoint | کاربرد |
-|---|---|
-| `GET /` | معرفی Worker و فهرست مسیرها |
-| `GET /health` | بررسی سلامت بدون نمایش رازها |
-| `POST /telegram` | Webhook تلگرام؛ با Secret Header |
-| `POST /api/v1/record` | ثبت پیام طبیعی یا رویداد تایپ‌شده |
-| `POST /api/v1/command` | alias برای ثبت/فرمان‌ها |
-| `GET /api/v1/overview` | نمای آماری کامل ذخیره‌شده |
-| `GET /api/v1/events?month=2026-10&type=fuel&limit=500` | خواندن رویدادها |
-| `GET /api/v1/due` | محاسبه‌ی موعد سرویس‌ها |
-| `GET /api/v1/config` | تنظیمات خودرو و بازه‌ها |
-| `GET /api/v1/export?month=2026-10` | خروجی CSV یک ماه |
+## 🔧 Maintenance configuration
 
-تمام مسیرهای `/api/v1/*` به‌جز درخواست preflight نیازمند API token هستند؛ توکن را در GitHub Pages سمت مرورگر قرار نده. API برای برنامه‌های کنترل‌شده است و نه برای embed مستقیم در یک سایت عمومی.
+Service intervals are stored in `data/config.json` and can be adjusted through the bot.
 
-## 7. داشبورد GitHub Pages
+For example:
 
-- ۸ بخش: داشبورد، سرویس‌ها، سوخت، تحلیل، هزینه‌ها، جریمه/خرابی، دفتر وقایع، راهنما و API.
-- نمودارهای SVG محلی، فیلتر رویداد و ماه، خروجی CSV/JSON، جست‌وجو، کارت‌های KPI، سوخت و هزینه دسته‌بندی‌شده، خرابی‌های باز و جریمه‌های پرداخت‌نشده.
-- Loader هنگام خواندن GitHub JSON، تصویر سینمایی پس‌زمینه، تصویر اختصاصی ۲۰۶ هاچ‌بک، favicon و Web Manifest.
-- داشبورد مستقیم از `data/index.json`, `data/config.json` و `data/logs/*.json` خوانده می‌شود و برای داده‌ها نیازی به قرار دادن GitHub token در مرورگر ندارد.
+```text
+/interval engine_oil 4000 180
+```
 
-GitHub Pages محتوای فایل‌های commitشده را در انتشار استاتیک ارائه می‌کند، بنابراین پس از commit ممکن است کمی زمان لازم باشد تا build منتشر و cache مرورگر به‌روزرسانی شود. دکمه‌ی تازه‌سازی داشبورد درخواست مجدد برای JSONها انجام می‌دهد، اما زمان انتشار GitHub Pages را کنترل نمی‌کند.
+This configures a 4,000 km distance interval and a 180-day time interval for engine oil.
 
-## 8. تست محلی
+Maintenance deadlines are estimates calculated from the available service history and odometer records. Initial interval values are configurable reminders, not guaranteed manufacturer specifications. Verify the correct intervals against the vehicle's exact engine, components, service history, and maintenance documentation.
+
+## ⏱️ Request-driven operation
+
+Normal event registration, reading, calculations, and report generation happen when a request arrives.
+
+There is no scheduled Worker handler in this configuration.
+
+This means:
+
+- Telegram messages trigger the Worker immediately.
+- Authorized API requests trigger the Worker immediately.
+- `/due` calculates maintenance status when requested.
+- GitHub writes are awaited before a successful registration response is returned.
+
+An unsolicited daily reminder cannot be delivered at a specified time without a separate scheduler or an external service that initiates a request. That functionality is intentionally outside this request-driven design.
+
+## 🛡️ Security and privacy
+
+- Use a fine-grained GitHub token restricted to this repository.
+- Keep all Worker secrets outside the published website.
+- Allow only the intended Telegram numeric user ID to operate the private bot.
+- Keep the API access token private and use it only in trusted clients.
+- Review Worker logs for failed writes and authorization errors.
+- Avoid storing home addresses, personal routes, or other sensitive information in public logs.
+
+**Important:** If this repository is public, the JSON event history is publicly accessible. GitHub Pages content is also public in the standard public-site configuration. Choose the repository's visibility with this in mind.
+
+## 🧪 Testing
+
+Run the automated tests from the Worker directory:
 
 ```cmd
-cd path\to\peugeot-206-garage\worker
 npm test
 ```
 
-تست‌ها با GitHub/Telegram واقعی تماس نمی‌گیرند؛ APIها mock شده‌اند. قبل از استفاده، ابتدا `GET /health`، سپس `/start` و یک ثبت آزمایشی واقعی را بررسی کن.
+The tests exercise the Worker using mocked GitHub and Telegram requests; they do not prove that real account tokens or deployed services work.
 
-## حریم خصوصی و پایداری
+After deployment, verify the integration in this order:
 
-- در مخزن عمومی، هر رویداد، مبلغ، زمان و کیلومتر ثبت‌شده برای عموم قابل مشاهده می‌شود.
-- GitHub Contents API برای هر فایل یک commit می‌سازد. یک رویداد معمولاً دو commit (فایل ماه و index) ایجاد می‌کند؛ این نیاز مستقیمِ ذخیره‌سازی بی‌درنگ است، اما در استفاده‌ی بسیار پرتکرار می‌تواند به rate limit GitHub برسد.
-- Worker retry محدود برای conflict دارد؛ هیچ سیستم توزیع‌شده‌ای نمی‌تواند در برابر دسترسی لغوشده، اختلال GitHub یا تمام شدن quota تضمین ذخیره‌سازی صددرصدی بدهد. در این حالت باید خطا را برطرف و رویداد را دوباره ثبت کنی؛ هرگز پیام موفقیت را به‌عنوان تضمینِ ذخیره‌ی خارج از مخزن تلقی نکن.
-- اطلاعات این برنامه دفتر شخصی نگهداری است، نه دیاگ خودرویی؛ سلامت قطعات و توصیه‌های فنی را با دفترچه و متخصص بررسی کن.
+1. Request `/health`.
+2. Send `/start` and `/help` to the Telegram bot.
+3. Register one real odometer reading.
+4. Confirm that `data/logs/YYYY-MM.json` and `data/index.json` have new commits.
+5. Open GitHub Pages and refresh the dashboard.
+
+A GitHub commit may complete before the updated public Pages build becomes visible. Dashboard publication is separate from the Worker write operation.
+
+## ⚠️ Operational limitations
+
+GitHub Contents API is the persistence layer. Each event typically requires a write to its monthly event file and another write to the month index. This is deliberately simple and auditable, but high request volumes can encounter GitHub API rate limits or concurrent-write conflicts.
+
+If GitHub rejects a write, do not assume the event was safely stored just because Telegram received a message. Inspect the repository and Worker logs before retrying a potentially duplicated record.
+
+This project is a personal vehicle recordkeeping system. Its service reminders and consumption estimates do not replace mechanical inspection, the vehicle's maintenance documentation, or professional advice.
+
+---
+
+**Repository:** [mehrdadmb2/peugeot-206-garage](https://github.com/mehrdadmb2/peugeot-206-garage)
+
+**Worker:** `peugeot-206-garage-bot`
+
+**Telegram bot:** [@Peugeot206GarageBot](https://t.me/Peugeot206GarageBot)
+
+**Dashboard:** [GitHub Pages](https://mehrdadmb2.github.io/peugeot-206-garage/)
