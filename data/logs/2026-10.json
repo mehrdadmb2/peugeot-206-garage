@@ -1,8 +1,31 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-22T14:16:00+03:30",
+  "updatedAt": "2026-10-22T14:22:00+03:30",
   "events": [
+    {
+      "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
+      "type": "fine",
+      "title": "ثبت جریمه",
+      "description": "جریمه سرعت 100 هزار تومان . تاریخ 1405/07/26",
+      "createdAt": "2026-10-22T10:52:13.381Z",
+      "occurredAt": "2026-10-18T14:22:00+03:30",
+      "date": "2026-10-18",
+      "time": "14:22",
+      "jalaliDate": "۱۴۰۵/۰۷/۲۶",
+      "odometerKm": 431247,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": 1000000,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "fullTank": false,
+      "paid": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
+    },
     {
       "id": "bec04649-a7a2-427f-a6fc-91dd89f0ac86",
       "type": "odometer",
