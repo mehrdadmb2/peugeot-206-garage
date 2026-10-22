@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-22T06:45:00+03:30",
+  "updatedAt": "2026-10-22T12:04:00+03:30",
   "events": [
     {
       "id": "bec04649-a7a2-427f-a6fc-91dd89f0ac86",
@@ -41,6 +41,28 @@
       "costRial": null,
       "serviceKey": "air_filter",
       "serviceLabel": "فیلتر هوا",
+      "fullTank": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
+    },
+    {
+      "id": "25d85f9e-59d8-45fe-9aa7-1649b6172bbc",
+      "type": "fuel",
+      "title": "سوخت‌گیری",
+      "description": "36.5 لیتر بنزین . هزینه 54750 تومان . کیلومتر 431200",
+      "createdAt": "2026-10-22T08:34:53.312Z",
+      "occurredAt": "2026-10-22T12:04:00+03:30",
+      "date": "2026-10-22",
+      "time": "12:04",
+      "jalaliDate": "۱۴۰۵/۰۷/۳۰",
+      "odometerKm": 431200,
+      "distanceKm": null,
+      "liters": 36.5,
+      "costRial": 547500,
+      "serviceKey": null,
+      "serviceLabel": null,
       "fullTank": false,
       "paidAt": null,
       "metadata": {
