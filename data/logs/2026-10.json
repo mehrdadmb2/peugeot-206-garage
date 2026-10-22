@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "month": "2026-10",
+  "updatedAt": "2026-10-22T06:43:00+03:30",
+  "events": [
+    {
+      "id": "bec04649-a7a2-427f-a6fc-91dd89f0ac86",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "/km 431215",
+      "createdAt": "2026-10-22T03:13:04.763Z",
+      "occurredAt": "2026-10-22T06:43:00+03:30",
+      "date": "2026-10-22",
+      "time": "06:43",
+      "jalaliDate": "۱۴۰۵/۰۷/۳۰",
+      "odometerKm": 431215,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "fullTank": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
+    }
+  ]
+}
