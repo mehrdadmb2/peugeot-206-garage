@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-22T06:43:00+03:30",
+  "updatedAt": "2026-10-22T06:45:00+03:30",
   "events": [
     {
       "id": "bec04649-a7a2-427f-a6fc-91dd89f0ac86",
@@ -19,6 +19,28 @@
       "costRial": null,
       "serviceKey": null,
       "serviceLabel": null,
+      "fullTank": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
+    },
+    {
+      "id": "0b32c748-3328-402b-b761-7009d42c5f28",
+      "type": "service",
+      "title": "ثبت سرویس: فیلتر هوا",
+      "description": "فیلتر هوا تعویض شد در کیلومتر 431200",
+      "createdAt": "2026-10-22T03:15:42.405Z",
+      "occurredAt": "2026-10-22T06:45:00+03:30",
+      "date": "2026-10-22",
+      "time": "06:45",
+      "jalaliDate": "۱۴۰۵/۰۷/۳۰",
+      "odometerKm": 431200,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": "air_filter",
+      "serviceLabel": "فیلتر هوا",
       "fullTank": false,
       "paidAt": null,
       "metadata": {
