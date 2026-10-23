@@ -5,7 +5,7 @@
 [![Telegram Bot](https://img.shields.io/badge/Telegram-%40Peugeot206GarageBot-26a5e4?style=for-the-badge&logo=telegram)](https://t.me/Peugeot206GarageBot)
 [![Request Driven](https://img.shields.io/badge/Runtime-request--driven-16a34a?style=for-the-badge)](#request-driven-design)
 
-**Garage OS 3.0 — a people-aware vehicle journal for the white Peugeot 206 SD sedan (model year 1387).** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
+**Garage OS 3.2 — a people-aware vehicle journal for the white Peugeot 206 SD sedan (model year 1387).** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
 
 > Private-use project. Do not store personal routes, home addresses, plate numbers, or secrets in a public repository.
 
@@ -22,6 +22,7 @@
 - [Data model and units](#data-model-and-units)
 - [Troubleshooting](#troubleshooting)
 - [Security](#security)
+- [Garage OS 3.2: purchase baseline and chart reports](#garage-os-32-purchase-baseline-and-chart-reports)
 
 ## Architecture
 
@@ -56,6 +57,11 @@ Telegram / authorized HTTP client
 - Full-history CSV (`/export all`) and JSON backup (`/backup`) can be sent directly in Telegram.
 - Cost breakdown by person and cost-per-kilometre analytics, calculated from stored events.
 - Custom sedan illustration, favicon, and reciprocal dashboard/bot links.
+- Purchase odometer baseline at 428,000 km with a 2,400 km estimate used as a reconciliation value; the actual odometer log remains authoritative.
+- Ownership-distance KPI and per-driver share, with corrections rebased from the latest lower odometer reading.
+- Fine total, paid and unpaid ledger rollups.
+- Searchable Persian help center and Telegram `/guide` command.
+- Telegram `/analysis hour|day|week|month` reports with spending, refueling, and distance PNG charts; only aggregate numeric series are sent to the chart renderer.
 
 ## Repository layout
 
@@ -191,7 +197,11 @@ This is optional; the command menu does not implement bot logic by itself. Run i
 ```powershell
 $commands = @(
   @{command="start";description="شروع و معرفی ربات"},
-  @{command="help";description="راهنمای فرمان‌ها"},
+  @{command="help";description="راهنمای سریع فرمان‌ها"},
+  @{command="guide";description="دفترچه کامل راهنمای ربات"},
+  @{command="analysis";description="ارسال تحلیل با نمودارهای تصویری"},
+  @{command="purchasekm";description="تنظیم کیلومتر خرید و پیمایش"},
+  @{command="operations";description="فهرست عملیات با شناسه و دکمه مدیریت"},
   @{command="id";description="شناسه عددی کاربر"},
   @{command="km";description="ثبت کیلومترشمار"},
   @{command="trip";description="ثبت مسافت"},
@@ -230,7 +240,11 @@ Invoke-RestMethod -Method Post `
 
 | Command | Example | Purpose |
 |---|---|---|
-| `/start`, `/help` | `/help` | Introduction and help |
+| `/start`, `/help` | `/help` | Introduction and quick help |
+| `/guide` | `/guide` | Complete multi-part Persian command manual |
+| `/analysis` | `/analysis week` | Text report + PNG charts for spending, fuel, and distance |
+| `/purchasekm` | `/purchasekm 428000 estimate=2400` | Purchase odometer baseline and estimate reconciliation |
+| `/operations` | `/operations all` | All active events in batches with IDs and inline management buttons |
 | `/id` | `/id` | Show numeric user/chat IDs |
 | `/km` | `/km 156321` | Record current odometer |
 | `/trip` | `/trip 85` | Record distance driven |
@@ -365,3 +379,43 @@ These local tests verify key routing and authorization behavior with mocked requ
 ### Updated deployment
 
 From the repository root, run `npm test` and `npm run check` inside `worker/`, then `npx wrangler deploy`. Push the changed `index.html`, `assets/`, `worker/src/index.js`, the worker tests, and documentation to `main` to publish GitHub Pages. The webhook endpoint is still `/telegram`; keep `callback_query` enabled in Telegram's `allowed_updates` for inline management buttons.
+
+
+## Garage OS 3.2.0 — Purchase Baseline, Full Guide, and Telegram Charts
+
+### Purchase kilometre baseline and current discrepancy
+
+The configured purchase odometer is `428000 km`; the user-provided estimated driven distance is `2400 km`. The existing log snapshot's latest recorded odometer is `431381 km`. Arithmetic from those two odometer values is `431381 - 428000 = 3381 km`, which is `981 km` above the estimate. The app reports this as a discrepancy rather than altering or fabricating an odometer reading. Verify the physical dashboard reading before entering a correction.
+
+- `/purchasekm` shows the configured baseline, latest reading, calculated mileage, estimate and difference.
+- `/purchasekm 428000 estimate=2400` sets the purchase baseline and the estimate. An optional confirmed purchase date can be supplied as `date=YYYY-MM-DD`.
+- Historical mileage between the purchase baseline and the first recorded odometer is attributed to the first reading's actor; legacy records without an actor default to `من`.
+- Since the exact purchase date is unknown, historical baseline mileage appears in lifetime totals, not in an invented hourly/daily/weekly bucket.
+- If a later odometer reading is lower than the prior reading, the new reading is treated as a correction checkpoint for distance attribution. This is useful for correcting a typo; only enter it if it matches the actual vehicle display.
+
+### New reporting commands
+
+| Command | Purpose |
+|---|---|
+| `/guide` | Four detailed Persian help messages covering registration, people, event management, reports and export. |
+| `/analysis hour` | Last 24 hourly buckets. |
+| `/analysis day` | Last 30 daily buckets. |
+| `/analysis week` | Last 12 weekly buckets. |
+| `/analysis month` | Last 12 monthly buckets. |
+| `/fines` | Total fines, total paid, total unpaid, item counts and recent IDs. |
+| `/operations all` | Lists all active operations in small Telegram batches, with inline details/edit/delete buttons. |
+
+`/analysis` sends one text summary and three PNG charts. The chart render request contains aggregated bucket labels and numeric values (expense, fuel litres, distance), not event notes, names or full event records. If the chart provider is unavailable, the bot returns a text fallback.
+
+### Version 3.2 validation
+
+Run the following from `worker/`:
+
+```powershell
+npm install
+npm test
+npm run check
+npx wrangler deploy
+```
+
+The local test suite includes checks for event actor/note storage, distance attribution, clickable dashboard/bot links, operation management formatting, report fine totals, and sending three mocked PNG charts. These tests do not validate the real Cloudflare secrets, Telegram webhook, GitHub permissions, or external chart provider availability.

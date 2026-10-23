@@ -4,6 +4,9 @@ const FILE_INDEX = "data/index.json";
 const FILE_CONFIG = "data/config.json";
 const FILE_REMINDERS = "data/reminder-state.json";
 const FILE_DELETED_EVENTS = "data/deleted-events.json";
+const DEFAULT_PURCHASE_ODOMETER_KM = 428000;
+const DEFAULT_ESTIMATED_KM_SINCE_PURCHASE = 2400;
+const QUICKCHART_URL = "https://quickchart.io/chart";
 const SITE_URL = "https://mehrdadmb2.github.io/peugeot-206-garage/";
 const BOT_URL = "https://t.me/Peugeot206GarageBot";
 
@@ -33,7 +36,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.1.0",
+        version: "3.2.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -48,13 +51,15 @@ export default {
           due: "GET /api/v1/due (authorized)",
           config: "GET /api/v1/config (authorized)",
           export: "GET /api/v1/export?month=YYYY-MM or month=all (authorized CSV)",
+          purchaseOdometer: "POST /api/v1/record with text /purchasekm 428000 estimate=2400 (authorized)",
+          analysis: "Telegram /analysis hour|day|week|month sends PNG charts and a detailed report",
           updateEvent: "POST /api/v1/event/update (authorized JSON {id, patch})",
           deleteEvent: "DELETE /api/v1/event?id=<event-id> (authorized; archived before removal)"
         }
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.1.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.2.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -129,7 +134,11 @@ async function handleExternalApi(request, url, env) {
     const unpaidFines = events.filter(e => e.type === "fine" && !e.paid);
     const openIssues = events.filter(e => e.type === "issue" && e.status !== "fixed");
     const due = calculateDueItems(events, config, currentOdo, nowTehran());
-    return json({ ok: true, vehicle: config.vehicle || {}, timezone: TZ, updatedAt: index.updatedAt || null, eventCount: events.length, currentOdometerKm: currentOdo, currentMonth, currentMonthEventCount: monthEvents.length, totalCostRial: actualCosts.reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthCostRial: actualCosts.filter(e => accountingDateForApi(e).slice(0,7) === currentMonth).reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthFuelLiters: monthEvents.filter(e=>e.type === "fuel").reduce((n,e)=>n+(Number(e.liters)||0),0), unpaidFineCount: unpaidFines.length, unpaidFineRial: unpaidFines.reduce((n,e)=>n+(Number(e.costRial)||0),0), openIssueCount: openIssues.length, dueItems: due, months: index.months || [] });
+    const fines = events.filter(e => e.type === "fine");
+    const ownership = getOwnershipSettings(config);
+    const ownershipDrivenKm = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
+    const paidFineRial = fines.filter(e => e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
+    return json({ ok: true, vehicle: config.vehicle || {}, ownership, ownershipDrivenKm, ownershipEstimateDifferenceKm: ownershipDrivenKm === null ? null : ownershipDrivenKm - ownership.estimatedKmSincePurchaseKm, timezone: TZ, updatedAt: index.updatedAt || null, eventCount: events.length, currentOdometerKm: currentOdo, currentMonth, currentMonthEventCount: monthEvents.length, totalCostRial: actualCosts.reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthCostRial: actualCosts.filter(e => accountingDateForApi(e).slice(0,7) === currentMonth).reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthFuelLiters: monthEvents.filter(e=>e.type === "fuel").reduce((n,e)=>n+(Number(e.liters)||0),0), totalFineCount: fines.length, totalFineRial: fines.reduce((n,e)=>n+(Number(e.costRial)||0),0), paidFineRial, unpaidFineCount: unpaidFines.length, unpaidFineRial: unpaidFines.reduce((n,e)=>n+(Number(e.costRial)||0),0), openIssueCount: openIssues.length, dueItems: due, months: index.months || [] });
   }
   if (request.method === "GET" && path === "/api/v1/events") {
     const month = url.searchParams.get("month");
@@ -221,6 +230,9 @@ async function handleTelegramUpdate(update, env) {
     const reply = await processMessage(text, message, env);
     if (reply?.document) {
       await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
+    } else if (Array.isArray(reply?.photos)) {
+      if (reply.text) await sendText(env, chatId, reply.text, false);
+      for (const item of reply.photos) await sendPhoto(env, chatId, item.filename, item.blob, item.caption || "نمودار تحلیلی پژو ۲۰۶");
     } else if (Array.isArray(reply?.messages)) {
       for (const item of reply.messages) await sendText(env, chatId, item.text, item.markup || false);
     } else if (reply?.text) {
@@ -313,6 +325,9 @@ function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*
 
 const COMMAND_ALIASES = {
   start: "start", begin: "start", شروع: "start", help: "help", commands: "help", command: "help", راهنما: "help", کمک: "help", دستورها: "help",
+  guide: "guide", manual: "guide", fullguide: "guide", راهنمای_کامل: "guide", دفترچه: "guide",
+  analysis: "analysis", analytics: "analysis", charts: "analysis", نمودار: "analysis", تحلیل: "analysis",
+  purchasekm: "purchasekm", purchase_km: "purchasekm", ownershipkm: "purchasekm", کیلومترخرید: "purchasekm", کیلومتر_خرید: "purchasekm",
   id: "id", شناسه: "id", km: "km", odo: "km", odometer: "km", mileage: "km", کارکرد: "km", کیلومتر: "km",
   trip: "trip", drive: "trip", distance: "trip", مسافت: "trip", سفر: "trip",
   fuel: "fuel", petrol: "fuel", gas: "fuel", refuel: "fuel", بنزین: "fuel", سوخت: "fuel",
@@ -412,6 +427,9 @@ async function processMessage(text, message, env) {
     return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد موردنظر پیدا نشد یا حذف شده است. /latest را بررسی کن.", keyboard: false };
   }
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
+  if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
+  if (/^\/purchasekm\b|^\/کیلومترخرید\b/i.test(text)) return { text: await purchaseOdometerCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
+  if (/^\/analysis\b|^\/charts\b|^\/نمودار\b|^\/تحلیل\b/i.test(text)) return await createAnalysisReply(text.replace(/^\S+/, "").trim(), env);
   if (/^\/cancel\b/i.test(text)) return { text: "✅ هیچ عملیات در انتظار تأییدی وجود ندارد. برای حذف از دکمه حذف در جزئیات رویداد استفاده کن.", keyboard: false };
   if (/^\/people\b|^\/اشخاص\b|^\/افراد\b/i.test(text)) return { text: await peopleCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/operations\b|^\/records\b|^\/list\b|^\/سوابق\b|^\/عملیات\b|^\/فهرست\b/i.test(text)) return { messages: await operationsReport(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
@@ -541,49 +559,310 @@ async function processMessage(text, message, env) {
 }
 
 function helpText() {
-  return `🚘 دفتر هوشمند پژو ۲۰۶ SD
+  return `🚘 دفتر هوشمند پژو ۲۰۶ SD · راهنمای شروع
 
-🧾 ثبت سریع
-• کیلومتر ۴۳۱۴۰۰ ← ثبت کیلومترشمار
+🧭 ثبت سریع
+• کیلومتر ۴۳۰۴۰۰ ← ثبت کیلومترشمار
+• بابام کیلومتر ۴۳۰۴۰۰ ← اختلاف نسبت به ثبت قبل به نام بابام
 • امروز ۸۵ کیلومتر رانندگی کردم
-• ۲۰ لیتر بنزین · هزینه ۷۰۰ هزار تومان · کیلومتر ۴۳۱۴۰۰
-• روغن موتور عوض شد · هزینه ۹۰۰ هزار تومان · کیلومتر ۴۳۱۰۰۰
+• بابام ۲۰ لیتر بنزین؛ هزینه ۷۰۰ هزار تومان؛ توضیح: سفر
+• روغن موتور عوض شد؛ هزینه ۹۰۰ هزار تومان؛ کیلومتر ۴۳۰۰۰۰
 
-👤 ثبت به نام شخص و توضیح
-• بنزین زدم؛ توسط بابام؛ توضیح: سفر جاده‌ای
-• بابام: ۲۰ لیتر بنزین زدم · هزینه ۷۰۰ هزار تومان
-• /people add مهرزاد — افزودن نام دلخواه به فهرست
-• /actor شناسه بابام
-• /annotate شناسه توضیح اضافه
-اگر شخصی مشخص نشود، انجام‌دهنده «من» ثبت می‌شود. نام هر شخص دلخواه پشتیبانی می‌شود.
+👥 اشخاص و توضیحات
+• اگر نام شخص را ننویسی، ثبت به نام «من» است.
+• بابام: ۲۰ لیتر بنزین · توضیح: سفر خانوادگی
+• /people add محمد — افزودن نام دلخواه
+• /actor a1b2c3d4 بابام — تغییر انجام‌دهنده
+• /annotate a1b2c3d4 توضیح تکمیلی — افزودن توضیح
+
+📚 راهنمای کامل در چند پیام: /guide
+📈 گزارش تصویری با نمودار: /analysis month
+گزینه‌های تحلیل: hour · day · week · month
+
+🧭 کیلومتر خرید و برآورد پیمایش
+/purchasekm — نمایش مبنا و اختلاف با کیلومتر فعلی
+/purchasekm 428000 estimate=2400 — تنظیم کیلومتر خرید و برآورد تقریبی
+مبنا ۴۲۸٬۰۰۰ است؛ کیلومتر واقعی فعلی هرگز برای هم‌خوان شدن با برآورد تغییر داده نمی‌شود.
 
 🛠 مدیریت عملیات
-/detail a1b2c3d4 — جزئیات کامل + دکمه‌های مدیریت
-/edit a1b2c3d4 عنوان=... | شرح=... | توضیح=... | شخص=... | مبلغ=... | کیلومتر=...
-/annotate a1b2c3d4 متن توضیح
+/operations — آخرین ۲۰ عملیات با شناسه و دکمه‌ها
+/operations all — فهرست کامل عملیات
+/detail a1b2c3d4 — جزئیات
+/edit a1b2c3d4 شخص=بابام | توضیح=سفر
+/annotate a1b2c3d4 توضیح تکمیلی
 /actor a1b2c3d4 نام شخص
-/delete a1b2c3d4 — حذف با تأیید و نگهداری بایگانی
-/restore a1b2c3d4 — بازگردانی عملیات بایگانی‌شده
+/delete a1b2c3d4 — حذف با تأیید و بایگانی
+/restore a1b2c3d4 — بازگردانی از بایگانی
 
-📊 گزارش و خروجی
-/km 431400 — کارکرد مطلق
-/trip 85 — مسافت
-/fuel 20l cost=700000 toman km=431400 full
-/service oil cost=900000 toman km=431000
-/summary week — گزارش ۷ روز اخیر؛ /summary month — ماه جاری
-/due — موعد سرویس‌ها · /fuelstats — تحلیل سوخت · /fines — جریمه‌ها
-/export — CSV ماه جاری · /export all — CSV همه سوابق
-/backup — پشتیبان کامل JSON · /backup 2026-10 — پشتیبان ماه
-/latest — آخرین رویدادها
-/operations — فهرست ۲۰ عملیات اخیر با شناسه و دکمه مدیریت
-/operations all — تمام عملیات با شناسه، جزئیات، ویرایش و حذف
-/operations today|week|month — فهرست یک بازه مشخص
+📊 گزارش‌ها و نگهداری
+/summary today|week|month|all — خلاصه و مبالغ
+/fines — جمع کل جریمه، پرداختی و بدهی
+/fuelstats — مصرف و هزینه سوخت
+/due — سرویس‌های نزدیک موعد یا عقب‌افتاده
+/config — تنظیمات و بازه‌های نگهداری
+/interval engine_oil 5000 180 — تنظیم فاصله سرویس
 
-💡 عدد فارسی و انگلیسی، تاریخ شمسی/میلادی، هزار/میلیون، تومان/ریال، km و l پشتیبانی می‌شود. از دکمه‌های زیر هر پیام ثبت برای جزئیات، ویرایش، توضیح، تغییر شخص یا حذف استفاده کن.
+📦 خروجی
+/export all — CSV همه عملیات
+/backup — پشتیبان JSON همه عملیات
+/latest — آخرین موارد ثبت‌شده
+/cancel — لغو روند مدیریت جاری
 
-🌐 داشبورد: ${SITE_URL}
-🤖 ربات: ${BOT_URL}
-📦 مخزن کد: https://github.com/mehrdadmb2/peugeot-206-garage`;
+🌐 داشبورد · 🤖 ربات تلگرام
+برای فهرست و مثال همه دستورها: /guide`;
+}
+
+async function guideMessages(env) {
+  const config = await readConfig(env);
+  const ownership = getOwnershipSettings(config);
+  return [
+    { text: `📘 راهنمای کامل · ۱ از ۴
+🚘 ثبت کیلومتر و رانندگی
+
+
+/km 430400 — کیلومترشمار فعلی
+/trip 85 — ثبت ۸۵ کیلومتر مسافت
+بابام کیلومتر 431381 — اختلاف از آخرین کیلومتر ثبت‌شده به نام بابام
+امروز ۸۵ کیلومتر رانندگی کردم — ثبت مسافت با شخص پیش‌فرض من
+
+پیش‌فرض مالکیت: کیلومتر خرید ${formatNum(ownership.purchaseOdometerKm)} km
+برآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km
+برای بررسی اختلاف و تنظیم مبنا: /purchasekm
+
+اگر تاریخ دقیق خرید مشخص نیست، سیستم مسافت تاریخی را در مجموع مالکیت نشان می‌دهد؛ آن را به ساعت/روز خاصی نسبت نمی‌دهد.` },
+    { text: `⛽ راهنمای کامل · ۲ از ۴
+سوخت، سرویس، هزینه و جریمه
+
+/fuel 20l cost=700000 toman km=430400 full
+بابام: ۲۰ لیتر بنزین؛ هزینه ۷۰۰ هزار تومان؛ توضیح: سفر
+/service oil cost=900000 toman km=430000
+/part air_filter cost=250000 toman km=430000
+/interval engine_oil 5000 180
+/fine 100000 toman سرعت غیرمجاز
+/fines — مجموع کل، پرداخت‌شده و پرداخت‌نشده
+/paid a1b2c3d4 — ثبت پرداخت جریمه
+/wash 180000 toman توضیح=کارواش
+/expense 250000 toman پارکینگ
+خرابی: صدای جلوبندی
+/repair a1b2c3d4 هزینه 1200000 تومان
+
+مبلغ را با واحد تومان بنویس؛ اگر ریال است، صریحاً «ریال» بنویس.` },
+    { text: `🧾 راهنمای کامل · ۳ از ۴
+مشاهده و مدیریت عملیات
+
+/operations — ۲۰ عملیات اخیر
+/operations all — همهٔ عملیات (در چند پیام)
+/operations today — موارد امروز
+/operations week — ۷ روز اخیر
+/detail a1b2c3d4 — جزئیات کامل
+/edit a1b2c3d4 شخص=بابام | توضیح=سفر
+/annotate a1b2c3d4 بررسی بعد از سفر
+/actor a1b2c3d4 مادرم
+/delete a1b2c3d4 — درخواست حذف؛ باید تأیید شود
+/restore a1b2c3d4 — بازیابی از بایگانی
+/people — فهرست اشخاص
+/people add محمد — افزودن شخص
+/people remove محمد — حذف از فهرست (سوابق پاک نمی‌شوند)
+
+شناسهٔ کوتاه برای مدیریت و شناسهٔ کامل برای بازیابی در فایل خروجی نگهداری می‌شود.` },
+    { text: `📊 راهنمای کامل · ۴ از ۴
+گزارش، نمودار و خروجی
+
+/summary today|week|month|all — خلاصهٔ بازه
+/analysis hour — نمودار ۲۴ ساعت اخیر
+/analysis day — نمودار ۳۰ روز اخیر
+/analysis week — نمودار ۱۲ هفته اخیر
+/analysis month — نمودار ۱۲ ماه اخیر (پیش‌فرض)
+/fuelstats — آمار سوخت و مصرف
+/due — موعد نگهداری
+/latest — آخرین عملیات
+/purchasekm 428000 estimate=2400 — مبنای کیلومتر خرید
+/export all — خروجی CSV همهٔ عملیات
+/backup — فایل پشتیبان JSON
+/config — بازه‌های نگهداری
+/id — شناسه حساب مجاز ربات
+
+📌 ارقام تحلیل فقط از داده‌های ثبت‌شده محاسبه می‌شوند. نمودارها با داده‌های تجمیع‌شدهٔ عددی ساخته می‌شوند؛ متن توضیحات و نام اشخاص برای ساخت نمودار به سرویس تصویر ارسال نمی‌شود.
+
+🌐 داشبورد و 🤖 ربات تلگرام از لینک‌های قابل‌کلیک پیام باز می‌شوند.` }
+  ];
+}
+
+function getOwnershipSettings(config = {}) {
+  const source = config.ownership || {};
+  const purchaseOdometerKm = Number(source.purchaseOdometerKm ?? config.vehicle?.purchaseOdometerKm ?? DEFAULT_PURCHASE_ODOMETER_KM);
+  const estimatedKmSincePurchaseKm = Number(source.estimatedKmSincePurchaseKm ?? source.estimatedDrivenSincePurchaseKm ?? DEFAULT_ESTIMATED_KM_SINCE_PURCHASE);
+  return {
+    purchaseOdometerKm: Number.isFinite(purchaseOdometerKm) && purchaseOdometerKm > 0 ? Math.round(purchaseOdometerKm) : DEFAULT_PURCHASE_ODOMETER_KM,
+    estimatedKmSincePurchaseKm: Number.isFinite(estimatedKmSincePurchaseKm) && estimatedKmSincePurchaseKm >= 0 ? Math.round(estimatedKmSincePurchaseKm) : DEFAULT_ESTIMATED_KM_SINCE_PURCHASE,
+    purchaseDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.purchaseDate || "")) ? String(source.purchaseDate) : null,
+    defaultActor: String(source.defaultActor || "من")
+  };
+}
+
+async function purchaseOdometerCommand(raw, env) {
+  const config = await readConfig(env);
+  const existing = getOwnershipSettings(config);
+  if (!String(raw || "").trim()) {
+    const events = await loadAllEvents(env);
+    const current = calculateCurrentOdometer(events);
+    const actual = current !== null && current >= existing.purchaseOdometerKm ? current - existing.purchaseOdometerKm : null;
+    const diff = actual === null ? null : actual - existing.estimatedKmSincePurchaseKm;
+    return `🚘 مبنای مالکیت پژو ۲۰۶
+کیلومتر هنگام خرید: ${formatNum(existing.purchaseOdometerKm)} km
+آخرین کیلومتر ثبت‌شده: ${current === null ? "ثبت نشده" : `${formatNum(current)} km`}
+پیمایش محاسبه‌شده از خرید: ${actual === null ? "قابل محاسبه نیست؛ کیلومتر فعلی از مبنا کمتر است" : `${formatNum(actual)} km`}
+برآورد تقریبی اعلام‌شده: ${formatNum(existing.estimatedKmSincePurchaseKm)} km
+اختلاف محاسبه با برآورد: ${diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNum(diff)} km`}
+
+اگر کیلومتر فعلی ۴۳۱۳۸۱ باشد، از مبنای ۴۲۸۰۰۰ اختلاف ۳۳۸۱ کیلومتر می‌شود؛ این با برآورد ۲۴۰۰ کیلومتر ۹۸۱ کیلومتر اختلاف دارد. برای هم‌خوان شدن اعداد، کیلومتر واقعی روی کیلومترشمار را تأیید کن؛ این دستور کیلومتر واقعی را دست‌کاری نمی‌کند.
+
+تنظیم نمونه: /purchasekm 428000 estimate=2400`;
+  }
+  const km = parseFirstNumber(raw);
+  if (!(km >= 10000 && km < 1000000)) return `نمونه: /purchasekm 428000 estimate=2400\nکیلومتر خرید باید یک مقدار معتبر کیلومترشمار باشد.`;
+  const estimateMatch = normalizeDigits(raw).match(/(?:estimate|برآورد|تخمین)\s*[:=]?\s*(\d[\d,._]*)/i);
+  const dateMatch = normalizeDigits(raw).match(/(?:date|تاریخ)\s*[:=]\s*(\d{4}-\d{2}-\d{2})/i);
+  const saved = await mutateJsonFile(FILE_CONFIG, env, () => ({ schemaVersion: 1, serviceIntervals: {}, people: [] }), current => {
+    current.ownership ||= {};
+    current.ownership.purchaseOdometerKm = Math.round(km);
+    current.ownership.estimatedKmSincePurchaseKm = estimateMatch ? Math.max(0, Math.round(parseNumericToken(estimateMatch[1]))) : existing.estimatedKmSincePurchaseKm;
+    current.ownership.purchaseDate = dateMatch ? dateMatch[1] : current.ownership.purchaseDate || null;
+    current.ownership.defaultActor = "من";
+    current.ownership.updatedAt = nowTehran().iso;
+    return current;
+  });
+  const currentOdo = calculateCurrentOdometer(await loadAllEvents(env));
+  const actual = currentOdo !== null && currentOdo >= saved.ownership.purchaseOdometerKm ? currentOdo - saved.ownership.purchaseOdometerKm : null;
+  return `✅ مبنای مالکیت ذخیره شد
+کیلومتر خرید: ${formatNum(saved.ownership.purchaseOdometerKm)} km
+آخرین کیلومتر ثبت‌شده: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}
+مسافت محاسبه‌شده: ${actual === null ? "—" : `${formatNum(actual)} km`}
+برآورد ذخیره‌شده: ${formatNum(saved.ownership.estimatedKmSincePurchaseKm)} km
+تاریخ خرید: ${saved.ownership.purchaseDate || "ثبت نشده؛ بخش تاریخی در تحلیل ساعتی/روزانه پخش نمی‌شود"}
+
+سوابق قبلی بدون نام شخص «من» فرض می‌شوند مگر اینکه قبلاً شخص دیگری ثبت شده باشد.`;
+}
+
+function buildAnalysisBuckets(period) {
+  const now = Date.now(), offset = 210 * 60000, hour = 3600000, day = 86400000;
+  const localNow = new Date(now + offset);
+  let count, starts = [], unit;
+  if (period === "hour") {
+    count = 24; unit = hour;
+    const base = Math.floor((now + offset) / hour) * hour - offset;
+    for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+  } else if (period === "day") {
+    count = 30; unit = day;
+    const base = Math.floor((now + offset) / day) * day - offset;
+    for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+  } else if (period === "week") {
+    count = 12; unit = 7 * day;
+    const midnight = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()) - offset;
+    const base = midnight - ((localNow.getUTCDay() + 1) % 7) * day;
+    for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+  } else {
+    period = "month"; count = 12;
+    for (let i = count - 1; i >= 0; i--) starts.push(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth() - i, 1) - offset);
+  }
+  return starts.map((start, i) => {
+    let end;
+    if (period === "month") { const local = new Date(start + offset); end = Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 1) - offset; }
+    else end = start + unit;
+    const labelDate = new Date(start + offset);
+    let label;
+    if (period === "hour") label = new Intl.DateTimeFormat("fa-IR", { timeZone: "UTC", hour: "2-digit", hourCycle: "h23" }).format(labelDate) + "";
+    else if (period === "day") label = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { timeZone: "UTC", day: "numeric", month: "short" }).format(labelDate);
+    else if (period === "week") label = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { timeZone: "UTC", day: "numeric", month: "short" }).format(labelDate);
+    else label = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { timeZone: "UTC", month: "short", year: "2-digit" }).format(labelDate);
+    return { start, end, label, key: `${start}-${i}` };
+  });
+}
+
+function analysisPeriodLabel(period) {
+  return ({ hour: "۲۴ ساعت اخیر", day: "۳۰ روز اخیر", week: "۱۲ هفته اخیر", month: "۱۲ ماه اخیر" })[period] || "۱۲ ماه اخیر";
+}
+
+async function createAnalysisReply(rawPeriod, env) {
+  const raw = normalizeIntentText(rawPeriod || "month");
+  const period = /hour|hourly|ساعتی|ساعت/.test(raw) ? "hour" : /day|daily|روزانه|روز/.test(raw) ? "day" : /week|weekly|هفتگی|هفته/.test(raw) ? "week" : "month";
+  const [events, config] = await Promise.all([loadAllEvents(env), readConfig(env)]);
+  const buckets = buildAnalysisBuckets(period);
+  const inBucket = (event, timestamp) => { const t = Date.parse(timestamp || ""); return Number.isFinite(t) && buckets.some(b => t >= b.start && t < b.end); };
+  const eventTimestamp = event => eventTimestampForReport(event);
+  const expenseTimestamp = event => event.type === "fine" && event.paid && event.paidAt ? event.paidAt : event.type === "issue" && event.resolvedAt && Number(event.repairCostRial) > 0 ? event.resolvedAt : event.occurredAt || event.date;
+  const rangedEvents = events.filter(event => inBucket(event, event.occurredAt || event.date));
+  const expenseEvents = events.filter(event => Number(event.costRial) > 0 && (event.type !== "fine" || Boolean(event.paid)) && inBucket(event, expenseTimestamp(event)));
+  const fuelEvents = rangedEvents.filter(event => event.type === "fuel");
+  const distances = calculateDistanceEntries(events, config.ownership).filter(entry => !entry.estimatedHistorical && inBucket(entry, entry.occurredAt));
+  const costValues = buckets.map(bucket => expenseEvents.filter(e => { const t=Date.parse(expenseTimestamp(e)||""); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.costRial)||0),0)/10_000_000); // million toman
+  const fuelValues = buckets.map(bucket => fuelEvents.filter(e => { const t=eventTimestamp(e); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.liters)||0),0));
+  const distanceValues = buckets.map(bucket => distances.filter(e => { const t=Date.parse(e.occurredAt||""); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.distanceKm)||0),0));
+  const fines = rangedEvents.filter(e => e.type === "fine");
+  const fineTotal = fines.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const finePaid = fines.filter(e=>e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const fineUnpaid = fines.filter(e=>!e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const actualCost = expenseEvents.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const liters = fuelEvents.reduce((n,e)=>n+(Number(e.liters)||0),0);
+  const currentOdo = calculateCurrentOdometer(events);
+  const ownership = getOwnershipSettings(config);
+  const ownershipKm = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
+  const discrepancy = ownershipKm === null ? null : ownershipKm - ownership.estimatedKmSincePurchaseKm;
+  const sumDistance = distanceValues.reduce((a,b)=>a+b,0);
+  const report = `📊 گزارش تحلیلی پژو ۲۰۶ · ${analysisPeriodLabel(period)}
+
+🧾 رویدادها: ${formatNum(rangedEvents.length)}
+🚘 آخرین کیلومتر ثبت‌شده: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}
+🚗 مسافت قابل انتساب در این بازه: ${formatNum(sumDistance)} km
+⛽ سوخت ثبت‌شده: ${formatNum(liters,1)} لیتر
+💳 هزینهٔ پرداخت‌شده در بازه: ${formatMoneyToman(actualCost)}
+
+🚦 جریمه‌های این بازه
+مجموع جریمه ثبت‌شده: ${formatMoneyToman(fineTotal)}
+پرداخت‌شده: ${formatMoneyToman(finePaid)}
+بدهی باز: ${formatMoneyToman(fineUnpaid)} (${formatNum(fines.filter(e=>!e.paid).length)} مورد)
+
+👤 از زمان خرید
+کیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km
+پیمایش بر مبنای کیلومترهای ثبت‌شده: ${ownershipKm === null ? "—" : `${formatNum(ownershipKm)} km`}
+برآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km
+اختلاف دو محاسبه: ${discrepancy === null ? "—" : `${discrepancy > 0 ? "+" : ""}${formatNum(discrepancy)} km`}${discrepancy !== null && Math.abs(discrepancy)>150 ? "\n⚠️ کیلومترهای موجود با برآورد تقریبی تطابق کامل ندارند؛ کیلومتر واقعی را تأیید کن." : ""}
+
+📈 سه نمودار تصویری در پیام‌های بعدی ارسال می‌شوند.`;
+  try {
+    const labels = buckets.map(b=>b.label);
+    const chartSpecs = [
+      { filename: "206-garage-costs.png", title: `روند هزینه · ${analysisPeriodLabel(period)}`, seriesLabel: "میلیون تومان", values: costValues, type: "bar", color: "rgba(73,222,236,0.78)", caption: "💳 نمودار هزینه‌های پرداخت‌شده · مقیاس: میلیون تومان" },
+      { filename: "206-garage-fuel.png", title: `سوخت‌گیری · ${analysisPeriodLabel(period)}`, seriesLabel: "لیتر", values: fuelValues, type: "line", color: "rgba(255,181,107,0.95)", caption: "⛽ نمودار حجم سوخت‌گیری · واحد: لیتر" },
+      { filename: "206-garage-distance.png", title: `مسافت · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: distanceValues, type: "line", color: "rgba(173,148,255,0.95)", caption: "🚗 نمودار مسافت ثبت‌شده · کیلومترهای تاریخی با تاریخ خرید نامشخص در بازه‌های زمانی توزیع نمی‌شوند." }
+    ];
+    const photos = await Promise.all(chartSpecs.map(async spec => ({
+      filename: spec.filename,
+      blob: await createChartPng({ labels, values: spec.values, title: spec.title, seriesLabel: spec.seriesLabel, color: spec.color, type: spec.type }),
+      caption: `${spec.caption} · ${analysisPeriodLabel(period)}`
+    })));
+    return { text: report, photos, keyboard: false };
+  } catch (error) {
+    console.error("analysis chart generation failed", error?.stack || error);
+    return { text: `${report}
+
+⚠️ سرویس ساخت تصویر موقتاً در دسترس نبود؛ گزارش متنی بالا کامل است. دوباره /analysis ${period} را امتحان کن.`, keyboard: true };
+  }
+}
+
+async function createChartPng({ labels, values, title, seriesLabel, color, type }) {
+  const chart = {
+    type,
+    data: { labels, datasets: [{ label: seriesLabel, data: values, backgroundColor: type === "bar" ? color : "rgba(73,222,236,0.16)", borderColor: color, borderWidth: 3, tension: 0.32, fill: type === "line", pointRadius: 2.5 }] },
+    options: { responsive: false, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: title, color: "#e7f4ff", font: { size: 20, weight: "bold" } }, tooltip: { enabled: true } }, scales: { x: { ticks: { color: "#9fb4c9", maxTicksLimit: 12, maxRotation: 0 }, grid: { color: "rgba(154,180,205,0.10)" } }, y: { beginAtZero: true, ticks: { color: "#9fb4c9" }, grid: { color: "rgba(154,180,205,0.12)" }, title: { display: true, text: seriesLabel, color: "#9fb4c9" } } } }
+  };
+  const response = await fetch(QUICKCHART_URL, { method: "POST", headers: { "content-type": "application/json", "accept": "image/png" }, body: JSON.stringify({ width: 1000, height: 600, format: "png", backgroundColor: "#08111f", chart }) });
+  if (!response.ok) throw new Error(`QuickChart HTTP ${response.status}`);
+  const typeHeader = response.headers.get("content-type") || "";
+  if (typeHeader && !typeHeader.includes("image/png") && !typeHeader.includes("application/octet-stream")) throw new Error(`Unexpected chart content type: ${typeHeader}`);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength < 100) throw new Error("QuickChart returned an empty image");
+  return new Blob([bytes], { type: "image/png" });
 }
 
 async function recordServiceOrPart(rawText, type, occurredAt, env) {
@@ -1053,11 +1332,36 @@ function calculateCurrentOdometer(events) {
   return current;
 }
 
-function calculateDistanceEntries(events) {
-  const odometers = [...events].filter(e => e.type === "odometer" && e.odometerKm !== null && e.odometerKm !== undefined && Number.isFinite(Number(e.odometerKm)))
+function calculateDistanceEntries(events, ownershipConfig = null) {
+  const allOdometers = [...events].filter(e => e.type === "odometer" && e.odometerKm !== null && e.odometerKm !== undefined && Number.isFinite(Number(e.odometerKm)))
     .sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  // Treat a newer lower reading as a correction checkpoint so impossible prior deltas do not remain in totals.
+  let correctionIndex = 0;
+  for (let i = 1; i < allOdometers.length; i++) if (Number(allOdometers[i].odometerKm) < Number(allOdometers[i - 1].odometerKm)) correctionIndex = i;
+  const odometers = allOdometers.slice(correctionIndex);
   const coveredTrips = new Set();
   const result = [];
+  const ownership = { purchaseOdometerKm: Number(ownershipConfig?.purchaseOdometerKm ?? ownershipConfig?.baselineOdometerKm ?? DEFAULT_PURCHASE_ODOMETER_KM), purchaseDate: ownershipConfig?.purchaseDate || null, defaultActor: String(ownershipConfig?.historicalActor || ownershipConfig?.defaultActor || "من") };
+  const first = odometers[0];
+  if (first && Number.isFinite(ownership.purchaseOdometerKm) && ownership.purchaseOdometerKm > 0) {
+    const startKm = ownership.purchaseOdometerKm;
+    const endKm = Number(first.odometerKm);
+    const baselineDistance = endKm - startKm;
+    if (baselineDistance > 0) {
+      const purchaseTime = ownership.purchaseDate ? Date.parse(`${ownership.purchaseDate}T00:00:00+03:30`) : NaN;
+      const firstTime = Date.parse(first.occurredAt || first.createdAt || "");
+      const historicalTrips = events.filter(trip => trip.type === "trip" && Number(trip.distanceKm) > 0 && Number.isFinite(Date.parse(trip.occurredAt || "")) && Date.parse(trip.occurredAt) <= firstTime && (!Number.isFinite(purchaseTime) || Date.parse(trip.occurredAt) >= purchaseTime) && (correctionIndex === 0 || Date.parse(trip.occurredAt) >= firstTime));
+      const tripTotal = historicalTrips.reduce((sum, trip) => sum + Number(trip.distanceKm || 0), 0);
+      if (tripTotal > 0 && tripTotal <= baselineDistance) {
+        for (const trip of historicalTrips) {
+          coveredTrips.add(trip.id);
+          result.push({ date: trip.date || String(trip.occurredAt).slice(0, 10), occurredAt: trip.occurredAt, distanceKm: Number(trip.distanceKm), actor: String(trip.actor || "من").trim() || "من", source: "ownership_historical_trip", eventId: trip.id, estimatedHistorical: true, fromOdometerKm: startKm, toOdometerKm: endKm });
+        }
+      }
+      const residual = baselineDistance - (tripTotal > 0 && tripTotal <= baselineDistance ? tripTotal : 0);
+      if (residual > 0) result.push({ date: ownership.purchaseDate || null, occurredAt: ownership.purchaseDate ? `${ownership.purchaseDate}T12:00:00+03:30` : null, distanceKm: residual, actor: ownership.defaultActor.trim() || "من", source: "ownership_baseline", eventId: first.id, estimatedHistorical: true, fromOdometerKm: startKm, toOdometerKm: endKm });
+    }
+  }
   for (let i = 1; i < odometers.length; i++) {
     const previous = odometers[i - 1], current = odometers[i];
     const delta = Number(current.odometerKm) - Number(previous.odometerKm);
@@ -1068,12 +1372,10 @@ function calculateDistanceEntries(events) {
     const tripDistance = trips.reduce((sum, trip) => sum + Number(trip.distanceKm || 0), 0);
     trips.forEach(trip => coveredTrips.add(trip.id));
     if (trips.length && tripDistance <= delta) {
-      // Explicit trip rows get their own drivers; attribute only the unexplained remainder to the newer odometer's actor.
       for (const trip of trips) result.push({ date: trip.date || String(trip.occurredAt).slice(0, 10), occurredAt: trip.occurredAt, distanceKm: Number(trip.distanceKm), actor: String(trip.actor || "من").trim() || "من", source: "trip_within_odometer", eventId: trip.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
       const residual = delta - tripDistance;
       if (residual > 0) result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: residual, actor: String(current.actor || "من").trim() || "من", source: "odometer_residual", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
     } else {
-      // With no explicit trips (or inconsistent trip totals), use the odometer interval as a single estimate.
       result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: delta, actor: String(current.actor || "من").trim() || "من", source: "odometer_delta", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
     }
   }
@@ -1082,7 +1384,7 @@ function calculateDistanceEntries(events) {
       result.push({ date: event.date || String(event.occurredAt).slice(0, 10), occurredAt: event.occurredAt, distanceKm: Number(event.distanceKm), actor: String(event.actor || "من").trim() || "من", source: "trip", eventId: event.id });
     }
   }
-  return result.sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)));
+  return result.sort((a, b) => (Date.parse(a.occurredAt || "") || 0) - (Date.parse(b.occurredAt || "") || 0));
 }
 
 async function dueReport(env) {
@@ -1149,7 +1451,8 @@ async function runDueReminders(env) {
 async function configReport(env) {
   const config = await readConfig(env);
   const rows = Object.entries(config.serviceIntervals || {}).map(([key, value]) => `${value.label || key} [${key}]\n${value.intervalKm ? `${formatNum(value.intervalKm)} km` : "بدون فاصله کیلومتری"}${value.intervalDays ? ` · ${formatNum(value.intervalDays)} روز` : ""}`);
-  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\n\n${rows.join("\n\n")}\n\nتغییر نمونه: /interval engine_oil 5000 180\nنام‌های انگلیسی کوتاه مثل oil و نام فارسی مثل «روغن موتور» هم پشتیبانی می‌شوند.`;
+  const ownership = getOwnershipSettings(config);
+  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\nکیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km\nبرآورد پیمایش از خرید: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km\n\n${rows.join("\n\n")}\n\nتغییر بازه: /interval engine_oil 5000 180\nتغییر کیلومتر خرید: /purchasekm 428000 estimate=2400\nنام‌های کوتاه انگلیسی و فارسی پشتیبانی می‌شوند.`;
 }
 
 async function summaryReport(text, env) {
@@ -1186,14 +1489,20 @@ async function summaryReport(text, env) {
     .reduce((sum, e) => sum + Math.max(0, Number(e.costRial) || 0), 0);
   const fuelCost = events.filter(e => e.type === "fuel").reduce((sum, e) => sum + Math.max(0, Number(e.costRial) || 0), 0);
   const fuelLiters = events.filter(e => e.type === "fuel").reduce((sum, e) => sum + Math.max(0, Number(e.liters) || 0), 0);
-  const distanceEntries = calculateDistanceEntries(all);
-  const trips = distanceEntries.filter(entry => events.some(e => String(e.date) === entry.date)).reduce((sum, entry) => sum + entry.distanceKm, 0);
+  const distanceEntries = calculateDistanceEntries(all, (await readConfig(env)).ownership);
+  const trips = distanceEntries.filter(entry => !entry.estimatedHistorical && events.some(e => String(e.date) === entry.date)).reduce((sum, entry) => sum + entry.distanceKm, 0);
   const fines = events.filter(e => e.type === "fine");
+  const totalFine = fines.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
+  const paidFine = fines.filter(e=>e.paid).reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
   const unpaid = fines.filter(e => !e.paid).reduce((sum, e) => sum + (Number(e.costRial) || 0), 0);
   const typeCounts = {};
   events.forEach(e => typeCounts[e.type] = (typeCounts[e.type] || 0) + 1);
   const currentOdo = calculateCurrentOdometer(all);
-  return `📊 گزارش ${label}\nرویدادها: ${formatNum(events.length)}\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nمسافت ثبت‌شده در بازه: ${formatNum(trips)} km\nسوخت‌گیری: ${formatNum(fuelLiters)} لیتر\nهزینه سوخت: ${formatMoneyToman(fuelCost)}\nکل هزینه‌های پرداخت‌شده: ${formatMoneyToman(cost)}\nجریمه پرداخت‌نشده: ${formatMoneyToman(unpaid)}\n\n` + Object.entries(typeCounts).map(([type, count]) => `${eventTypeLabel(type)}: ${formatNum(count)}`).join("\n") + `\n\nخروجی CSV: /export`;
+  const config = await readConfig(env);
+  const ownership = getOwnershipSettings(config);
+  const lifetimeFromPurchase = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
+  const estimateGap = lifetimeFromPurchase === null ? null : lifetimeFromPurchase - ownership.estimatedKmSincePurchaseKm;
+  return `📊 گزارش ${label}\nرویدادها: ${formatNum(events.length)}\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nمسافت ثبت‌شده در بازه: ${formatNum(trips)} km\nسوخت‌گیری: ${formatNum(fuelLiters)} لیتر\nهزینه سوخت: ${formatMoneyToman(fuelCost)}\nکل هزینه‌های پرداخت‌شده: ${formatMoneyToman(cost)}\n\n🚦 وضعیت جریمه‌های همین بازه\nمجموع جریمه: ${formatMoneyToman(totalFine)}\nپرداخت‌شده: ${formatMoneyToman(paidFine)}\nپرداخت‌نشده: ${formatMoneyToman(unpaid)} (${formatNum(fines.filter(e=>!e.paid).length)} مورد)\n\n👤 از زمان خرید در کیلومتر ${formatNum(ownership.purchaseOdometerKm)}: ${lifetimeFromPurchase === null ? "—" : `${formatNum(lifetimeFromPurchase)} km طبق آخرین کیلومتر ثبت‌شده`}\nبرآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km${estimateGap === null ? "" : `\nاختلاف با برآورد: ${estimateGap > 0 ? "+" : ""}${formatNum(estimateGap)} km`}${estimateGap !== null && Math.abs(estimateGap)>150 ? "\n⚠️ اختلاف بیشتر از حد معمول است؛ کیلومتر فعلی را روی خودرو تأیید کن." : ""}\n\n` + Object.entries(typeCounts).map(([type, count]) => `${eventTypeLabel(type)}: ${formatNum(count)}`).join("\n") + `\n\nخروجی CSV: /export all · نمودار تصویری: /analysis month`;
 }
 
 async function latestReport(env) {
@@ -1204,9 +1513,13 @@ async function latestReport(env) {
 
 async function finesReport(env) {
   const events = (await loadAllEvents(env)).filter(e => e.type === "fine").sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)));
-  if (!events.length) return "✅ جریمه‌ای ثبت نشده است.";
+  if (!events.length) return "✅ جریمه‌ای ثبت نشده است.\n\nبرای دیدن کل هزینه‌ها و پیمایش از /summary all استفاده کن.";
   const unpaid = events.filter(e => !e.paid);
-  return `🚦 جریمه‌ها\nتعداد کل: ${events.length} · پرداخت‌نشده: ${unpaid.length}\n\n` + events.slice(0, 20).map(e => `${e.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده"} · ${formatMoneyToman(e.costRial || 0)}\n${e.description}\n${e.jalaliDate || e.date} · شناسه ${e.id.slice(0, 8)}`).join("\n\n") + "\n\nپرداخت را ثبت کن: /paid 8-character-id";
+  const paid = events.filter(e => e.paid);
+  const totalRial = events.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
+  const paidRial = paid.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
+  const unpaidRial = unpaid.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
+  return `🚦 گزارش جامع جریمه‌ها\n\n📋 تعداد کل: ${formatNum(events.length)} مورد\n💰 مجموع مبلغ تمام جریمه‌ها: ${formatMoneyToman(totalRial)}\n✅ مجموع پرداخت‌شده: ${formatMoneyToman(paidRial)} (${formatNum(paid.length)} مورد)\n🔴 بدهی پرداخت‌نشده: ${formatMoneyToman(unpaidRial)} (${formatNum(unpaid.length)} مورد)\n\n🧾 ریزسوابق اخیر\n` + events.slice(0, 25).map(e => `${e.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده"} · ${formatMoneyToman(e.costRial || 0)}\n${e.description}\nتاریخ: ${e.jalaliDate || e.date} · شناسه: ${e.id.slice(0, 8)}`).join("\n\n") + "\n\nبرای ثبت پرداخت: /paid شناسه\nبرای گزارش نموداری هزینه‌ها: /analysis month";
 }
 
 async function markFinePaid(input, env) {
@@ -1297,7 +1610,7 @@ function detectServiceKey(text, config) {
 }
 
 async function readConfig(env) {
-  return await readJsonFile(FILE_CONFIG, env, { serviceIntervals: {}, vehicle: { label: "Peugeot 206" } });
+  return await readJsonFile(FILE_CONFIG, env, { serviceIntervals: {}, vehicle: { label: "Peugeot 206" }, ownership: { purchaseOdometerKm: DEFAULT_PURCHASE_ODOMETER_KM, estimatedKmSincePurchaseKm: DEFAULT_ESTIMATED_KM_SINCE_PURCHASE } });
 }
 async function getMonth(month, env) {
   if (!/^\d{4}-\d{2}$/.test(month)) return { month, events: [] };
@@ -1399,6 +1712,21 @@ async function sendDocument(env, chatId, filename, blob, caption) {
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(`Telegram sendDocument failed: ${JSON.stringify(data).slice(0, 300)}`);
+  return data;
+}
+
+async function sendPhoto(env, chatId, filename, blob, caption) {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN secret is missing.");
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  const rawCaption = String(caption || "");
+  const withNavigation = `${rawCaption}\n\n🌐 داشبورد: ${SITE_URL}\n🤖 ربات: ${BOT_URL}`;
+  form.set("caption", telegramHtml(withNavigation).slice(0, 1024));
+  form.set("parse_mode", "HTML");
+  form.set("photo", blob, filename || "206-garage-chart.png");
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`, { method: "POST", body: form });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(`Telegram sendPhoto failed: ${JSON.stringify(data).slice(0, 300)}`);
   return data;
 }
 

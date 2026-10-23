@@ -41,6 +41,7 @@
     $('#typeFilter').addEventListener('change', updateJournal);
     $('#monthFilter').addEventListener('change', updateJournal);
     $('#actorFilter')?.addEventListener('change', updateJournal);
+    $('#guideSearch')?.addEventListener('input', filterGuideCards);
     $('#loadMoreButton').addEventListener('click', () => { state.shown += 12; renderJournal(); });
     $$('[data-analytics-period]').forEach(button => button.addEventListener('click', () => {
       $$('[data-analytics-period]').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', active ? 'true' : 'false'); });
@@ -123,6 +124,7 @@
     renderExpensePage();
     renderTrafficDetails();
     renderSettingsPage();
+    renderOwnershipSummary();
   }
 
   function activateTab(name, scroll = true) {
@@ -228,7 +230,7 @@
   function renderAnalytics() {
     const period = state.analyticsPeriod || 'month';
     const buckets = buildAnalyticsBuckets(period);
-    const distanceEntries = calculateDistanceEntries(state.events);
+    const distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership);
     const bucketIndex = timestamp => buckets.findIndex(bucket => timestamp >= bucket.start && timestamp < bucket.end);
     const eventTime = event => eventEpoch(event);
     const expenseTime = event => {
@@ -239,7 +241,7 @@
     };
     const rangeEvents = state.events.filter(event => bucketIndex(eventTime(event)) >= 0);
     const rangeExpenses = state.events.filter(event => isActualExpense(event) && bucketIndex(expenseTime(event)) >= 0);
-    const rangeDistance = distanceEntries.filter(entry => bucketIndex(eventEpoch(entry)) >= 0);
+    const rangeDistance = distanceEntries.filter(entry => !entry.estimatedHistorical && bucketIndex(eventEpoch(entry)) >= 0);
     const datasets = buckets.map((bucket, index) => {
       const items = rangeEvents.filter(event => bucketIndex(eventTime(event)) === index);
       const costs = rangeExpenses.filter(event => bucketIndex(expenseTime(event)) === index);
@@ -344,7 +346,7 @@
     root.innerHTML = rows.map(([actor, cost], index) => `<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index + 1}</i>${escapeHtml(actor)}</span><strong>${escapeHtml(moneyText(cost))} <small>تومان</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2, cost / max * 100)}%"></span></div><small class="actor-cost-share">${formatNumber(cost / rows.reduce((n, row) => n + row[1], 0) * 100, 1)}٪ از هزینه‌های تفکیک‌شده</small></div>`).join('');
   }
 
-  function renderDriverInsights(distanceEntries = calculateDistanceEntries(state.events)) {
+  function renderDriverInsights(distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership)) {
     const root = $('#actorDistanceBreakdown'); if (!root) return;
     const totals = new Map();
     distanceEntries.forEach(entry => { const actor = String(entry.actor || 'من').trim() || 'من'; totals.set(actor, (totals.get(actor) || 0) + (Number(entry.distanceKm) || 0)); });
@@ -354,7 +356,7 @@
     root.innerHTML = rows.map(([actor,km],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index+1}</i>${escapeHtml(actor)}</span><strong>${formatNumber(km)} <small>km</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,km/max*100)}%"></span></div><small class="actor-cost-share">${formatNumber(total ? km/total*100 : 0,1)}٪ از مسافت قابل محاسبه در بازه</small></div>`).join('');
   }
 
-  function renderCostPerKm(expenseEvents = state.events.filter(isActualExpense), distanceEntries = calculateDistanceEntries(state.events)) {
+  function renderCostPerKm(expenseEvents = state.events.filter(isActualExpense), distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership)) {
     const value = $('#costPerKmValue');
     if (!value) return;
     const costRial = sum(expenseEvents.filter(e => isActualExpense(e)), e => e.costRial);
@@ -522,6 +524,7 @@
     const people = Array.isArray(config.people) ? config.people : [];
     const peopleRoot = $('#settingsPeopleList');
     if (peopleRoot) peopleRoot.innerHTML = people.length ? people.map((person, index) => `<div class="person-settings-row"><span class="person-settings-index">${index + 1}</span><b>${escapeHtml(person)}</b><small>ACTOR</small></div>`).join('') : '<div class="empty-state">فهرست شخصی هنوز خالی است؛ از دستور /people add نام استفاده کن.</div>';
+    filterGuideCards();
   }
 
   async function copyApiExample() {
@@ -587,10 +590,68 @@
     }).join('');
   }
 
+  function renderOwnershipSummary() {
+    const settings = state.config?.ownership || {};
+    const purchaseKm = Number(settings.purchaseOdometerKm ?? settings.baselineOdometerKm ?? state.config?.vehicle?.purchaseOdometerKm ?? 428000);
+    const estimateKm = Number(settings.estimatedKmSincePurchaseKm ?? settings.estimatedDrivenSincePurchaseKm ?? 2400);
+    const currentKm = calculateOdometer(state.events);
+    const actualKm = currentKm != null && currentKm >= purchaseKm ? currentKm - purchaseKm : null;
+    const difference = actualKm == null ? null : actualKm - estimateKm;
+    const put = (selector, value) => { const node=$(selector); if(node) node.textContent=value; };
+    put('#ownershipPurchaseKm', `${formatNumber(purchaseKm)} km`);
+    put('#ownershipCurrentKm', currentKm == null ? '—' : `${formatNumber(currentKm)} km`);
+    put('#ownershipDrivenKm', actualKm == null ? '—' : `${formatNumber(actualKm)} km`);
+    put('#ownershipEstimateKm', `${formatNumber(estimateKm)} km`);
+    const reconciliation = $('#ownershipReconciliation');
+    if (reconciliation) {
+      const warning = difference != null && Math.abs(difference) > 150;
+      reconciliation.classList.toggle('is-warning', warning);
+      reconciliation.classList.toggle('is-confirmed', !warning && difference != null);
+      reconciliation.innerHTML = difference == null
+        ? 'برای محاسبهٔ پیمایش از زمان خرید، ابتدا کیلومترشمار فعلی را ثبت کن.'
+        : warning
+          ? `<b>⚠️ اختلاف نیازمند بررسی</b><span>آخرین عدد ثبت‌شده نسبت به کیلومتر خرید، ${formatNumber(actualKm)} کیلومتر پیمایش نشان می‌دهد؛ درحالی‌که برآورد اولیه ${formatNumber(estimateKm)} کیلومتر بوده است. اختلاف ${difference > 0 ? '+' : ''}${formatNumber(difference)} کیلومتر است. اگر کیلومتر واقعی خودرو ۴۳۰۴۰۰ است، آن را با /km 430400 ثبت کن؛ فقط درصورتی انجام بده که کیلومترشمار خودرو همین عدد را نشان دهد.</span>`
+          : `<b>✓ برآورد با کیلومتر ثبت‌شده نزدیک است</b><span>اختلاف برآورد و کیلومتر واقعی ثبت‌شده ${formatNumber(difference)} کیلومتر است.</span>`;
+    }
+    const breakdown = $('#ownershipDriverBreakdown');
+    if (breakdown) {
+      const entries = calculateDistanceEntries(state.events, settings);
+      const grouped = {};
+      entries.forEach(entry => { const name=String(entry.actor||'من').trim()||'من'; grouped[name]=(grouped[name]||0)+(Number(entry.distanceKm)||0); });
+      const rows = Object.entries(grouped).filter(([,value])=>value>0).sort((a,b)=>b[1]-a[1]);
+      const total = rows.reduce((n,row)=>n+row[1],0);
+      breakdown.innerHTML = rows.length ? rows.map(([name,value],i)=>`<div class="ownership-driver-row"><div class="ownership-driver-title"><b>${escapeHtml(name)}</b><span>${formatNumber(value)} km · ${formatNumber(total?value/total*100:0,1)}٪</span></div><div class="ownership-driver-track"><span style="width:${clamp(total?value/total*100:0,0,100)}%"></span></div>${i===0?'<small>سهم تاریخی از مبنای خرید به نام «من» فرض شده، مگر اینکه شخص دیگری برای کیلومتر ثبت شده باشد.</small>':''}</div>`).join('') : '<div class="empty-state">برای ساخت سهم رانندگی، مبنای خرید و حداقل یک ثبت کیلومتر لازم است.</div>';
+    }
+  }
+
+  function filterGuideCards() {
+    const input = $('#guideSearch');
+    const grid = $('#fullGuideGrid');
+    if (!input || !grid) return;
+    const query = input.value.trim().toLocaleLowerCase('fa');
+    const cards = $$('.guide-card', grid);
+    let visible = 0;
+    cards.forEach(card => {
+      const text = `${card.dataset.search || ''} ${card.textContent || ''}`.toLocaleLowerCase('fa');
+      const show = !query || text.includes(query);
+      card.hidden = !show;
+      if (show) visible++;
+    });
+    const counter = $('#guideResultCount');
+    if (counter) counter.textContent = `${formatNumber(visible)} دستور از ${formatNumber(cards.length)}`;
+  }
+
   function renderFinesAndIssues() {
     const fines = state.events.filter(e => e.type === 'fine').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     const unpaid = fines.filter(e => !e.paid);
-    $('#fineTotals').textContent = `مجموع بدهی: ${moneyText(sum(unpaid,e=>e.costRial)/10)} تومان`;
+    const totalFine = sum(fines, e => e.costRial) / 10;
+    const paidFine = sum(fines.filter(e => e.paid), e => e.costRial) / 10;
+    const unpaidFine = sum(unpaid, e => e.costRial) / 10;
+    $('#fineTotals').textContent = `کل جریمه‌ها: ${moneyText(totalFine)} تومان · بدهی: ${moneyText(unpaidFine)} تومان`;
+    if ($('#fineTotalAll')) $('#fineTotalAll').textContent = `${moneyText(totalFine)} تومان`;
+    if ($('#fineTotalPaid')) $('#fineTotalPaid').textContent = `${moneyText(paidFine)} تومان`;
+    if ($('#fineTotalUnpaid')) $('#fineTotalUnpaid').textContent = `${moneyText(unpaidFine)} تومان`;
+    if ($('#fineCountAll')) $('#fineCountAll').textContent = `${formatNumber(fines.length)} مورد ثبت‌شده`;
     $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description || 'جریمه ثبت‌شده')}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || e.date || '—')} · ${String(e.id).slice(0,8)}</div></div><div class="mini-row-value ${e.paid?'paid':''}">${escapeHtml(moneyText((Number(e.costRial)||0)/10))}<div class="mini-row-meta">${e.paid?'پرداخت شد':'پرداخت‌نشده'}</div></div></div>`).join('') : '<div class="empty-state">جریمه‌ای ثبت نشده است.</div>';
     const issues = state.events.filter(e => e.type === 'issue' || e.type === 'repair').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     const open = issues.filter(e=>e.type==='issue' && e.status!=='fixed');
@@ -650,28 +711,50 @@
     return current == null ? null : Math.round(current*10)/10;
   }
 
-  function calculateDistanceEntries(events) {
-    const odometers = events.filter(e=>e.type==='odometer' && e.odometerKm!==null && e.odometerKm!==undefined && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+  function calculateDistanceEntries(events, ownershipConfig = null) {
+    const allOdometers = events.filter(e=>e.type==='odometer' && e.odometerKm!==null && e.odometerKm!==undefined && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+    let correctionIndex = 0;
+    for (let i=1;i<allOdometers.length;i++) if (Number(allOdometers[i].odometerKm)<Number(allOdometers[i-1].odometerKm)) correctionIndex=i;
+    const odometers = allOdometers.slice(correctionIndex);
     const coveredTrips = new Set();
     const result = [];
+    const purchaseKm = Number(ownershipConfig?.purchaseOdometerKm ?? ownershipConfig?.baselineOdometerKm ?? state.config?.vehicle?.purchaseOdometerKm ?? 428000);
+    const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownershipConfig?.purchaseDate || '')) ? ownershipConfig.purchaseDate : null;
+    const historicalActor = String(ownershipConfig?.historicalActor || ownershipConfig?.defaultActor || 'من').trim() || 'من';
+    const first = odometers[0];
+    if (first && Number.isFinite(purchaseKm) && purchaseKm > 0) {
+      const baselineDistance = Number(first.odometerKm) - purchaseKm;
+      if (baselineDistance > 0) {
+        const purchaseTime = purchaseDate ? Date.parse(`${purchaseDate}T00:00:00+03:30`) : NaN;
+        const firstTime = eventEpoch(first);
+        const historicalTrips = events.filter(trip => trip.type === 'trip' && Number(trip.distanceKm) > 0 && eventEpoch(trip) <= firstTime && (!Number.isFinite(purchaseTime) || eventEpoch(trip) >= purchaseTime) && (correctionIndex === 0 || eventEpoch(trip) >= firstTime));
+        const tripTotal = sum(historicalTrips, trip => trip.distanceKm);
+        if (tripTotal > 0 && tripTotal <= baselineDistance) {
+          for (const trip of historicalTrips) {
+            coveredTrips.add(trip.id);
+            result.push({ date: trip.date || String(trip.occurredAt || '').slice(0,10), occurredAt: trip.occurredAt, distanceKm: Number(trip.distanceKm), actor: String(trip.actor || 'من').trim() || 'من', source: 'ownership_historical_trip', eventId: trip.id, estimatedHistorical: true, fromOdometerKm: purchaseKm, toOdometerKm: Number(first.odometerKm) });
+          }
+        }
+        const residual = baselineDistance - (tripTotal > 0 && tripTotal <= baselineDistance ? tripTotal : 0);
+        if (residual > 0) result.push({ date: purchaseDate, occurredAt: purchaseDate ? `${purchaseDate}T12:00:00+03:30` : null, distanceKm: residual, actor: historicalActor, source: 'ownership_baseline', eventId: first.id, estimatedHistorical: true, fromOdometerKm: purchaseKm, toOdometerKm: Number(first.odometerKm) });
+      }
+    }
     for (let i=1;i<odometers.length;i++) {
       const previous=odometers[i-1], current=odometers[i];
       const delta=Number(current.odometerKm)-Number(previous.odometerKm);
       if (delta<=0 || delta>5000) continue;
       const start=eventEpoch(previous), end=eventEpoch(current);
       const trips=events.filter(trip=>trip.type==='trip'&&eventEpoch(trip)>start&&eventEpoch(trip)<=end&&Number(trip.distanceKm)>0).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
-      const tripDistance=trips.reduce((total,trip)=>total+(Number(trip.distanceKm)||0),0);
+      const tripDistance=sum(trips,trip=>trip.distanceKm);
       trips.forEach(trip=>coveredTrips.add(trip.id));
       if(trips.length&&tripDistance<=delta){
         for(const trip of trips) result.push({date:trip.date||String(trip.occurredAt||'').slice(0,10),occurredAt:trip.occurredAt,distanceKm:Number(trip.distanceKm),actor:String(trip.actor||'من').trim()||'من',source:'trip_within_odometer',eventId:trip.id,fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm)});
         const residual=delta-tripDistance;
         if(residual>0) result.push({date:current.date||String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:residual,actor:String(current.actor||'من').trim()||'من',source:'odometer_residual',fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm)});
-      } else {
-        result.push({date:current.date||String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:delta,actor:String(current.actor||'من').trim()||'من',fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm),source:'odometer_delta'});
-      }
+      } else result.push({date:current.date||String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:delta,actor:String(current.actor||'من').trim()||'من',fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm),source:'odometer_delta'});
     }
-    for (const event of events) if (event.type==='trip' && !coveredTrips.has(event.id) && Number(event.distanceKm)>0) result.push({date:event.date||String(event.occurredAt||'').slice(0,10),occurredAt:event.occurredAt,distanceKm:Number(event.distanceKm),actor:String(event.actor||'من').trim()||'من',source:'trip',eventId:event.id});
-    return result.sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+    for (const event of events) if (event.type==='trip'&&!coveredTrips.has(event.id)&&Number(event.distanceKm)>0) result.push({date:event.date||String(event.occurredAt||'').slice(0,10),occurredAt:event.occurredAt,distanceKm:Number(event.distanceKm),actor:String(event.actor||'من').trim()||'من',source:'trip',eventId:event.id});
+    return result.sort((a,b)=>(eventEpoch(a)||0)-(eventEpoch(b)||0));
   }
 
   function countOdometerSources(events) { return events.filter(e=>e.type==='odometer'||e.type==='trip').length; }

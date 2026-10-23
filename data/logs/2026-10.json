@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-23T08:44:00+03:30",
+  "updatedAt": "2026-10-23T08:03:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -134,22 +134,7 @@
       "paidAt": null,
       "metadata": {
         "source": "telegram-or-api"
-      },
-      "actor": "بابام",
-      "updatedAt": "2026-10-23T08:44:00+03:30",
-      "revision": 2,
-      "editHistory": [
-        {
-          "at": "2026-10-23T08:44:00+03:30",
-          "by": "telegram",
-          "before": {
-            "actor": null
-          },
-          "after": {
-            "actor": "بابام"
-          }
-        }
-      ]
+      }
     }
   ]
 }
