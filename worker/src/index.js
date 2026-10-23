@@ -3,6 +3,9 @@ const TZ = "Asia/Tehran";
 const FILE_INDEX = "data/index.json";
 const FILE_CONFIG = "data/config.json";
 const FILE_REMINDERS = "data/reminder-state.json";
+const FILE_DELETED_EVENTS = "data/deleted-events.json";
+const SITE_URL = "https://mehrdadmb2.github.io/peugeot-206-garage/";
+const BOT_URL = "https://t.me/Peugeot206GarageBot";
 
 const SERVICE_ALIASES = {
   engine_oil: ["engine_oil", "oil", "روغن موتور", "روغن", "موتور", "engine oil"],
@@ -30,9 +33,11 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "2.0.0",
+        version: "3.0.0",
         timezone: TZ,
         mode: "request-driven",
+        dashboard: SITE_URL,
+        telegram: BOT_URL,
         writes: "GitHub Contents API commits are awaited before a successful response; no Cron/periodic trigger is required.",
         endpoints: {
           health: "GET /health",
@@ -42,12 +47,14 @@ export default {
           events: "GET /api/v1/events?month=YYYY-MM&type=fuel&limit=100 (authorized)",
           due: "GET /api/v1/due (authorized)",
           config: "GET /api/v1/config (authorized)",
-          export: "GET /api/v1/export?month=YYYY-MM (authorized CSV)"
+          export: "GET /api/v1/export?month=YYYY-MM or month=all (authorized CSV)",
+          updateEvent: "POST /api/v1/event/update (authorized JSON {id, patch})",
+          deleteEvent: "DELETE /api/v1/event?id=<event-id> (authorized; archived before removal)"
         }
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "2.0.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.0.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -97,7 +104,7 @@ function isApiAuthorized(request, env) {
 function corsResponse(response) {
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Token");
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Cache-Control", "no-store, max-age=0");
@@ -141,9 +148,27 @@ async function handleExternalApi(request, url, env) {
   if (request.method === "GET" && path === "/api/v1/config") return json({ ok: true, config: await readConfig(env) });
   if (request.method === "GET" && path === "/api/v1/export") {
     const month = url.searchParams.get("month") || nowTehran().date.slice(0, 7);
-    const data = await getMonth(month, env);
-    const csv = eventsToCsv(data.events || []);
-    return new Response("\uFEFF" + csv, { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename=\"206-garage-${month}.csv\"`, "cache-control": "no-store" } });
+    const events = /^(all|همه|کل)$/i.test(month) ? await loadAllEvents(env) : (await getMonth(month, env)).events || [];
+    const csv = eventsToCsv(events);
+    return new Response("\uFEFF" + csv, { status: 200, headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="206-garage-${month}.csv"`, "cache-control": "no-store" } });
+  }
+  if (request.method === "POST" && path === "/api/v1/event/update") {
+    let payload;
+    try { payload = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400); }
+    if (!payload || typeof payload.id !== "string" || !payload.patch || typeof payload.patch !== "object" || Array.isArray(payload.patch)) return json({ ok: false, error: "invalid_payload", example: { id: "event-id-prefix", patch: { actor: "بابام", note: "سفر جاده‌ای" } } }, 400);
+    const allowed = new Set(["title", "description", "actor", "note", "odometerKm", "distanceKm", "liters", "costRial", "paid", "paidAt", "status"]);
+    const patch = Object.fromEntries(Object.entries(payload.patch).filter(([key]) => allowed.has(key)));
+    for (const key of ["title", "description", "actor", "note"]) if (patch[key] !== undefined) patch[key] = String(patch[key]).slice(0, 2000);
+    for (const key of ["odometerKm", "distanceKm", "liters", "costRial"]) if (patch[key] !== undefined) { const n = Number(patch[key]); if (!Number.isFinite(n) || n < 0) return json({ ok: false, error: "invalid_numeric_field", field: key }, 400); patch[key] = n; }
+    if (!Object.keys(patch).length) return json({ ok: false, error: "empty_patch" }, 400);
+    const result = await mutateEventByPrefix(payload.id, patch, env, "api");
+    if (result.error) return json({ ok: false, error: "event_update_failed", message: result.error }, 404);
+    return json({ ok: true, event: result.event });
+  }
+  if (request.method === "DELETE" && path === "/api/v1/event") {
+    const id = url.searchParams.get("id") || "";
+    const result = await deleteEventByPrefix(id, env, "api");
+    return result.event ? json({ ok: true, deletedId: result.event.id, archived: true }) : json({ ok: false, error: "delete_failed", message: result.text }, 404);
   }
   if (request.method === "POST" && (path === "/api/v1/record" || path === "/api/v1/command")) {
     let payload;
@@ -158,7 +183,7 @@ async function handleExternalApi(request, url, env) {
     } else if (typeof payload.type === "string") {
       const allowed = new Set(["odometer","trip","fuel","service","part","expense","fine","wash","issue","repair","note"]);
       if (!allowed.has(payload.type)) return json({ ok: false, error: "unsupported_event_type", allowed: [...allowed] }, 400);
-      const input = { ...payload, type: payload.type, title: String(payload.title || eventTypeLabel(payload.type)), description: String(payload.description || "External API event").slice(0,2000), occurredAt: payload.occurredAt || nowTehran().iso };
+      const input = { ...payload, type: payload.type, title: String(payload.title || eventTypeLabel(payload.type)), description: String(payload.description || "External API event").slice(0,2000), actor: payload.actor === undefined || payload.actor === null ? "" : String(payload.actor).slice(0,100), note: String(payload.note || "").slice(0,2000), occurredAt: payload.occurredAt || nowTehran().iso };
       for (const key of ["odometerKm","distanceKm","liters","costRial"]) if (input[key] !== undefined && input[key] !== null) {
         const n = Number(input[key]); if (!Number.isFinite(n) || n < 0) return json({ ok: false, error: "invalid_numeric_field", field: key }, 400); input[key] = n;
       }
@@ -170,7 +195,7 @@ async function handleExternalApi(request, url, env) {
     if (reply?.document) return json({ ok: false, error: "use_csv_endpoint", message: "برای دریافت CSV از GET /api/v1/export?month=YYYY-MM استفاده کن." }, 400);
     return json({ ok: true, persisted, source: "github", reply: replyText, filename: reply?.filename || null, note: "در رویدادهای تغییردهنده، پاسخ موفق پس از پایان commitهای GitHub ارسال می‌شود؛ گزارش‌ها فقط داده‌های ذخیره‌شده را می‌خوانند." });
   }
-  return json({ ok: false, error: "not_found", allowed: ["GET /api/v1/overview","GET /api/v1/events","GET /api/v1/due","GET /api/v1/config","GET /api/v1/export","POST /api/v1/record"] }, 404);
+  return json({ ok: false, error: "not_found", allowed: ["GET /api/v1/overview","GET /api/v1/events","GET /api/v1/due","GET /api/v1/config","GET /api/v1/export","POST /api/v1/record","POST /api/v1/event/update","DELETE /api/v1/event?id=EVENT_ID"] }, 404);
 }
 
 function accountingDateForApi(event) {
@@ -178,14 +203,18 @@ function accountingDateForApi(event) {
 }
 
 async function handleTelegramUpdate(update, env) {
-  const message = update?.message;
-  if (!message || !message.text) return;
-  const senderId = String(message.from?.id ?? "");
-  if (!senderId || senderId !== String(env.ALLOWED_TELEGRAM_USER_ID || "")) {
-    if (message.chat?.id) await sendText(env, message.chat.id, "⛔ این ربات خصوصی است و اجازه استفاده برای این حساب فعال نیست.");
+  if (update?.callback_query) {
+    await handleCallbackQuery(update.callback_query, env);
     return;
   }
+  const message = update?.message;
+  if (!message || typeof message.text !== "string") return;
+  const senderId = String(message.from?.id ?? "");
   const chatId = message.chat?.id;
+  if (!senderId || senderId !== String(env.ALLOWED_TELEGRAM_USER_ID || "")) {
+    if (chatId) await sendText(env, chatId, "⛔ این ربات خصوصی است و اجازه استفاده برای این حساب فعال نیست.");
+    return;
+  }
   if (!chatId) return;
   const text = normalizeDigits(message.text.trim());
   try {
@@ -193,13 +222,92 @@ async function handleTelegramUpdate(update, env) {
     if (reply?.document) {
       await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
     } else if (reply?.text) {
-      await sendText(env, chatId, reply.text, reply.keyboard !== false);
+      const shortId = reply.eventId || eventIdFromReply(reply.text);
+      const markup = reply.markup || (shortId ? eventActionKeyboard(shortId) : null);
+      await sendText(env, chatId, reply.text, markup || reply.keyboard !== false);
     }
   } catch (error) {
     console.error("message processing failed", error?.stack || error);
-    await sendText(env, chatId, "⚠️ ثبت انجام نشد. اتصال Worker به GitHub و دسترسی Contents: Read and write را بررسی کن. جزئیات فنی در Cloudflare > Workers > Logs ثبت شده است.");
+    await sendText(env, chatId, "⚠️ عملیات انجام نشد. وضعیت Worker و دسترسی Contents: Read and write را در Cloudflare بررسی کن. جزئیات فنی در Worker Logs ثبت شده است.");
   }
 }
+
+async function handleCallbackQuery(query, env) {
+  const senderId = String(query?.from?.id ?? "");
+  const chatId = query?.message?.chat?.id;
+  const callbackId = query?.id;
+  if (senderId !== String(env.ALLOWED_TELEGRAM_USER_ID || "")) {
+    await answerCallbackQuery(env, callbackId, "این ربات خصوصی است.", true);
+    return;
+  }
+  const match = String(query?.data || "").match(/^evt:([a-f0-9-]{6,36}):(detail|edit|note|actor|delete|confirm|cancel)$/i);
+  if (!match || !chatId) {
+    await answerCallbackQuery(env, callbackId, "دکمه نامعتبر یا منقضی‌شده است.", true);
+    return;
+  }
+  const [, id, action] = match;
+  await answerCallbackQuery(env, callbackId, "در حال پردازش…");
+  if (action === "cancel") {
+    await sendText(env, chatId, "عملیات حذف لغو شد.");
+    return;
+  }
+  if (action === "delete") {
+    const event = await findEventByPrefix(id, env);
+    if (!event) { await sendText(env, chatId, "رویداد پیدا نشد؛ شاید قبلاً حذف شده باشد."); return; }
+    await sendText(env, chatId, `⚠️ تأیید حذف عملیات
+
+${formatEventDetails(event)}
+
+این کار رویداد را از دفتر فعال حذف می‌کند و یک نسخه در بایگانی نگه می‌دارد.`, deleteConfirmationKeyboard(event.id.slice(0, 8)));
+    return;
+  }
+  if (action === "confirm") {
+    const result = await deleteEventByPrefix(id, env, senderId);
+    await sendText(env, chatId, result.text, false);
+    return;
+  }
+  const event = await findEventByPrefix(id, env);
+  if (!event) { await sendText(env, chatId, "رویداد پیدا نشد؛ شناسه را با /latest یا از داشبورد بررسی کن."); return; }
+  if (action === "detail") {
+    await sendText(env, chatId, formatEventDetails(event), eventActionKeyboard(event.id.slice(0, 8)));
+  } else if (action === "edit") {
+    await sendText(env, chatId, `✏️ ویرایش رویداد ${event.id.slice(0,8)}
+هر فیلدی را با قالب زیر بفرست:
+/edit ${event.id.slice(0,8)} عنوان=... | شرح=... | توضیح=... | شخص=... | مبلغ=... | کیلومتر=...
+فقط فیلدهایی را بنویس که قصد تغییرشان را داری. مبلغ بدون واحد به تومان محسوب می‌شود.`, eventActionKeyboard(event.id.slice(0, 8)));
+  } else if (action === "note") {
+    await sendText(env, chatId, `📝 افزودن/تغییر توضیح
+/annotate ${event.id.slice(0,8)} متن توضیح
+برای پاک‌کردن توضیح از «-» استفاده کن.`, eventActionKeyboard(event.id.slice(0, 8)));
+  } else if (action === "actor") {
+    await sendText(env, chatId, `👤 تغییر شخص انجام‌دهنده
+/actor ${event.id.slice(0,8)} نام شخص
+مثال: /actor ${event.id.slice(0,8)} بابام
+برای بازگرداندن به حالت پیش‌فرض بنویس: /actor ${event.id.slice(0,8)} من`, eventActionKeyboard(event.id.slice(0, 8)));
+  }
+}
+
+async function answerCallbackQuery(env, callbackId, text = "", showAlert = false) {
+  if (!callbackId || !env.TELEGRAM_BOT_TOKEN) return;
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackId, text: String(text).slice(0, 180), show_alert: Boolean(showAlert) })
+  }).catch(error => console.warn("answerCallbackQuery failed", error?.message || error));
+}
+
+function eventActionKeyboard(id) {
+  const safeId = String(id).slice(0, 8);
+  return { inline_keyboard: [
+    [{ text: "🔎 جزئیات کامل", callback_data: `evt:${safeId}:detail` }],
+    [{ text: "✏️ ویرایش", callback_data: `evt:${safeId}:edit` }, { text: "📝 توضیح", callback_data: `evt:${safeId}:note` }, { text: "👤 شخص", callback_data: `evt:${safeId}:actor` }],
+    [{ text: "🗑 حذف عملیات", callback_data: `evt:${safeId}:delete` }],
+    [{ text: "🌐 داشبورد", url: SITE_URL }, { text: "🤖 ربات", url: BOT_URL }]
+  ] };
+}
+function deleteConfirmationKeyboard(id) {
+  return { inline_keyboard: [[{ text: "🗑 بله، حذف شود", callback_data: `evt:${String(id).slice(0,8)}:confirm` }, { text: "انصراف", callback_data: `evt:${String(id).slice(0,8)}:cancel` }]] };
+}
+function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*:\s*([a-f0-9-]{6,36})/i)?.[1] || null; }
 
 const COMMAND_ALIASES = {
   start: "start", begin: "start", شروع: "start", help: "help", commands: "help", command: "help", راهنما: "help", کمک: "help", دستورها: "help",
@@ -220,6 +328,15 @@ const COMMAND_ALIASES = {
   note: "note", memo: "note", یادداشت: "note",
   latest: "latest", recent: "latest", آخرین: "latest",
   fuelstats: "fuelstats", fuel_stats: "fuelstats", consumption: "fuelstats", مصرف: "fuelstats",
+  detail: "detail", event: "detail", info: "detail", جزئیات: "detail", رویداد: "detail",
+  edit: "edit", اصلاح: "edit", ویرایش: "edit",
+  annotate: "annotate", comment: "annotate", noteevent: "annotate", توضیح: "annotate",
+  actor: "actor", who: "actor", person: "actor", شخص: "actor", انجامدهنده: "actor",
+  delete: "delete", remove: "delete", حذف: "delete",
+  backup: "backup", exportjson: "backup", پشتیبان: "backup",
+  cancel: "cancel", لغو: "cancel",
+  restore: "restore", بازگردانی: "restore",
+  people: "people", persons: "people", اشخاص: "people", افراد: "people",
   undo: "undo"
 };
 const KNOWN_COMMANDS = new Set(Object.values(COMMAND_ALIASES));
@@ -241,7 +358,7 @@ function normalizeIntentText(value) {
     .replace(/\s+/g, " ").trim().toLowerCase();
 }
 function telegramHtml(value) {
-  const lines = String(value || "").slice(0, 3300).split("\n");
+  const lines = String(value || "").slice(0, 3800).split("\n");
   let firstContentSeen = false;
   const escape = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const rendered = lines.map(original => {
@@ -262,6 +379,10 @@ function telegramHtml(value) {
     }
     const idLine = line.match(/^(شناسه|ID|کد|کیلومتر ثبت\s*شده|موعد کیلومتری بعدی)\s*:\s*(.*)$/i);
     if (idLine) return `<b>${escape(idLine[1])}:</b> <code>${escape(idLine[2])}</code>`;
+    const fieldLine = line.match(/^([^:：]{1,38})\s*[:：]\s*(.*)$/);
+    if (fieldLine && /^(دسته|تاریخ|انجام.?دهنده|شرح عملیات|توضیح تکمیلی|کیلومترشمار|مسافت|سوخت|هزینه|مبلغ|وضعیت جریمه|وضعیت خرابی|سرویس\/قطعه|زمان ثبت|آخرین ویرایش|کارکرد فعلی|رویدادها|شناسه تلگرام شما|شناسه گفتگو)$/i.test(fieldLine[1].trim())) {
+      return `<b>${escape(fieldLine[1].trim())}:</b> ${escape(fieldLine[2])}`;
+    }
     if (/^(?:⚠️|⛔|💡|📌|نکته[:：])/u.test(line)) return `<blockquote>${safe}</blockquote>`;
     return safe.replace(/`([^`]{1,140})`/g, (_, code) => `<code>${escape(code)}</code>`);
   });
@@ -274,17 +395,49 @@ async function processMessage(text, message, env) {
   if (parsedCommand.unknown) return { text: `دستور «/${parsedCommand.command}» شناخته نشد. راهنمای کامل و نمونه‌های ثبت را پایین ببین:\n\n${helpText()}`, keyboard: true };
   const lower = normalizeIntentText(text);
   const fromDate = new Date((message.date || Math.floor(Date.now() / 1000)) * 1000);
+  const deepLinkEvent = text.match(/^\/start(?:@\w+)?\s+e_([a-f0-9-]{6,36})/i);
+  if (deepLinkEvent) {
+    const event = await findEventByPrefix(deepLinkEvent[1], env);
+    return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد موردنظر پیدا نشد یا حذف شده است. /latest را بررسی کن.", keyboard: false };
+  }
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
+  if (/^\/cancel\b/i.test(text)) return { text: "✅ هیچ عملیات در انتظار تأییدی وجود ندارد. برای حذف از دکمه حذف در جزئیات رویداد استفاده کن.", keyboard: false };
+  if (/^\/people\b|^\/اشخاص\b|^\/افراد\b/i.test(text)) return { text: await peopleCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/id\b/i.test(text)) return { text: `شناسه تلگرام شما: ${message.from.id}\nشناسه گفتگو: ${message.chat.id}`, keyboard: false };
+  if (/^\/(detail|event|info)\b/i.test(text)) {
+    const id = text.replace(/^\/\S+/, "").trim();
+    const event = await findEventByPrefix(id, env);
+    return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد پیدا نشد. شناسه حداقل ۶ کاراکتر باشد؛ نمونه: /detail a1b2c3d4", keyboard: false };
+  }
+  if (/^\/edit\b/i.test(text)) return { text: await editEventCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/annotate\b/i.test(text)) return { text: await annotateEventCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/actor\b/i.test(text)) return { text: await actorEventCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/delete\b/i.test(text)) {
+    const id = text.replace(/^\/\S+/, "").trim();
+    const event = await findEventByPrefix(id, env);
+    return event ? { text: `⚠️ تأیید حذف این عملیات لازم است.\n\n${formatEventDetails(event)}\n\nرویداد پیش از حذف از دفتر فعال در بایگانی نگهداری می‌شود.`, markup: deleteConfirmationKeyboard(event.id.slice(0,8)) } : { text: "رویداد پیدا نشد. نمونه: /delete a1b2c3d4", keyboard: false };
+  }
+  if (/^\/restore\b/i.test(text)) return { text: await restoreDeletedEvent(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/summary\b/i.test(text) || /^\/گزارش\b/i.test(text)) return { text: await summaryReport(text, env), keyboard: true };
   if (/^\/due\b/i.test(text) || /^\/سرویس‌ها\b/i.test(text)) return { text: await dueReport(env), keyboard: true };
   if (/^\/config\b/i.test(text) || /^\/تنظیمات\b/i.test(text)) return { text: await configReport(env), keyboard: false };
   if (/^\/fines\b/i.test(text) || /^\/جریمه‌ها\b/i.test(text)) return { text: await finesReport(env), keyboard: false };
-  if (/^\/export\b/i.test(text) || /^\/خروجی\b/i.test(text)) {
-    const month = extractMonthArgument(text) || nowTehran().date.slice(0, 7);
-    const data = await getMonth(month, env);
-    const csv = eventsToCsv(data.events || []);
-    return { filename: `car-log-${month}.csv`, document: new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), caption: `خروجی CSV خودرو برای ${month} · ${data.events?.length || 0} رویداد` };
+  if (/^\/export\b|^\/خروجی\b/i.test(text)) {
+    const arg = text.replace(/^\/\S+/, "").trim();
+    const month = extractMonthArgument(arg);
+    const allMode = /^(?:all|همه|کل)(?:\s|$)/i.test(arg);
+    const events = allMode || (!month && !arg) ? await loadAllEvents(env) : (await getMonth(month || nowTehran().date.slice(0, 7), env)).events || [];
+    const fileLabel = allMode || (!month && !arg) ? "all" : (month || nowTehran().date.slice(0, 7));
+    const csv = eventsToCsv(events);
+    return { filename: `206-garage-${fileLabel}.csv`, document: new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), caption: `📦 خروجی CSV ${fileLabel === "all" ? "همه سوابق" : `ماه ${fileLabel}`} · ${events.length} رویداد` };
+  }
+  if (/^\/backup\b|^\/exportjson\b|^\/پشتیبان\b/i.test(text)) {
+    const arg = text.replace(/^\/\S+/, "").trim();
+    const month = extractMonthArgument(arg);
+    const events = month ? (await getMonth(month, env)).events || [] : await loadAllEvents(env);
+    const label = month || "all";
+    const bundle = { schemaVersion: 1, exportedAt: nowTehran().iso, timezone: TZ, vehicle: (await readConfig(env)).vehicle || {}, count: events.length, events };
+    return { filename: `206-garage-backup-${label}.json`, document: new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json;charset=utf-8" }), caption: `🛡️ نسخه پشتیبان JSON · ${label === "all" ? "همه سوابق" : label} · ${events.length} رویداد` };
   }
   if (/^\/km\b|^\/odo\b|^\/کارکرد\b/i.test(text)) {
     const value = parseFirstNumber(text.replace(/^\/\S+/, ""));
@@ -331,7 +484,7 @@ async function processMessage(text, message, env) {
   }
   if (/^\/latest\b|^\/آخرین\b/i.test(text)) return { text: await latestReport(env), keyboard: false };
   if (/^\/fuelstats\b|^\/مصرف\b/i.test(text)) return { text: await fuelReport(env), keyboard: false };
-  if (/^\/undo\b/i.test(text)) return { text: "برای جلوگیری از حذف تصادفی، حذف رویداد از طریق /undo فعال نیست. شناسه رویداد را از داشبورد بردار و قبل از حذف دستی، نسخه پشتیبان بگیر.", keyboard: false };
+  if (/^\/undo\b/i.test(text)) return { text: "حذف امن با تأیید دو مرحله‌ای انجام می‌شود: /delete شناسه\nاگر اشتباهی حذف کردی: /restore شناسه\nبرای پیدا کردن شناسه از /latest یا /detail استفاده کن.", keyboard: false };
 
   // Natural-language entry: commands and plain Persian/English phrases are both accepted.
   const occurredAt = getOccurredAt(text, fromDate);
@@ -376,33 +529,46 @@ async function processMessage(text, message, env) {
 }
 
 function helpText() {
-  return `🚘 دفتر هوشمند پژو ۲۰۶\n\nثبت سریع با فارسی یا انگلیسی:
-• کیلومتر ۱۵۶۲۰۰  ← کیلومترشمار فعلی
-• امروز ۸۵ کیلومتر رانندگی کردم ← مسافت روز
-• ۲۰ لیتر بنزین · هزینه ۷۰۰ هزار تومان · کیلومتر ۱۵۶۲۰۰
-• روغن موتور را عوض کردم · ۹۰۰ هزار تومان · کیلومتر ۱۵۶۰۰۰
-• فیلتر هوا تعویض شد در کیلومتر ۱۵۷۰۰۰
-• خرابی: صدای جلوبندی
-• تعمیر شد: جلوبندی · هزینه ۱٫۲ میلیون تومان
-• جریمه سرعت ۵۰۰ هزار تومان
-• جریمه 8f31 پرداخت شد
-• کارواش ۱۸۰ هزار تومان
-• ۱۴۰۵/۰۷/۲۹ ساعت ۱۸:۳۰ روغن موتور را عوض کردم\n\nدستورها:
-/km 156000 — ثبت کارکرد فعلی
-/trip 85 — ثبت مسافت طی‌شده
-/fuel 20l cost=700000 toman km=156200 full — سوخت‌گیری
-/service oil cost=900000 toman km=156000 — ثبت سرویس
-/interval oil 5000 — تنظیم بازه تعویض (کیلومتر)
-/due — موعد سرویس‌های بعدی
-/summary today — گزارش روز؛ /summary week — گزارش هفته؛ /summary month — گزارش ماه
-/fuelstats — آمار سوخت
-/fines — جریمه‌های پرداخت‌نشده
-/paid 8f31 — پرداخت جریمه با شناسه
-/export — فایل CSV ماه جاری؛ /export 2026-09 — ماه مشخص
-/config — بازه‌های نگهداری
-/latest — رویدادهای اخیر\n\n💡 عدد فارسی/عربی/انگلیسی، فاصله‌گذاری متفاوت، تاریخ شمسی/میلادی، «هزار/میلیون»، تومان/ریال، km و l پشتیبانی می‌شود. نام‌های رایج فارسی و انگلیسی نیز شناسایی می‌شوند. اگر متن مبهم باشد، برای جلوگیری از داده اشتباه ذخیره نمی‌شود.
+  return `🚘 دفتر هوشمند پژو ۲۰۶ SD
 
-📡 API مستقیم Worker: برای ثبت از سامانه دیگر، POST /api/v1/record با هدر Authorization: Bearer <API_ACCESS_TOKEN> و بدنه JSON مثل {"text":"20l fuel, cost 700000 toman, km 156200"}. هر ثبت پس از commit در GitHub تأیید می‌شود.`;
+<b>🧾 ثبت سریع</b>
+• کیلومتر ۴۳۱۴۰۰ ← ثبت کیلومترشمار
+• امروز ۸۵ کیلومتر رانندگی کردم
+• ۲۰ لیتر بنزین · هزینه ۷۰۰ هزار تومان · کیلومتر ۴۳۱۴۰۰
+• روغن موتور عوض شد · هزینه ۹۰۰ هزار تومان · کیلومتر ۴۳۱۰۰۰
+
+<b>👤 ثبت به نام شخص و توضیح</b>
+• بنزین زدم؛ توسط بابام؛ توضیح: سفر جاده‌ای
+• بابام: ۲۰ لیتر بنزین زدم · هزینه ۷۰۰ هزار تومان
+• /people add مهرزاد — افزودن نام دلخواه به فهرست
+• /actor شناسه بابام
+• /annotate شناسه توضیح اضافه
+اگر شخصی مشخص نشود، انجام‌دهنده «من» ثبت می‌شود. نام هر شخص دلخواه پشتیبانی می‌شود.
+
+<b>🛠 مدیریت عملیات</b>
+/detail a1b2c3d4 — جزئیات کامل + دکمه‌های مدیریت
+/edit a1b2c3d4 عنوان=... | شرح=... | توضیح=... | شخص=... | مبلغ=... | کیلومتر=...
+/annotate a1b2c3d4 متن توضیح
+/actor a1b2c3d4 نام شخص
+/delete a1b2c3d4 — حذف با تأیید و نگهداری بایگانی
+/restore a1b2c3d4 — بازگردانی عملیات بایگانی‌شده
+
+<b>📊 گزارش و خروجی</b>
+/km 431400 — کارکرد مطلق
+/trip 85 — مسافت
+/fuel 20l cost=700000 toman km=431400 full
+/service oil cost=900000 toman km=431000
+/summary week — گزارش ۷ روز اخیر؛ /summary month — ماه جاری
+/due — موعد سرویس‌ها · /fuelstats — تحلیل سوخت · /fines — جریمه‌ها
+/export — CSV ماه جاری · /export all — CSV همه سوابق
+/backup — پشتیبان کامل JSON · /backup 2026-10 — پشتیبان ماه
+/latest — آخرین رویدادها
+
+💡 عدد فارسی و انگلیسی، تاریخ شمسی/میلادی، هزار/میلیون، تومان/ریال، km و l پشتیبانی می‌شود. از دکمه‌های زیر هر پیام ثبت برای جزئیات، ویرایش، توضیح، تغییر شخص یا حذف استفاده کن.
+
+🌐 داشبورد: ${SITE_URL}
+🤖 ربات: ${BOT_URL}
+📦 مخزن کد: https://github.com/mehrdadmb2/peugeot-206-garage`;
 }
 
 async function recordServiceOrPart(rawText, type, occurredAt, env) {
@@ -454,11 +620,18 @@ async function saveEvent(input, env) {
   const latestOdo = calculateCurrentOdometer(eventsBefore);
   const config = await readConfig(env);
   const explicitOdo = Number.isFinite(input.odometerKm) && input.odometerKm > 0 ? Math.round(input.odometerKm) : null;
+  const metaSource = String(input.description || input.sourceText || "");
+  const parsedMeta = extractEventMetadata(metaSource, input.actor, input.note, config.people || []);
   const event = {
     id: crypto.randomUUID(),
     type: input.type || "note",
     title: input.title || "رویداد خودرو",
-    description: String(input.description || "").slice(0, 2000),
+    description: String(parsedMeta.description || input.description || "").slice(0, 2000),
+    actor: parsedMeta.actor || "من",
+    note: String(parsedMeta.note || "").slice(0, 2000),
+    updatedAt: null,
+    revision: 1,
+    editHistory: [],
     createdAt: new Date().toISOString(),
     occurredAt: occurred.iso,
     date: occurred.date,
@@ -501,19 +674,284 @@ async function saveEvent(input, env) {
     return current;
   });
   const id = event.id.slice(0, 8);
-  const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `تاریخ: ${event.jalaliDate}، ساعت ${event.time}`];
+  const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `دسته: ${eventTypeLabel(event.type)} · تاریخ: ${event.jalaliDate}، ساعت ${event.time}`, `انجام‌دهنده: ${event.actor || "من"}`];
   if (event.odometerKm !== null) lines.push(`کیلومتر ثبت‌شده: ${formatNum(event.odometerKm)} km`);
   if (event.distanceKm !== null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km${event.odometerAfterKm !== null ? ` · کارکرد تخمینی جدید: ${formatNum(event.odometerAfterKm)} km` : " · برای تخمین کارکرد، ابتدا /km ثبت کن"}`);
   if (event.liters !== null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر`);
   if (event.costRial !== null) lines.push(`هزینه: ${formatMoneyToman(event.costRial)}`);
+  if (event.note) lines.push(`توضیح تکمیلی: ${event.note}`);
   if (event.type === "service" && event.serviceKey) {
     const interval = config.serviceIntervals?.[event.serviceKey];
     if (interval && event.odometerKm !== null && interval.intervalKm > 0) lines.push(`موعد کیلومتری بعدی: حدود ${formatNum(event.odometerKm + interval.intervalKm)} km (${formatNum(interval.intervalKm)} km دیگر)`);
     else if (interval && interval.intervalDays > 0) lines.push(`یادآور زمانی بعدی: حدود ${formatNum(interval.intervalDays)} روز بعد`);
     if (event.odometerKm === null && interval?.intervalKm > 0) lines.push("⚠️ برای محاسبه کیلومتر سرویس بعدی، اول کیلومتر فعلی را با /km ثبت کن و سرویس را با کیلومتر درست دوباره ثبت کن.");
   }
-  lines.push("داده در GitHub ثبت شد. ممکن است انتشار GitHub Pages کمی زمان ببرد.");
+  lines.push(`✅ ذخیره در GitHub انجام شد.
+🌐 داشبورد: ${SITE_URL}
+🤖 ربات: ${BOT_URL}
+از دکمه‌های زیر پیام برای جزئیات یا مدیریت همین عملیات استفاده کن.`);
   return lines.join("\n");
+}
+
+async function peopleCommand(raw, env) {
+  const match = String(raw || "").trim().match(/^(add|remove|delete|list|افزودن|حذف|فهرست)?\s*([\s\S]*)$/i);
+  const actionRaw = (match?.[1] || "list").toLowerCase();
+  const action = /^(add|افزودن)$/i.test(actionRaw) ? "add" : /^(remove|delete|حذف)$/i.test(actionRaw) ? "remove" : "list";
+  const name = String(match?.[2] || "").trim().slice(0, 100);
+  if (action !== "list" && !name) return "نام شخص را هم وارد کن. نمونه: /people add بابام";
+  let config;
+  if (action === "list") {
+    config = await readConfig(env);
+    config.people = Array.isArray(config.people) ? config.people : [];
+  } else {
+    config = await mutateJsonFile(FILE_CONFIG, env, () => ({ schemaVersion: 1, serviceIntervals: {}, people: [] }), current => {
+      current.people = Array.isArray(current.people) ? current.people : [];
+      if (action === "add" && !current.people.some(person => normalizeIntentText(person) === normalizeIntentText(name))) current.people.push(name);
+      if (action === "remove") current.people = current.people.filter(person => normalizeIntentText(person) !== normalizeIntentText(name));
+      current.people.sort((a,b) => String(a).localeCompare(String(b), "fa"));
+      current.updatedAt = nowTehran().iso;
+      return current;
+    });
+  }
+  if (action === "add") return `✅ شخص «${name}» به فهرست اشخاص اضافه شد.
+از این به بعد می‌توانی پیام را با «${name}: ...» شروع کنی یا بنویسی «توسط ${name}».
+
+فهرست فعلی: ${(config.people || []).join("، ") || "خالی"}`;
+  if (action === "remove") return `✅ «${name}» از فهرست انتخاب اشخاص حذف شد؛ سوابق قبلی او تغییر نکردند.
+
+فهرست فعلی: ${(config.people || []).join("، ") || "خالی"}`;
+  return `👥 اشخاص ثبت‌شده
+
+${(config.people || []).length ? config.people.map((person, i) => `${i+1}. ${person}`).join("\n") : "هنوز شخصی به فهرست اضافه نشده است."}
+
+افزودن: /people add نام شخص
+حذف از فهرست: /people remove نام شخص
+سوابق قدیمی با حذف شخص از این فهرست پاک نمی‌شوند.`;
+}
+
+function extractEventMetadata(source, explicitActor, explicitNote, people = []) {
+  let description = String(source || "").trim();
+  let actor = String(explicitActor || "").trim();
+  let note = String(explicitNote || "").trim();
+  const noteMatch = description.match(/(?:توضیح(?:\s*تکمیلی)?|یادداشت|comment|note)\s*[:=：]\s*([\s\S]*?)(?=\s*(?:[|;؛,،·]\s*(?:شخص|توسط|actor|person)\s*[:=：]?|$))/i);
+  if (!note && noteMatch) note = noteMatch[1].trim();
+  if (noteMatch) description = description.replace(noteMatch[0], " ");
+  if (!actor) {
+    const known = [...(Array.isArray(people) ? people : [])].map(String).filter(Boolean).sort((a,b) => b.length - a.length);
+    for (const person of known) {
+      // Support both explicit "Name: event" and natural "Name event" prefixes.
+      const prefix = description.match(new RegExp(`^\\s*${escapeRegExp(person)}(?:\\s*(?::|：|[-–—])\\s*|\\s+)`, "i"));
+      if (prefix) { actor = person; description = description.slice(prefix[0].length); break; }
+    }
+  }
+  if (!actor) {
+    const family = description.match(/^(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)\s*[:：,،-]?\s+/i);
+    if (family) { actor = family[1]; description = description.slice(family[0].length); }
+  }
+  const actorMatch = description.match(/(?:توسط|از طرف|انجام(?:\s*دهنده)?|شخص|شخصیت|actor|person|by)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
+  if (!actor && actorMatch) actor = actorMatch[1].trim();
+  if (actorMatch) description = description.replace(actorMatch[0], " ");
+  // Explicit assignment syntax is useful for slash commands and automation clients.
+  const assignedActor = description.match(/(?:actor|person|شخص|انجام.?دهنده)\s*=\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
+  if (!actor && assignedActor) actor = assignedActor[1].trim();
+  if (assignedActor) description = description.replace(assignedActor[0], " ");
+  const cleaned = description.replace(/[|;؛]+/g, " · ").replace(/\s+·\s+·\s+/g, " · ").replace(/\s+/g, " ").replace(/^\s*[·,،-]+|[·,،-]+\s*$/g, "").trim();
+  return { description: cleaned, actor: actor || "من", note: note === "-" ? "" : note };
+}
+
+function escapeRegExp(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function eventTypeEmoji(type) {
+  return ({ odometer: "⌁", trip: "↗️", fuel: "⛽", service: "🧰", part: "🔩", expense: "💳", fine: "🚦", wash: "🫧", issue: "⚠️", repair: "🛠️", note: "📝" })[type] || "🚘";
+}
+function formatEventDetails(event) {
+  const lines = [`${eventTypeEmoji(event.type)} جزئیات رویداد خودرو`, `عنوان: ${event.title || eventTypeLabel(event.type)}`, `شناسه: ${event.id}`, `دسته: ${eventTypeLabel(event.type)}`, `تاریخ: ${event.jalaliDate || event.date || "—"} · ساعت ${event.time || "—"}`, `انجام‌دهنده: ${event.actor || "من"}`];
+  if (event.description) lines.push(`شرح عملیات: ${event.description}`);
+  if (event.note) lines.push(`توضیح تکمیلی: ${event.note}`);
+  if (event.odometerKm != null) lines.push(`کیلومترشمار: ${formatNum(event.odometerKm)} km`);
+  if (event.distanceKm != null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km`);
+  if (event.liters != null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر${event.fullTank ? " · باک کامل" : ""}`);
+  if (Number(event.costRial) > 0) lines.push(`مبلغ: ${formatMoneyToman(event.costRial)}`);
+  if (event.type === "fine") lines.push(`وضعیت جریمه: ${event.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده"}`);
+  if (event.type === "issue") lines.push(`وضعیت خرابی: ${event.status === "fixed" ? "✅ رفع‌شده" : "🟠 باز"}`);
+  if (event.serviceLabel) lines.push(`سرویس/قطعه: ${event.serviceLabel}`);
+  if (event.repairDescription) lines.push(`شرح تعمیر: ${event.repairDescription}`);
+  if (event.repairCostRial) lines.push(`هزینه تعمیر: ${formatMoneyToman(event.repairCostRial)}`);
+  if (event.createdAt) lines.push(`زمان ثبت: ${event.createdAt}`);
+  if (event.updatedAt) lines.push(`آخرین ویرایش: ${event.updatedAt} · نسخه ${event.revision || 1}`);
+  if (Array.isArray(event.editHistory) && event.editHistory.length) {
+    lines.push(`تاریخچه تغییرات: ${event.editHistory.length} ویرایش ثبت‌شده`);
+    for (const edit of event.editHistory.slice(-3).reverse()) {
+      const keys = Object.keys(edit.after || {});
+      lines.push(`↳ ${edit.at || "—"} · ${edit.by || "کاربر"} · ${keys.join("، ") || "ویرایش"}`);
+    }
+  }
+  lines.push(`🌐 سایت: ${SITE_URL}`, `🤖 ربات: ${BOT_URL}`);
+  return lines.join("\n");
+}
+
+async function findEventByPrefix(prefix, env) {
+  const query = String(prefix || "").trim().replace(/[^a-f0-9-]/gi, "");
+  if (query.length < 6) return null;
+  const matches = (await loadAllEvents(env)).filter(event => String(event.id || "").toLowerCase().startsWith(query.toLowerCase()));
+  return matches.length === 1 ? matches[0] : null;
+}
+async function getMatchingEvent(prefix, env) {
+  const query = String(prefix || "").trim().replace(/[^a-f0-9-]/gi, "");
+  if (query.length < 6) return { error: "شناسه باید حداقل ۶ حرف/عدد داشته باشد؛ نمونه: /detail a1b2c3d4" };
+  const matches = (await loadAllEvents(env)).filter(event => String(event.id || "").toLowerCase().startsWith(query.toLowerCase()));
+  if (!matches.length) return { error: "رویداد فعال پیدا نشد. شاید قبلاً حذف شده باشد؛ برای بازگردانی /restore را بررسی کن." };
+  if (matches.length > 1) return { error: "شناسه مبهم است؛ حداقل ۸ کاراکتر اول شناسه را وارد کن." };
+  return { event: matches[0] };
+}
+
+async function mutateEventByPrefix(prefix, patch, env, editor = "telegram") {
+  const match = await getMatchingEvent(prefix, env);
+  if (match.error) return { error: match.error };
+  const target = match.event;
+  const month = String(target.date || target.occurredAt || "").slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "ماه رویداد معتبر نیست؛ تغییر متوقف شد." };
+  const filePath = `data/logs/${month}.json`;
+  let updatedEvent = null;
+  await mutateJsonFile(filePath, env, () => ({ schemaVersion: 1, month, events: [] }), current => {
+    current.events ||= [];
+    const event = current.events.find(item => item.id === target.id);
+    if (!event) throw new Error("Event disappeared while updating; reload and retry.");
+    const before = {};
+    for (const key of Object.keys(patch)) before[key] = event[key] ?? null;
+    for (const [key, value] of Object.entries(patch)) event[key] = value;
+    event.updatedAt = nowTehran().iso;
+    event.revision = Math.max(1, Number(event.revision) || 1) + 1;
+    event.editHistory = Array.isArray(event.editHistory) ? event.editHistory : [];
+    event.editHistory.push({ at: event.updatedAt, by: editor, before, after: Object.fromEntries(Object.keys(patch).map(key => [key, event[key] ?? null])) });
+    if (event.editHistory.length > 20) event.editHistory = event.editHistory.slice(-20);
+    current.updatedAt = nowTehran().iso;
+    updatedEvent = structuredClone(event);
+    return current;
+  });
+  await mutateJsonFile(FILE_INDEX, env, () => ({ months: [] }), current => { current.updatedAt = nowTehran().iso; return current; });
+  return { event: updatedEvent };
+}
+
+async function annotateEventCommand(raw, env) {
+  const match = raw.match(/^(\S+)\s+([\s\S]+)$/);
+  if (!match) return `نمونه: /annotate a1b2c3d4 توضیح تکمیلی عملیات\nبرای حذف توضیح بنویس: /annotate a1b2c3d4 -`;
+  const result = await mutateEventByPrefix(match[1], { note: match[2].trim() === "-" ? "" : match[2].trim().slice(0, 2000) }, env);
+  return result.error || `✅ توضیح رویداد ${result.event.id.slice(0,8)} به‌روز شد.
+
+${formatEventDetails(result.event)}`;
+}
+async function actorEventCommand(raw, env) {
+  const match = raw.match(/^(\S+)\s+([\s\S]+)$/);
+  if (!match) return `نمونه: /actor a1b2c3d4 بابام\nبرای حالت پیش‌فرض بنویس: /actor a1b2c3d4 من`;
+  const actor = match[2].trim().slice(0, 100) || "من";
+  const result = await mutateEventByPrefix(match[1], { actor: actor === "-" ? "من" : actor }, env);
+  return result.error || `✅ شخص انجام‌دهنده به «${result.event.actor}» تغییر کرد.
+
+${formatEventDetails(result.event)}`;
+}
+function parseEditPatch(raw) {
+  const chunks = String(raw || "").split(/[|؛;]/).map(x => x.trim()).filter(Boolean);
+  const patch = {};
+  const labels = {
+    title: "title", عنوان: "title", name: "title",
+    description: "description", desc: "description", شرح: "description", متن: "description", عملیات: "description",
+    note: "note", comment: "note", توضیح: "note", یادداشت: "note",
+    actor: "actor", person: "actor", شخص: "actor", انجامدهنده: "actor", انجام_دهنده: "actor",
+    cost: "costRial", amount: "costRial", price: "costRial", مبلغ: "costRial", هزینه: "costRial",
+    km: "odometerKm", odometer: "odometerKm", کیلومتر: "odometerKm", کارکرد: "odometerKm",
+    liters: "liters", liter: "liters", لیتر: "liters",
+    distance: "distanceKm", مسافت: "distanceKm",
+    paid: "paid", پرداخت: "paid",
+    status: "status", وضعیت: "status"
+  };
+  for (const chunk of chunks) {
+    const m = chunk.match(/^([^:=：]+)\s*[:=：]\s*([\s\S]*)$/);
+    if (!m) { patch.description = chunk.slice(0, 2000); continue; }
+    const key = labels[normalizeIntentText(m[1]).replace(/[\s-]+/g, "_")];
+    if (!key) continue;
+    const value = m[2].trim();
+    if (key === "title" || key === "description" || key === "note" || key === "actor") patch[key] = key === "actor" && (!value || value === "-") ? "من" : (value === "-" && key === "note" ? "" : value.slice(0, 2000));
+    else if (key === "costRial") {
+      const extracted = extractMoneyRial(value);
+      const n = extracted !== null ? extracted : parseFirstNumber(value);
+      if (n !== null && Number.isFinite(n) && n >= 0) patch.costRial = extracted !== null ? extracted : Math.round(n * 10);
+    } else if (["odometerKm", "liters", "distanceKm"].includes(key)) {
+      const n = parseFirstNumber(value);
+      if (n !== null && Number.isFinite(n) && n >= 0) patch[key] = key === "odometerKm" ? Math.round(n) : n;
+    } else if (key === "paid") {
+      if (/^(1|true|yes|بله|پرداخت(?:شده)?|بله پرداخت شده)$/i.test(value)) patch.paid = true;
+      else if (/^(0|false|no|خیر|پرداخت.?نشده|بدهکار)$/i.test(value)) patch.paid = false;
+    } else if (key === "status") {
+      if (/^(fixed|closed|رفع.?شده|بسته|حل.?شده)$/i.test(value)) patch.status = "fixed";
+      else if (/^(open|باز|در.?انتظار)$/i.test(value)) patch.status = "open";
+    }
+  }
+  return patch;
+}
+async function editEventCommand(raw, env) {
+  const match = raw.match(/^(\S+)\s+([\s\S]+)$/);
+  if (!match) return "نمونه: /edit a1b2c3d4 عنوان=سوخت‌گیری | شرح=بنزین برای سفر | توضیح=سفر شمال | شخص=بابام | مبلغ=700000 تومان | کیلومتر=431400";
+  const patch = parseEditPatch(match[2]);
+  if (!Object.keys(patch).length) return "هیچ فیلد معتبری تشخیص داده نشد. از عنوان، شرح، توضیح، شخص، مبلغ، کیلومتر، لیتر، مسافت، پرداخت یا وضعیت استفاده کن.";
+  const original = await getMatchingEvent(match[1], env);
+  if (original.error) return original.error;
+  if (patch.paid !== undefined && original.event.type === "fine") patch.paidAt = patch.paid ? nowTehran().iso : null;
+  const result = await mutateEventByPrefix(match[1], patch, env);
+  return result.error || `✅ رویداد ویرایش شد · نسخه ${result.event.revision}
+
+${formatEventDetails(result.event)}`;
+}
+
+async function deleteEventByPrefix(prefix, env, deletedBy = "telegram") {
+  const match = await getMatchingEvent(prefix, env);
+  if (match.error) return { text: match.error, event: null };
+  const event = match.event;
+  const month = String(event.date || event.occurredAt || "").slice(0, 7);
+  const filePath = `data/logs/${month}.json`;
+  const deletedAt = nowTehran().iso;
+  // Archive first so a write failure cannot destroy the only copy of a record.
+  await mutateJsonFile(FILE_DELETED_EVENTS, env, () => ({ schemaVersion: 1, updatedAt: null, events: [] }), current => {
+    current.events ||= [];
+    if (!current.events.some(item => item.id === event.id)) current.events.push({ ...event, deletedAt, deletedBy, deletionReason: "user-request", archiveVersion: 1 });
+    current.updatedAt = deletedAt;
+    return current;
+  });
+  await mutateJsonFile(filePath, env, () => ({ schemaVersion: 1, month, events: [] }), current => {
+    current.events = (current.events || []).filter(item => item.id !== event.id);
+    current.updatedAt = deletedAt;
+    return current;
+  });
+  await mutateJsonFile(FILE_INDEX, env, () => ({ months: [] }), current => { current.updatedAt = deletedAt; return current; });
+  return { text: `🗑 عملیات حذف شد و برای امکان بازیابی در بایگانی نگهداری شد.
+شناسه: ${event.id.slice(0,8)}
+عنوان: ${event.title}
+شخص: ${event.actor || "من"}
+
+برای بازگردانی: /restore ${event.id.slice(0,8)}
+🌐 ${SITE_URL}`, event };
+}
+async function restoreDeletedEvent(prefix, env) {
+  const query = String(prefix || "").trim().replace(/[^a-f0-9-]/gi, "");
+  if (query.length < 6) return "نمونه: /restore a1b2c3d4";
+  const archive = await readJsonFile(FILE_DELETED_EVENTS, env, { events: [] });
+  const matches = (archive.events || []).filter(event => String(event.id || "").toLowerCase().startsWith(query.toLowerCase()));
+  if (matches.length !== 1) return matches.length ? "شناسه مبهم است؛ کاراکترهای بیشتری وارد کن." : "رویداد در بایگانی پیدا نشد.";
+  const event = matches[0];
+  const month = String(event.date || event.occurredAt || "").slice(0,7);
+  if (!/^\d{4}-\d{2}$/.test(month)) return "تاریخ رویداد بایگانی‌شده معتبر نیست؛ بازگردانی متوقف شد.";
+  delete event.deletedAt; delete event.deletedBy; delete event.deletionReason; delete event.archiveVersion;
+  await mutateJsonFile(`data/logs/${month}.json`, env, () => ({ schemaVersion: 1, month, events: [] }), current => {
+    current.events ||= [];
+    if (!current.events.some(item => item.id === event.id)) current.events.push(event);
+    current.events.sort((a,b)=>String(a.occurredAt).localeCompare(String(b.occurredAt)));
+    current.updatedAt = nowTehran().iso;
+    return current;
+  });
+  await mutateJsonFile(FILE_DELETED_EVENTS, env, () => ({ events: [] }), current => { current.events = (current.events || []).filter(item => item.id !== event.id); current.updatedAt = nowTehran().iso; return current; });
+  await mutateJsonFile(FILE_INDEX, env, () => ({ months: [] }), current => { current.months ||= []; if (!current.months.includes(month)) current.months.push(month); current.months.sort(); current.updatedAt = nowTehran().iso; return current; });
+  return `♻️ رویداد بازیابی شد.
+
+${formatEventDetails(event)}`;
 }
 
 async function loadAllEvents(env) {
@@ -860,8 +1298,12 @@ function base64ToUtf8(text) {
 
 async function sendText(env, chatId, text, keyboard = false) {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN secret is missing.");
-  const body = { chat_id: chatId, text: telegramHtml(text), parse_mode: "HTML", disable_web_page_preview: true };
-  if (keyboard) body.reply_markup = { keyboard: [[{ text: "/km" }, { text: "/summary" }, { text: "/due" }], [{ text: "/fuelstats" }, { text: "/fines" }, { text: "/export" }]], resize_keyboard: true, is_persistent: true };
+  const rawText = String(text || "");
+  const boundedText = rawText.length > 3300 ? `${rawText.slice(0, 3150)}\n… ادامه برای جلوگیری از محدودیت طول پیام کوتاه شد.` : rawText;
+  const withNavigation = boundedText.includes(SITE_URL) ? boundedText : `${boundedText}\n\n🌐 داشبورد: ${SITE_URL}\n🤖 ربات: ${BOT_URL}`;
+  const body = { chat_id: chatId, text: telegramHtml(withNavigation), parse_mode: "HTML", disable_web_page_preview: true };
+  if (keyboard && typeof keyboard === "object") body.reply_markup = keyboard;
+  else if (keyboard) body.reply_markup = { keyboard: [[{ text: "/km" }, { text: "/summary" }, { text: "/due" }], [{ text: "/fuelstats" }, { text: "/fines" }, { text: "/export" }, { text: "/backup" }]], resize_keyboard: true, is_persistent: true };
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(`Telegram sendMessage failed: ${JSON.stringify(data).slice(0, 300)}`);
@@ -870,7 +1312,9 @@ async function sendText(env, chatId, text, keyboard = false) {
 async function sendDocument(env, chatId, filename, blob, caption) {
   const form = new FormData();
   form.set("chat_id", String(chatId));
-  form.set("caption", String(caption).slice(0, 900));
+  const captionText = String(caption || "");
+  const captionWithLinks = captionText.includes(SITE_URL) ? captionText : `${captionText}\n🌐 ${SITE_URL}\n🤖 ${BOT_URL}`;
+  form.set("caption", captionWithLinks.slice(0, 1000));
   form.set("document", blob, filename);
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
   const data = await response.json().catch(() => ({}));
@@ -879,7 +1323,7 @@ async function sendDocument(env, chatId, filename, blob, caption) {
 }
 
 function eventsToCsv(events) {
-  const headers = ["id", "type", "title", "description", "occurredAt", "jalaliDate", "time", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "paid", "status", "fullTank"];
+  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "paid", "paidAt", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
   const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [headers.join(","), ...events.map(event => headers.map(key => quote(event[key])).join(","))].join("\r\n");
 }

@@ -40,6 +40,7 @@
     $('#searchInput').addEventListener('input', updateJournal);
     $('#typeFilter').addEventListener('change', updateJournal);
     $('#monthFilter').addEventListener('change', updateJournal);
+    $('#actorFilter')?.addEventListener('change', updateJournal);
     $('#loadMoreButton').addEventListener('click', () => { state.shown += 12; renderJournal(); });
     $$('.range-button').forEach(button => button.addEventListener('click', () => {
       $$('.range-button').forEach(x => x.classList.toggle('active', x === button));
@@ -81,11 +82,12 @@
       }));
       const seen = new Set();
       state.events = monthResults.flat().filter(event => {
-        if (!event || !event.id || seen.has(event.id)) return false;
+        if (!event || !event.id || event.deletedAt || seen.has(event.id)) return false;
         seen.add(event.id); return true;
       }).sort((a, b) => String(a.occurredAt || '').localeCompare(String(b.occurredAt || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
       state.refreshedAt = new Date();
       populateMonthFilter();
+      populateActorFilter();
       renderAll();
       setConnection('connected');
       const idxDate = index.updatedAt ? formatDateTime(index.updatedAt) : 'هنوز ثبت اولیه انجام نشده';
@@ -238,7 +240,40 @@
     $('#fuelChartTotal').textContent = `${formatNumber(totalFuel, 1)} لیتر`;
     $('#costChart').innerHTML = barChart(datasets, 'cost', { id: 'expense', color: 'cyan', empty: 'در بازه انتخابی هزینه‌ای ثبت نشده است.' });
     $('#fuelChart').innerHTML = mixedChart(datasets);
+    renderActorInsights();
+    renderCostPerKm();
     renderInsights(datasets);
+  }
+
+  function renderActorInsights() {
+    const root = $('#actorCostBreakdown');
+    if (!root) return;
+    const totals = new Map();
+    state.events.filter(e => isActualExpense(e) && Number(e.costRial) > 0).forEach(event => {
+      const actor = String(event.actor || 'من').trim() || 'من';
+      totals.set(actor, (totals.get(actor) || 0) + Number(event.costRial) / 10);
+    });
+    const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    if (!rows.length) { root.innerHTML = '<div class="empty-state">هزینهٔ پرداخت‌شده‌ای برای مقایسه ثبت نشده است.</div>'; return; }
+    const max = Math.max(...rows.map(row => row[1]), 1);
+    root.innerHTML = rows.map(([actor, cost], index) => `<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index + 1}</i>${escapeHtml(actor)}</span><strong>${escapeHtml(moneyText(cost))} <small>تومان</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2, cost / max * 100)}%"></span></div><small class="actor-cost-share">${formatNumber(cost / rows.reduce((n, row) => n + row[1], 0) * 100, 1)}٪ از هزینه‌های تفکیک‌شده</small></div>`).join('');
+  }
+
+  function renderCostPerKm() {
+    const value = $('#costPerKmValue');
+    if (!value) return;
+    const costRial = sum(state.events.filter(e => isActualExpense(e)), e => e.costRial);
+    const kms = calculateDistanceEntries(state.events).reduce((total, entry) => total + (Number(entry.distanceKm) || 0), 0);
+    if (!(kms > 0) || !(costRial > 0)) {
+      value.textContent = '—';
+      $('#costPerKmFoot').textContent = 'هنوز هم‌زمان هزینه و مسافت قابل محاسبه کافی ثبت نشده است.';
+      $('#costPerKmTrack').style.width = '0%';
+      return;
+    }
+    const perKm = costRial / 10 / kms;
+    value.textContent = formatNumber(Math.round(perKm));
+    $('#costPerKmFoot').textContent = `بر پایه ${formatNumber(Math.round(kms))} کیلومترِ قابل محاسبه و ${moneyText(costRial / 10)} تومان هزینهٔ ثبت‌شده در کل سوابق. این میانگین با کامل‌تر شدن داده‌ها تغییر می‌کند.`;
+    $('#costPerKmTrack').style.width = `${Math.min(100, Math.max(3, Math.log10(perKm + 1) * 15))}%`;
   }
 
   function barChart(data, key, options = {}) {
@@ -385,6 +420,9 @@
     const config = state.config || {};
     const entries = Object.entries(config.serviceIntervals || {});
     $('#settingsServiceTable').innerHTML = entries.length ? `<div class="settings-service-head"><span>سرویس / قطعه</span><span>بازه</span></div>`+entries.map(([key,item])=>`<div class="settings-service-row"><div><b>${escapeHtml(item.label||key)}</b><small>${escapeHtml(key)}</small></div><span>${Number(item.intervalKm)?`${formatNumber(item.intervalKm)} km`:''}${Number(item.intervalDays)?` · ${formatNumber(item.intervalDays)} روز`:''}</span></div>`).join('') : '<div class="empty-state">فایل config.json بارگیری نشده است.</div>';
+    const people = Array.isArray(config.people) ? config.people : [];
+    const peopleRoot = $('#settingsPeopleList');
+    if (peopleRoot) peopleRoot.innerHTML = people.length ? people.map((person, index) => `<div class="person-settings-row"><span class="person-settings-index">${index + 1}</span><b>${escapeHtml(person)}</b><small>ACTOR</small></div>`).join('') : '<div class="empty-state">فهرست شخصی هنوز خالی است؛ از دستور /people add نام استفاده کن.</div>';
   }
 
   async function copyApiExample() {
@@ -395,7 +433,7 @@
 
   function exportCsvAll() {
     if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...state.events.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-all-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('CSV کامل همه‌ی رویدادها آماده شد.');
   }
@@ -417,8 +455,9 @@
     const type = $('#typeFilter').value;
     const month = $('#monthFilter').value;
     state.filtered = state.events.filter(event => {
-      const searchText = [event.title,event.description,event.serviceLabel,event.serviceKey,event.id,event.jalaliDate,event.date,event.costRial,event.odometerKm].join(' ').toLowerCase();
-      return (type === 'all' || event.type === type) && (month === 'all' || String(event.date || event.occurredAt || '').slice(0,7) === month) && (!query || searchText.includes(query));
+      const searchText = [event.title,event.description,event.note,event.actor,event.serviceLabel,event.serviceKey,event.id,event.jalaliDate,event.date,event.costRial,event.odometerKm].join(' ').toLowerCase();
+      const actor = $('#actorFilter')?.value || 'all';
+      return (type === 'all' || event.type === type) && (month === 'all' || String(event.date || event.occurredAt || '').slice(0,7) === month) && (actor === 'all' || String(event.actor || 'من') === actor) && (!query || searchText.includes(query));
     }).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     renderJournal();
   }
@@ -442,7 +481,10 @@
       const status = event.type === 'fine' ? (event.paid ? 'پرداخت‌شده' : 'پرداخت‌نشده') : event.type === 'issue' ? (event.status === 'fixed' ? 'رفع‌شده' : 'باز') : event.type === 'service' ? 'سرویس' : '';
       const cost = Number(event.costRial) > 0 ? `<div class="event-cost ${event.type==='fine'&&!event.paid?'negative':''}">${escapeHtml(moneyText(Number(event.costRial)/10))}<small>تومان</small></div>` : '<div class="event-cost">—</div>';
       const desc = (event.description || '').slice(0, 200);
-      return `<article class="event-row"><div class="event-icon ${escapeAttr(event.type)}">${icon}</div><div class="event-body"><div class="event-title-line"><span class="event-title">${escapeHtml(event.title || typeLabels[event.type] || 'رویداد')}</span><span class="event-pill">${escapeHtml(typeLabels[event.type] || event.type || 'رویداد')}</span>${status ? `<span class="event-pill">${escapeHtml(status)}</span>` : ''}</div><div class="event-description">${escapeHtml(desc)}</div><div class="event-meta"><span>${eventDate}</span><span>${time}</span>${odo}${distance}${liters}<span>ID: ${escapeHtml(String(event.id).slice(0,8))}</span></div></div>${cost}</article>`;
+      const actor = String(event.actor || 'من').trim() || 'من';
+      const note = String(event.note || '').trim();
+      const manageUrl = `https://t.me/Peugeot206GarageBot?start=e_${encodeURIComponent(String(event.id).slice(0,8))}`;
+      return `<article class="event-row"><div class="event-icon ${escapeAttr(event.type)}">${icon}</div><div class="event-body"><div class="event-title-line"><span class="event-title">${escapeHtml(event.title || typeLabels[event.type] || 'رویداد')}</span><span class="event-pill">${escapeHtml(typeLabels[event.type] || event.type || 'رویداد')}</span>${status ? `<span class="event-pill">${escapeHtml(status)}</span>` : ''}</div><div class="event-description">${escapeHtml(desc)}</div><div class="event-person-row"><span class="event-person">👤 ${escapeHtml(actor)}</span>${note ? `<span class="event-note">📝 ${escapeHtml(note)}</span>` : ''}</div><div class="event-meta"><span>${eventDate}</span><span>${time}</span>${odo}${distance}${liters}<span>ID: ${escapeHtml(String(event.id).slice(0,8))}</span></div><a class="event-manage-link" href="${escapeAttr(manageUrl)}" target="_blank" rel="noopener noreferrer">جزئیات و مدیریت در تلگرام ↗</a></div>${cost}</article>`;
     }).join('');
   }
 
@@ -455,6 +497,15 @@
     const open = issues.filter(e=>e.type==='issue' && e.status!=='fixed');
     $('#issueTotals').textContent = `خرابی باز: ${formatNumber(open.length)}`;
     $('#issueSummary').innerHTML = issues.length ? issues.slice(0,4).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.title || (e.type==='repair'?'تعمیر':'خرابی'))}</div><div class="mini-row-desc">${escapeHtml((e.description || '').slice(0,100))}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || e.date || '—')} · ${e.status==='fixed'?'رفع‌شده':e.type==='repair'?'تعمیر':'باز'}</div></div><div class="mini-row-value ${e.status==='fixed'?'paid':''}">${Number(e.costRial)>0?escapeHtml(moneyText(Number(e.costRial)/10))+' تومان':e.status==='fixed'?'✓':'—'}</div></div>`).join('') : '<div class="empty-state">خرابی‌ای ثبت نشده است.</div>';
+  }
+
+  function populateActorFilter() {
+    const select = $('#actorFilter');
+    if (!select) return;
+    const old = select.value || 'all';
+    const actors = [...new Set([...(Array.isArray(state.config?.people) ? state.config.people : []), ...state.events.map(event => String(event.actor || 'من').trim() || 'من')])].sort((a, b) => a.localeCompare(b, 'fa'));
+    select.innerHTML = '<option value="all">همه اشخاص</option>' + actors.map(actor => `<option value="${escapeAttr(actor)}">${escapeHtml(actor)}</option>`).join('');
+    select.value = actors.includes(old) ? old : 'all';
   }
 
   function populateMonthFilter() {

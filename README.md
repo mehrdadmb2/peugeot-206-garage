@@ -5,7 +5,7 @@
 [![Telegram Bot](https://img.shields.io/badge/Telegram-%40Peugeot206GarageBot-26a5e4?style=for-the-badge&logo=telegram)](https://t.me/Peugeot206GarageBot)
 [![Request Driven](https://img.shields.io/badge/Runtime-request--driven-16a34a?style=for-the-badge)](#request-driven-design)
 
-**A personal vehicle journal for the white 2008 Peugeot 206 SD sedan.** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
+**Garage OS 3.0 — a people-aware vehicle journal for the white Peugeot 206 SD sedan (model year 1387).** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
 
 > Private-use project. Do not store personal routes, home addresses, plate numbers, or secrets in a public repository.
 
@@ -49,8 +49,13 @@ Telegram / authorized HTTP client
 - Persian and English digits; common Persian/English command aliases.
 - Odometer, trip distance, fuel liters and full-tank flag, cost, service intervals, repairs, fines and payments, washes, notes and CSV export.
 - Jalali-friendly timestamps and `Asia/Tehran` handling.
-- Dashboard refresh, search/filter, charts, and CSV/JSON downloads.
-- Custom sedan illustration and favicon for the 206 SD profile.
+- Dashboard refresh, search/filter by event type, month and person, charts, and CSV/JSON downloads.
+- Every event supports an actor (defaults to «من»), separate notes, edit history and revision number.
+- Inline Telegram actions for detailed view, edit, annotation, actor change, and confirmed deletion.
+- Deleted events are archived before removal and can be restored with `/restore`.
+- Full-history CSV (`/export all`) and JSON backup (`/backup`) can be sent directly in Telegram.
+- Cost breakdown by person and cost-per-kilometre analytics, calculated from stored events.
+- Custom sedan illustration, favicon, and reciprocal dashboard/bot links.
 
 ## Repository layout
 
@@ -64,7 +69,8 @@ Telegram / authorized HTTP client
 | `site.webmanifest` | Installable-site metadata |
 | `data/config.json` | Vehicle profile and editable service intervals |
 | `data/index.json` | List of months available to the dashboard |
-| `data/logs/YYYY-MM.json` | Monthly event log; created by the Worker on first event |
+| `data/logs/YYYY-MM.json` | Monthly event log with actor, note and edit audit fields |
+| `data/deleted-events.json` | Archive used to restore explicitly deleted events |
 | `worker/src/index.js` | Worker, Telegram handler, GitHub persistence, API |
 | `worker/wrangler.toml` | Worker name and repository configuration |
 | `worker/package.json` | Test and Wrangler scripts |
@@ -79,7 +85,7 @@ Telegram / authorized HTTP client
 5. Open <https://mehrdadmb2.github.io/peugeot-206-garage/> and hard-refresh with `Ctrl+F5`.
 6. Verify that `data/index.json`, `data/config.json`, `assets/img/206-white.svg`, `assets/img/favicon.svg`, `assets/css/style.css`, and `assets/js/app.js` all return HTTP 200 when opened under the Pages URL.
 
-The dashboard reads static JSON files from the Pages origin. It does not contain GitHub or Telegram tokens. The initial `data/index.json` intentionally contains an empty month list until the first record is committed.
+The dashboard reads static JSON files from the Pages origin. It does not contain GitHub or Telegram tokens. **Preserve `data/index.json` and all `data/logs/YYYY-MM.json` files when updating this project**: they contain the live vehicle history and must not be replaced with an empty starter dataset.
 
 ## Deploy the Worker
 
@@ -204,6 +210,14 @@ $commands = @(
   @{command="expense";description="ثبت هزینه متفرقه"},
   @{command="note";description="یادداشت خودرو"},
   @{command="latest";description="آخرین رویدادها"},
+  @{command="detail";description="جزئیات و مدیریت رویداد"},
+  @{command="edit";description="ویرایش عملیات"},
+  @{command="annotate";description="توضیح تکمیلی عملیات"},
+  @{command="actor";description="تغییر شخص انجام‌دهنده"},
+  @{command="people";description="مدیریت اشخاص"},
+  @{command="delete";description="حذف با تأیید"},
+  @{command="restore";description="بازیابی عملیات"},
+  @{command="backup";description="پشتیبان JSON"},
   @{command="export";description="خروجی CSV"}
 )
 $menu = @{commands=$commands} | ConvertTo-Json -Depth 5
@@ -235,14 +249,22 @@ Invoke-RestMethod -Method Post `
 | `/expense` | `/expense 250000 toman parking` | Other expense |
 | `/note` | `/note inspect tires next visit` | Save a note |
 | `/latest` | `/latest` | Recent events |
-| `/export` | `/export 2026-10` | Export a month as CSV |
+| `/detail` | `/detail a1b2c3d4` | Full event details and inline actions |
+| `/edit` | `/edit a1b2c3d4 شخص=بابام | توضیح=سفر` | Edit title, description, notes, actor, amounts, odometer and statuses |
+| `/annotate` | `/annotate a1b2c3d4 سفر جاده‌ای` | Add or replace an event note; `-` clears it |
+| `/actor` | `/actor a1b2c3d4 بابام` | Set who performed the operation |
+| `/people` | `/people add مهرزاد` | Manage the selectable person roster |
+| `/delete` | `/delete a1b2c3d4` | Ask for confirmation, archive, then remove from active history |
+| `/restore` | `/restore a1b2c3d4` | Restore a deleted event from archive |
+| `/export` | `/export all` or `/export 2026-10` | Export all records or one month as CSV |
+| `/backup` | `/backup` or `/backup 2026-10` | Export JSON archive for all records or one month |
 | `/config` | `/config` | Vehicle/service configuration |
 
-The bot supports common aliases and Persian digits, but natural-language parsing is best-effort. For important records, use an explicit command and include amount, currency, and odometer where applicable. Do not assume an ambiguous sentence was recorded unless the bot confirms it.
+The bot supports common aliases and Persian digits. By default, an event is attributed to «من». Attribution can be supplied in a message (`بنزین زدم؛ توسط بابام؛ توضیح: سفر جاده‌ای`) or by starting it with a person already registered (`بابام: بنزین زدم ...`). Add custom people with `/people add NAME`; the `NAME: ...` form then works for those names too. Every confirmed record gets inline Telegram buttons. Edits are recorded in a bounded `editHistory` audit trail. Deletion requires a second confirmation and first copies the record to `data/deleted-events.json`, so `/restore ID` can recover it. For important records, include amount, unit, and odometer where applicable; do not assume ambiguous text was recorded unless the bot confirms it.
 
 ## API
 
-All `/api/v1/*` endpoints require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`. The health route is public.
+All `/api/v1/*` endpoints require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`. The health route is public. All other `/api/v1/*` routes require the `API_ACCESS_TOKEN` bearer token. The public GitHub Pages app intentionally never receives this token; event management is handed off to the allowlisted Telegram bot.
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -255,7 +277,9 @@ All `/api/v1/*` endpoints require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`.
 | `GET` | `/api/v1/events?month=YYYY-MM&type=fuel&limit=100` | Read filtered events |
 | `GET` | `/api/v1/due` | Maintenance deadlines |
 | `GET` | `/api/v1/config` | Vehicle and interval configuration |
-| `GET` | `/api/v1/export?month=2026-10` | CSV export |
+| `GET` | `/api/v1/export?month=2026-10` or `month=all` | CSV export |
+| `POST` | `/api/v1/event/update` | Edit actor, notes, descriptive and supported numeric/status fields |
+| `DELETE` | `/api/v1/event?id=EVENT_ID` | Archive then remove an event from active records |
 
 Example PowerShell API request (replace the token in memory; never commit it):
 
@@ -323,6 +347,7 @@ These local tests verify key routing and authorization behavior with mocked requ
 - Dashboard: <https://mehrdadmb2.github.io/peugeot-206-garage/>
 - Worker health: <https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health>
 - Telegram: <https://t.me/Peugeot206GarageBot>
+- Dashboard ↔ Telegram navigation is also shown in the site header/footer, event cards, and bot replies.
 - Telegram Bot API: <https://core.telegram.org/bots/api>
 - Cloudflare Workers secrets: <https://developers.cloudflare.com/workers/configuration/secrets/>
 - GitHub Contents API: <https://docs.github.com/en/rest/repos/contents>
