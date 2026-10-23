@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-23T20:37:00+03:30",
+  "updatedAt": "2026-10-23T20:56:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -217,10 +217,21 @@
       "title": "ثبت کیلومترشمار",
       "description": "/km 431440",
       "actor": "من",
-      "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "note": "With SkyBit",
+      "updatedAt": "2026-10-23T20:56:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-10-23T20:56:00+03:30",
+          "by": "telegram",
+          "before": {
+            "note": ""
+          },
+          "after": {
+            "note": "With SkyBit"
+          }
+        }
+      ],
       "createdAt": "2026-10-23T17:07:21.807Z",
       "occurredAt": "2026-10-23T20:37:00+03:30",
       "date": "2026-10-23",
