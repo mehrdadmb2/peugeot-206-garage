@@ -1,112 +1,245 @@
-# 🚘 206 Garage — Peugeot 206 SD Vehicle OS
+<div align="center">
+  <img src="assets/img/favicon.svg" width="112" height="112" alt="206 Garage logo" />
+  <h1>🚘 206 Garage OS</h1>
+  <p><strong>دفتر هوشمند و تحلیلی پژو ۲۰۶ SD</strong></p>
+  <p>ثبت سوخت، کیلومتر، رانندگی، سرویس، هزینه، جریمه و تعمیرات؛ از تلگرام تا داشبورد زندهٔ GitHub Pages.</p>
 
-[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-dashboard-40e5f4?style=for-the-badge&logo=github)](https://mehrdadmb2.github.io/peugeot-206-garage/)
-[![Cloudflare Workers](https://img.shields.io/badge/API-Cloudflare%20Workers-f38020?style=for-the-badge&logo=cloudflare)](https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health)
-[![Telegram Bot](https://img.shields.io/badge/Telegram-%40Peugeot206GarageBot-26a5e4?style=for-the-badge&logo=telegram)](https://t.me/Peugeot206GarageBot)
-[![Request Driven](https://img.shields.io/badge/Runtime-request--driven-16a34a?style=for-the-badge)](#request-driven-design)
+  <p>
+    <a href="https://mehrdadmb2.github.io/peugeot-206-garage/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Dashboard-40e5f4?style=for-the-badge&logo=github&logoColor=white" alt="Open dashboard"></a>
+    <a href="https://t.me/Peugeot206GarageBot"><img src="https://img.shields.io/badge/Telegram-%40Peugeot206GarageBot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram bot"></a>
+    <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Version-3.2.0-8b5cf6?style=flat-square" alt="Version 3.2.0">
+    <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
+    <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
+    <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
+  </p>
+</div>
 
-**Garage OS 3.2 — a people-aware vehicle journal for the white Peugeot 206 SD sedan (model year 1387).** Record odometer readings, trips, fuel, maintenance, parts, repairs, fines, payments and expenses through Telegram or the authenticated API. GitHub stores the event log; GitHub Pages renders the dashboard.
+<p align="center">
+  <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
+</p>
 
-> Private-use project. Do not store personal routes, home addresses, plate numbers, or secrets in a public repository.
+> **نسخهٔ پروژه:** Garage OS 3.2.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+>
+> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
 
-## Table of contents
+---
 
-- [Architecture](#architecture)
-- [Features](#features)
-- [Repository layout](#repository-layout)
-- [Deploy GitHub Pages](#deploy-github-pages)
-- [Deploy the Worker](#deploy-the-worker)
-- [Connect Telegram webhook without any script file](#connect-telegram-webhook-without-any-script-file)
-- [Bot commands](#bot-commands)
-- [API](#api)
-- [Data model and units](#data-model-and-units)
-- [Troubleshooting](#troubleshooting)
-- [Security](#security)
-- [Garage OS 3.2: purchase baseline and chart reports](#garage-os-32-purchase-baseline-and-chart-reports)
+## 🧭 فهرست مطالب
 
-## Architecture
+- [معرفی و قابلیت‌ها](#-معرفی-و-قابلیتها)
+- [سامانه چگونه کار می‌کند؟](#-سامانه-چگونه-کار-میکند)
+- [شروع سریع](#-شروع-سریع)
+- [تمام فرمان‌های ربات](#-تمام-فرمانهای-ربات)
+- [نمونه‌های ثبت طبیعی فارسی](#-نمونههای-ثبت-طبیعی-فارسی)
+- [مبنای کیلومتر خرید](#-مبنای-کیلومتر-خرید)
+- [راهنمای BotFather](#-راهنمای-botfather)
+- [نصب و انتشار GitHub Pages](#-نصب-و-انتشار-github-pages)
+- [تنظیم Cloudflare Worker](#-تنظیم-cloudflare-worker)
+- [ثبت وب‌هوک تلگرام](#-ثبت-وبهوک-تلگرام)
+- [API](#-api)
+- [ساختار فایل‌ها و داده‌ها](#-ساختار-فایلها-و-دادهها)
+- [امنیت و حریم خصوصی](#-امنیت-و-حریم-خصوصی)
+- [آزمایش و عیب‌یابی](#-آزمایش-و-عیبیابی)
 
-```text
-Telegram / authorized HTTP client
-                 |
-                 v
-       Cloudflare Worker
-       parse -> validate -> calculate
-                 |
-                 v
-       GitHub Contents API
-       data/logs/YYYY-MM.json
-       data/index.json
-                 |
-                 v
-       GitHub Pages dashboard
+## 🚀 معرفی و قابلیت‌ها
+
+**206 Garage OS** یک دفتر وقایع خودرو با رابط فارسی، گزارش‌گیری و مدیریت سوابق از راه دور است. رویدادها از طریق ربات تلگرام یا API مجاز ثبت می‌شوند؛ Cloudflare Worker داده را اعتبارسنجی می‌کند و در مخزن GitHub می‌نویسد؛ داشبورد GitHub Pages فایل‌های ثبت‌شده را می‌خواند و آن‌ها را به آمار و نمودار تبدیل می‌کند.
+
+### قابلیت‌های اصلی
+
+- 🚘 **دفتر وقایع خودرو:** کیلومترشمار، مسافت، سوخت‌گیری، سرویس، قطعه، کارواش، هزینه، جریمه، خرابی، تعمیر و یادداشت.
+- 👥 **ثبت شخص انجام‌دهنده:** اگر نامی مشخص نشود، پیش‌فرض «من» است؛ می‌توان راننده یا فرد پرداخت‌کننده را با نامی مانند «بابام» یا «مادرم» ثبت کرد.
+- 🧮 **نسبت دادن مسافت:** اختلاف بین دو ثبت معتبر کیلومترشمار به شخص ثبت‌کنندهٔ کیلومتر جدید نسبت داده می‌شود. این تخمین مبتنی بر دو قرائت است، نه GPS.
+- 📝 **توضیح مستقل:** شرح اصلی رویداد و توضیح تکمیلی جدا از هم نگهداری می‌شوند.
+- ✏️ **مدیریت رویداد:** مشاهدهٔ جزئیات، ویرایش، تغییر شخص، افزودن توضیح، حذف با تأیید و بازگردانی از بایگانی.
+- ⛽ **تحلیل سوخت:** مقدار لیتر، هزینه، قیمت متوسط لیتر و تخمین مصرف در صورت وجود دادهٔ کافی و ثبت‌های باک کامل.
+- 🧰 **نگهداری خودرو:** بازهٔ زمانی و کیلومتری برای سرویس‌ها و محاسبهٔ موعد تقریبی.
+- 🚦 **دفتر جریمه:** نمایش مجموع جریمه‌ها، پرداخت‌شده‌ها و پرداخت‌نشده‌ها به‌صورت مجزا.
+- 📊 **داشبورد تحلیلی:** بازه‌های ساعتی، روزانه، هفتگی و ماهانه، هزینه‌ها، سوخت، مسافت، سهم اشخاص و هزینهٔ هر کیلومتر.
+- 🖼️ **تحلیل تصویری تلگرام:** `/analysis hour|day|week|month` گزارش متنی و نمودارهای PNG هزینه، سوخت و مسافت را ارسال می‌کند.
+- 📦 **خروجی و پشتیبان:** CSV همهٔ رویدادها یا یک ماه و فایل JSON برای پشتیبان‌گیری.
+- 🔐 **حفاظت از API:** توکن API فقط در Cloudflare Worker Secret می‌ماند؛ در HTML یا داشبورد عمومی قرار نمی‌گیرد.
+- ⚡ **بدون Cron برای ثبت عادی:** ثبت، ویرایش، گزارش و خروجی هنگام دریافت درخواست انجام می‌شوند؛ ارسال خودکار دوره‌ای به یک زمان‌بند جداگانه نیاز دارد.
+
+## 🔁 سامانه چگونه کار می‌کند؟
+
+```mermaid
+flowchart LR
+    T[Telegram Bot] --> W[Cloudflare Worker]
+    A[Authorized API Client] --> W
+    W -->|validate and process| G[GitHub Contents API]
+    G --> D[data/logs/YYYY-MM.json]
+    G --> I[data/index.json]
+    D --> P[GitHub Pages Dashboard]
+    I --> P
 ```
 
-## Features
+- **تلگرام:** [@Peugeot206GarageBot](https://t.me/Peugeot206GarageBot)
+- **داشبورد:** [mehrdadmb2.github.io/peugeot-206-garage](https://mehrdadmb2.github.io/peugeot-206-garage/)
+- **Worker health:** [بررسی وضعیت Worker](https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health)
+- **مخزن:** [GitHub Repository](https://github.com/mehrdadmb2/peugeot-206-garage)
 
-- Responsive Persian-first dashboard with separate views for overview, maintenance, fuel, analytics, expenses, fines/issues, journal, and API/help.
-- Request-driven Worker: no Cron trigger is required for event recording, queries, or on-demand reports.
-- GitHub-backed event persistence; a successful event response is returned only after the write operations complete.
-- Persian and English digits; common Persian/English command aliases.
-- Odometer, trip distance, fuel liters and full-tank flag, cost, service intervals, repairs, fines and payments, washes, notes and CSV export.
-- Jalali-friendly timestamps and `Asia/Tehran` handling.
-- Dashboard refresh, search/filter by event type, month and person, charts, and CSV/JSON downloads.
-- Every event supports an actor (defaults to «من»), separate notes, edit history and revision number.
-- Inline Telegram actions for detailed view, edit, annotation, actor change, and confirmed deletion.
-- Deleted events are archived before removal and can be restored with `/restore`.
-- Full-history CSV (`/export all`) and JSON backup (`/backup`) can be sent directly in Telegram.
-- Cost breakdown by person and cost-per-kilometre analytics, calculated from stored events.
-- Custom sedan illustration, favicon, and reciprocal dashboard/bot links.
-- Purchase odometer baseline at 428,000 km with a 2,400 km estimate used as a reconciliation value; the actual odometer log remains authoritative.
-- Ownership-distance KPI and per-driver share, with corrections rebased from the latest lower odometer reading.
-- Fine total, paid and unpaid ledger rollups.
-- Searchable Persian help center and Telegram `/guide` command.
-- Telegram `/analysis hour|day|week|month` reports with spending, refueling, and distance PNG charts; only aggregate numeric series are sent to the chart renderer.
+## ⚡ شروع سریع
 
-## Repository layout
+1. داشبورد را باز کن و از ربات `/start` و سپس `/guide` را بفرست.
+2. یک کیلومتر واقعی ثبت کن، مثلاً `/km 431381`، یا پیام طبیعی «بابام کیلومتر ۴۳۱۳۸۱» را بنویس.
+3. ثبت عادی مثل «۲۰ لیتر بنزین، هزینه ۷۰۰ هزار تومان، کیلومتر ۴۳۱۴۰۰، توضیح: سفر» را ارسال کن.
+4. برای گزارش تصویری، `/analysis month` را بفرست؛ برای فهرست سوابق، `/operations all` را ارسال کن.
+5. بعد از هر ثبت مهم، شناسهٔ رویداد و پاسخ تأیید ربات را بررسی کن.
 
-| Path | Purpose |
+## 📚 تمام فرمان‌های ربات
+
+فهرست زیر با فرمان‌های canonical در `worker/src/index.js` هماهنگ است. برای راهنمای کامل چندبخشی داخل تلگرام از `/guide` استفاده کن. فرمان‌های منو باید انگلیسی و با حروف کوچک باشند؛ توضیحات فارسی صرفاً شرح عملکردند.
+
+| فرمان | کاربرد | نمونه |
+|---|---|---|
+| `/start` | 🚘 شروع و نمایش پیام آغازین | `/start` |
+| `/help` | 📖 راهنمای سریع فرمان‌ها | `/help` |
+| `/guide` | 📚 دفترچهٔ کامل فارسی و نمونه‌ها | `/guide` |
+| `/analysis` | 📈 تحلیل متنی و نمودارهای PNG | `/analysis week` |
+| `/purchasekm` | 🛒 نمایش/تنظیم کیلومتر خرید و برآورد پیمایش | `/purchasekm 428000 estimate=2400` |
+| `/id` | 🆔 نمایش شناسهٔ عددی تلگرام و گفتگو | `/id` |
+| `/km` | ⌁ ثبت کیلومترشمار فعلی | `/km 431381` |
+| `/trip` | 🚗 ثبت مسافت طی‌شده | `/trip 85` |
+| `/fuel` | ⛽ ثبت سوخت، هزینه، کیلومتر و باک کامل | `/fuel 20l cost=700000 toman km=431400 full` |
+| `/service` | 🔧 ثبت سرویس خودرو | `/service oil cost=900000 toman km=431400` |
+| `/part` | 🧩 ثبت قطعه یا قطعهٔ مصرفی | `/part air_filter km=431400` |
+| `/interval` | ⚙️ تنظیم بازهٔ سرویس به کیلومتر/روز | `/interval engine_oil 5000 180` |
+| `/due` | ⏰ سرویس‌های نزدیک موعد یا عقب‌افتاده | `/due` |
+| `/summary` | 📊 گزارش هزینه، سوخت، کارکرد و رویدادها | `/summary week` |
+| `/config` | 🛠 نمایش تنظیمات خودرو و سرویس‌ها | `/config` |
+| `/fine` | 🚦 ثبت یک جریمه | `/fine 500000 toman speeding` |
+| `/fines` | 🧾 مجموع و فهرست جریمه‌ها، پرداختی و بدهی | `/fines` |
+| `/paid` | ✅ ثبت پرداخت جریمه با شناسه | `/paid a1b2c3d4` |
+| `/wash` | 🧽 ثبت کارواش و هزینهٔ آن | `/wash 180000 toman` |
+| `/repair` | 🛠 ثبت تعمیر یا رفع خرابی باز | `/repair suspension cost=450000 toman` |
+| `/expense` | 💳 ثبت هزینهٔ متفرقه خودرو | `/expense 250000 toman parking` |
+| `/note` | 📝 ثبت یادداشت خودرو | `/note inspect tires next visit` |
+| `/latest` | 🧾 نمایش آخرین رویدادها | `/latest` |
+| `/fuelstats` | ⛽ گزارش مصرف و هزینهٔ سوخت | `/fuelstats` |
+| `/detail` | 🔎 مشاهدهٔ جزئیات رویداد و دکمه‌های مدیریت | `/detail a1b2c3d4` |
+| `/edit` | ✏️ ویرایش فیلدهای پشتیبانی‌شده | `/edit a1b2c3d4 شخص=بابام \| توضیح=سفر` |
+| `/annotate` | 🗒 افزودن/اصلاح توضیح تکمیلی | `/annotate a1b2c3d4 سفر خانوادگی` |
+| `/actor` | 👤 تغییر شخص انجام‌دهنده | `/actor a1b2c3d4 مادرم` |
+| `/delete` | 🗑 درخواست حذف با تأیید نهایی | `/delete a1b2c3d4` |
+| `/restore` | ♻️ بازگردانی رویداد از بایگانی | `/restore a1b2c3d4` |
+| `/operations` | 🗂 نمایش عملیات با شناسه و دکمه‌های مدیریت | `/operations all` |
+| `/export` | 📥 فایل CSV برای همه یا یک ماه | `/export all` یا `/export 2026-10` |
+| `/backup` | 🛡️ فایل پشتیبان JSON برای همه یا یک ماه | `/backup` یا `/backup 2026-10` |
+| `/people` | 👥 افزودن/فهرست اشخاص | `/people add محمد` |
+| `/cancel` | ↩️ خروج از روند مدیریت/تأیید جاری | `/cancel` |
+| `/undo` | ↩️ نمایش راهنمای بازگردانی و حذف امن | `/undo` |
+
+### 👥 افراد، راننده و توضیح تکمیلی
+
+بدون تعیین شخص، رویداد به نام «من» ثبت می‌شود. برای نام دلخواه ابتدا از `/people add NAME` استفاده کن.
+
+```text
+بابام کیلومتر 431381
+بابام 20 لیتر بنزین زد؛ هزینه 700000 تومان؛ توضیح: سفر خانوادگی
+مادرم: کارواش 180000 تومان
+/people add محمد
+/actor a1b2c3d4 محمد
+/annotate a1b2c3d4 تعویض روغن قبل از سفر
+```
+
+**تفسیر مسافت:** اگر کیلومتر قبلی 431247 و ثبت جدید به نام «بابام» 431381 باشد، 134 کیلومتر به سهم رانندگی بابام نسبت داده می‌شود. این محاسبه بر اساس قرائت‌های کیلومترشمار است و فرض نمی‌کند مسیر یا لحظهٔ دقیق رانندگی از GPS معلوم است.
+
+### 📈 بازه‌های تحلیل
+
+| دستور | بازه |
 |---|---|
-| `index.html` | GitHub Pages application shell |
-| `assets/css/style.css` | Responsive styling and animation |
-| `assets/js/app.js` | Dashboard rendering, charts, filters, exports |
-| `assets/img/206-white.svg` | Local 206 SD illustration |
-| `assets/img/favicon.svg` | Browser tab icon |
-| `site.webmanifest` | Installable-site metadata |
-| `data/config.json` | Vehicle profile and editable service intervals |
-| `data/index.json` | List of months available to the dashboard |
-| `data/logs/YYYY-MM.json` | Monthly event log with actor, note and edit audit fields |
-| `data/deleted-events.json` | Archive used to restore explicitly deleted events |
-| `worker/src/index.js` | Worker, Telegram handler, GitHub persistence, API |
-| `worker/wrangler.toml` | Worker name and repository configuration |
-| `worker/package.json` | Test and Wrangler scripts |
-| `worker/tests/worker.test.mjs` | Local route/security tests |
+| `/analysis hour` | ۲۴ ساعت اخیر، گروه‌بندی ساعتی |
+| `/analysis day` | ۳۰ روز اخیر، روز به روز |
+| `/analysis week` | ۱۲ هفتهٔ اخیر |
+| `/analysis month` | ۱۲ ماه اخیر |
 
-## Deploy GitHub Pages
+گزارش تلگرام حاوی خلاصه و نمودارهای تصویری هزینه، مقدار سوخت و مسافت است. اگر سرویس بیرونی تولید تصویر در دسترس نباشد، ربات باید گزارش متنی یا خطای قابل‌فهم برگرداند؛ موفقیت نهایی به تنظیمات و شبکهٔ سرویس تولید نمودار وابسته است.
 
-1. Push the repository contents to the `main` branch. `index.html` must be at the repository root.
-2. Open **Settings → Pages**.
-3. Select **Deploy from a branch**, branch `main`, folder `/(root)`, then Save.
-4. Wait for the Pages deployment to finish.
-5. Open <https://mehrdadmb2.github.io/peugeot-206-garage/> and hard-refresh with `Ctrl+F5`.
-6. Verify that `data/index.json`, `data/config.json`, `assets/img/206-white.svg`, `assets/img/favicon.svg`, `assets/css/style.css`, and `assets/js/app.js` all return HTTP 200 when opened under the Pages URL.
+### 🧾 توضیح جریمه‌ها
 
-The dashboard reads static JSON files from the Pages origin. It does not contain GitHub or Telegram tokens. **Preserve `data/index.json` and all `data/logs/YYYY-MM.json` files when updating this project**: they contain the live vehicle history and must not be replaced with an empty starter dataset.
+`/fines` مجموع جریمه‌های ثبت‌شده را به تفکیک پرداخت‌شده و پرداخت‌نشده نشان می‌دهد. بدهی پرداخت‌نشده نباید به‌عنوان هزینهٔ پرداخت‌شده در تحلیل هزینه‌ها محاسبه شود. برای ثبت جریمه:
 
-## Deploy the Worker
+```text
+/fine 500000 toman speeding km=431400
+/paid a1b2c3d4
+/fines
+```
 
-Requirements: supported Node.js LTS, npm, a Cloudflare account, and Wrangler authentication.
+## 🛒 مبنای کیلومتر خرید
 
-Run these commands in **PowerShell or CMD** from the repository directory:
+مقدار مبنای فعلی `428000 km` و برآورد پیمایش از خرید `2400 km` است. در snapshot اولیه، آخرین کیلومتر ثبت‌شده `431381 km` بود:
+
+- اختلاف کیلومتر ثبت‌شده با مبنای خرید: **3,381 km**.
+- اختلاف این مقدار با برآورد تقریبی 2,400 کیلومتر: **981 km**.
+
+این اختلاف به شکل هشدار/تطبیق نمایش داده می‌شود؛ سیستم نباید کیلومتر واقعی خودرو را صرفاً برای هماهنگ کردن آن با یک برآورد تغییر دهد. اگر عدد روی کیلومترشمار با مقدار ذخیره‌شده فرق دارد، تنها پس از خواندن کیلومتر واقعی آن را اصلاح کن.
+
+```text
+/purchasekm
+/purchasekm 428000 estimate=2400
+```
+
+اگر تاریخ خرید دقیق معلوم نیست، برای پیمایش تاریخی زمان ساختگی ایجاد نمی‌شود. فاصلهٔ کیلومتر خرید تا اولین قرائت معتبر می‌تواند در مجموع از زمان خرید حساب شود، اما به ساعت یا روز نامعلوم نسبت داده نمی‌شود.
+
+## 🤖 راهنمای BotFather
+
+برای ثبت منوی command در تلگرام:
+
+1. به [@BotFather](https://t.me/BotFather) برو.
+2. دستور `/setcommands` را بفرست و `@Peugeot206GarageBot` را انتخاب کن.
+3. تمام محتوای فایل [`botfather-commands.txt`](botfather-commands.txt) را یک‌جا ارسال کن.
+4. پس از ذخیره، به ربات برگرد و `/start` و `/guide` را آزمایش کن.
+
+**توجه:** BotFather فقط منو را تعریف می‌کند؛ رفتار هر فرمان باید در Worker مستقرشده هم وجود داشته باشد. فهرست این مخزن شامل ۳۶ فرمان استاندارد است و با handlerهای فرمان در سورس نسخهٔ 3.2 تطبیق داده شده است.
+
+## 🌐 نصب و انتشار GitHub Pages
+
+1. فایل‌های سایت را در ریشهٔ مخزن قرار بده؛ `index.html` باید در ریشه باشد.
+2. در GitHub مسیر **Settings → Pages** را باز کن.
+3. گزینهٔ **Deploy from a branch**، شاخهٔ `main` و پوشهٔ `/(root)` را انتخاب کن.
+4. پس از تکمیل deployment این آدرس را باز کن: [داشبورد زنده](https://mehrdadmb2.github.io/peugeot-206-garage/).
+5. اگر صفحه قدیمی بود، `Ctrl+F5` بزن و در Actions وضعیت deployment را بررسی کن.
+
+### ⚠️ هنگام ارتقا این داده‌ها را حفظ کن
+
+```text
+data/config.json
+data/index.json
+data/logs/YYYY-MM.json
+data/deleted-events.json  # اگر وجود دارد
+```
+
+این فایل‌ها مبنای آمار، تنظیمات خودرو و تاریخچهٔ عملیاتی‌اند. بستهٔ امن ارتقا عمداً آن‌ها را شامل نمی‌کند تا هنگام استخراج، اطلاعات زنده جایگزین نشوند.
+
+## ☁️ تنظیم Cloudflare Worker
+
+نیازمندی‌ها: Node.js LTS، npm، حساب Cloudflare و دسترسی نوشتن به مخزن GitHub.
+
+از پوشهٔ پروژه:
 
 ```powershell
 cd .\worker
 npm install
 npm test
+npm run check
 npx wrangler login
 ```
 
-Configure secrets interactively:
+### Secretهای موردنیاز
+
+| نام Secret | کاربرد |
+|---|---|
+| `GITHUB_TOKEN` | توکن محدود GitHub با دسترسی `Contents: Read and write` فقط به مخزن لازم |
+| `TELEGRAM_BOT_TOKEN` | توکن دریافتی از BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | رشتهٔ تصادفی برای بررسی درخواست‌های وب‌هوک |
+| `ALLOWED_TELEGRAM_USER_ID` | شناسهٔ عددی حساب تلگرام مجاز؛ نام کاربری کافی نیست |
+| `API_ACCESS_TOKEN` | توکن مجزا و قوی برای API خارجی |
+
+مقادیر را در Cloudflare ثبت کن؛ هرگز آن‌ها را در `index.html`، فایل‌های JSON عمومی، README یا commit قرار نده.
 
 ```powershell
 npx wrangler secret put GITHUB_TOKEN
@@ -114,43 +247,30 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
 npx wrangler secret put ALLOWED_TELEGRAM_USER_ID
 npx wrangler secret put API_ACCESS_TOKEN
+npx wrangler deploy
 ```
 
-Secret meanings:
-
-- `GITHUB_TOKEN`: fine-grained GitHub token restricted to this repository, with **Contents: Read and write**.
-- `TELEGRAM_BOT_TOKEN`: token from BotFather.
-- `TELEGRAM_WEBHOOK_SECRET`: random 32-byte hex value used to validate Telegram's webhook header.
-- `ALLOWED_TELEGRAM_USER_ID`: your numeric Telegram user ID, not your username and not the bot ID.
-- `API_ACCESS_TOKEN`: a different strong token for authorized external API requests.
-
-To create a random secret in PowerShell:
+ساخت یک secret تصادفی در PowerShell:
 
 ```powershell
 [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
 ```
 
-Run it twice for two different secrets. Store the first as `TELEGRAM_WEBHOOK_SECRET`, the second as `API_ACCESS_TOKEN`.
+این دستور را برای `TELEGRAM_WEBHOOK_SECRET` و `API_ACCESS_TOKEN` جداگانه اجرا کن تا دو مقدار متفاوت داشته باشی.
 
-Deploy:
-
-```powershell
-npx wrangler deploy
-```
-
-Check the Worker:
+بررسی وضعیت Worker:
 
 ```powershell
 Invoke-RestMethod "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health" | ConvertTo-Json -Depth 6
 ```
 
-A healthy response should report `ok: true`, `mode: request-driven`, and configured booleans. These booleans indicate whether secret values are present, not whether credentials are valid against external services.
+## 🔗 ثبت وب‌هوک تلگرام
 
-## Connect Telegram webhook without any script file
+وب‌هوک باید به URL زیر اشاره کند و برای دکمه‌های inline، `callback_query` در `allowed_updates` فعال باشد:
 
-**Important:** use a plain URL. Do not include Markdown link syntax such as `[https://...](https://...)` in a variable. That syntax is documentation formatting, not part of the URL, and can cause Telegram to reject the webhook with a DNS resolution error.
+`https://peugeot-206-garage-bot.game-developer-mb.workers.dev/telegram`
 
-Open PowerShell and paste the complete block below. It does not create or require any file. Enter the real BotFather token and the exact `TELEGRAM_WEBHOOK_SECRET` value saved in Cloudflare when prompted.
+برای نصب در PowerShell بدون ساخت فایل اسکریپت، از این الگو استفاده کن. توکن و secret را هنگام prompt وارد کن؛ آن‌ها را برای هیچ‌کس ارسال نکن.
 
 ```powershell
 $tokenSecure = Read-Host "BotFather bot token" -AsSecureString
@@ -159,12 +279,6 @@ $secretSecure = Read-Host "Exact TELEGRAM_WEBHOOK_SECRET from Cloudflare" -AsSec
 $WEBHOOK_SECRET = [System.Net.NetworkCredential]::new("", $secretSecure).Password
 $WORKER_URL = "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/telegram"
 
-if ($WEBHOOK_SECRET -notmatch '^[A-Za-z0-9_-]{1,256}$') { throw "Invalid Telegram webhook secret format." }
-
-# Check that the Worker host resolves from this computer before asking Telegram to register it.
-$workerHost = ([uri]$WORKER_URL).DnsSafeHost
-Resolve-DnsName $workerHost -ErrorAction Stop | Select-Object Name, Type, IPAddress
-
 $payload = @{
   url = $WORKER_URL
   secret_token = $WEBHOOK_SECRET
@@ -172,250 +286,128 @@ $payload = @{
   drop_pending_updates = $false
 } | ConvertTo-Json -Depth 5
 
-$result = Invoke-RestMethod -Method Post `
-  -Uri ("https://api.telegram.org/bot{0}/setWebhook" -f $BOT_TOKEN) `
-  -ContentType "application/json; charset=utf-8" `
-  -Body $payload
-$result | ConvertTo-Json -Depth 5
-```
-
-Expected result: `ok: true`, `result: true`. If `Resolve-DnsName` fails, stop there and check the Worker hostname, Cloudflare deployment, DNS/network/VPN settings. If the local DNS test passes but Telegram reports `Failed to resolve host`, verify the URL is exactly the plain HTTPS URL above and that the deployed hostname is active and publicly resolvable.
-
-Verify the webhook in the same PowerShell window:
-
-```powershell
-$info = Invoke-RestMethod -Method Get -Uri ("https://api.telegram.org/bot{0}/getWebhookInfo" -f $BOT_TOKEN)
-$info.result | Select-Object url, pending_update_count, last_error_date, last_error_message, allowed_updates | Format-List
-```
-
-Then message the bot with `/start`. If it does not reply, open **Cloudflare Dashboard → Workers & Pages → `peugeot-206-garage-bot` → Logs** and inspect the request at the time you sent the message.
-
-### Set the Telegram command menu without a file
-
-This is optional; the command menu does not implement bot logic by itself. Run in the same PowerShell session:
-
-```powershell
-$commands = @(
-  @{command="start";description="شروع و معرفی ربات"},
-  @{command="help";description="راهنمای سریع فرمان‌ها"},
-  @{command="guide";description="دفترچه کامل راهنمای ربات"},
-  @{command="analysis";description="ارسال تحلیل با نمودارهای تصویری"},
-  @{command="purchasekm";description="تنظیم کیلومتر خرید و پیمایش"},
-  @{command="operations";description="فهرست عملیات با شناسه و دکمه مدیریت"},
-  @{command="id";description="شناسه عددی کاربر"},
-  @{command="km";description="ثبت کیلومترشمار"},
-  @{command="trip";description="ثبت مسافت"},
-  @{command="fuel";description="ثبت سوخت‌گیری"},
-  @{command="service";description="ثبت سرویس"},
-  @{command="part";description="ثبت قطعه مصرفی"},
-  @{command="interval";description="تنظیم فاصله سرویس"},
-  @{command="due";description="موعد سرویس‌ها"},
-  @{command="summary";description="گزارش هزینه و مسافت"},
-  @{command="fuelstats";description="آمار سوخت"},
-  @{command="fine";description="ثبت جریمه"},
-  @{command="fines";description="فهرست جریمه‌ها"},
-  @{command="paid";description="ثبت پرداخت جریمه"},
-  @{command="wash";description="ثبت کارواش"},
-  @{command="repair";description="ثبت تعمیر"},
-  @{command="expense";description="ثبت هزینه متفرقه"},
-  @{command="note";description="یادداشت خودرو"},
-  @{command="latest";description="آخرین رویدادها"},
-  @{command="detail";description="جزئیات و مدیریت رویداد"},
-  @{command="edit";description="ویرایش عملیات"},
-  @{command="annotate";description="توضیح تکمیلی عملیات"},
-  @{command="actor";description="تغییر شخص انجام‌دهنده"},
-  @{command="people";description="مدیریت اشخاص"},
-  @{command="delete";description="حذف با تأیید"},
-  @{command="restore";description="بازیابی عملیات"},
-  @{command="backup";description="پشتیبان JSON"},
-  @{command="export";description="خروجی CSV"}
-)
-$menu = @{commands=$commands} | ConvertTo-Json -Depth 5
 Invoke-RestMethod -Method Post `
-  -Uri ("https://api.telegram.org/bot{0}/setMyCommands" -f $BOT_TOKEN) `
-  -ContentType "application/json; charset=utf-8" -Body $menu | ConvertTo-Json -Depth 5
+  -Uri ("https://api.telegram.org/bot{0}/setWebhook" -f $BOT_TOKEN) `
+  -ContentType "application/json; charset=utf-8" -Body $payload | ConvertTo-Json -Depth 5
 ```
 
-## Bot commands
+برای مشاهدهٔ وضعیت وب‌هوک:
 
-| Command | Example | Purpose |
+```powershell
+Invoke-RestMethod -Uri ("https://api.telegram.org/bot{0}/getWebhookInfo" -f $BOT_TOKEN) | ConvertTo-Json -Depth 6
+```
+
+## 🔌 API
+
+همهٔ مسیرهای `/api/v1/*` به هدر احراز هویت نیاز دارند:
+
+```http
+Authorization: Bearer YOUR_API_ACCESS_TOKEN
+```
+
+| Method | Route | توضیح |
 |---|---|---|
-| `/start`, `/help` | `/help` | Introduction and quick help |
-| `/guide` | `/guide` | Complete multi-part Persian command manual |
-| `/analysis` | `/analysis week` | Text report + PNG charts for spending, fuel, and distance |
-| `/purchasekm` | `/purchasekm 428000 estimate=2400` | Purchase odometer baseline and estimate reconciliation |
-| `/operations` | `/operations all` | All active events in batches with IDs and inline management buttons |
-| `/id` | `/id` | Show numeric user/chat IDs |
-| `/km` | `/km 156321` | Record current odometer |
-| `/trip` | `/trip 85` | Record distance driven |
-| `/fuel` | `/fuel 20l cost=700000 toman km=156321 full` | Record refueling |
-| `/service` | `/service oil cost=900000 toman km=156321` | Record maintenance |
-| `/part` | `/part air_filter km=156321` | Record a component |
-| `/interval` | `/interval engine_oil 4000 180` | Set km/day interval |
-| `/due` | `/due` | Calculate due maintenance now |
-| `/summary` | `/summary week` | Summary report |
-| `/fuelstats` | `/fuelstats` | Fuel statistics |
-| `/fine` | `/fine 500000 toman speeding` | Record a fine |
-| `/fines` | `/fines` | List fines |
-| `/paid` | `/paid EVENT_ID` | Mark a fine as paid |
-| `/wash` | `/wash 180000 toman` | Record car wash |
-| `/repair` | `/repair suspension cost=450000 toman` | Resolve an open issue / record repair |
-| `/expense` | `/expense 250000 toman parking` | Other expense |
-| `/note` | `/note inspect tires next visit` | Save a note |
-| `/latest` | `/latest` | Recent events |
-| `/detail` | `/detail a1b2c3d4` | Full event details and inline actions |
-| `/edit` | `/edit a1b2c3d4 شخص=بابام | توضیح=سفر` | Edit title, description, notes, actor, amounts, odometer and statuses |
-| `/annotate` | `/annotate a1b2c3d4 سفر جاده‌ای` | Add or replace an event note; `-` clears it |
-| `/actor` | `/actor a1b2c3d4 بابام` | Set who performed the operation |
-| `/people` | `/people add مهرزاد` | Manage the selectable person roster |
-| `/delete` | `/delete a1b2c3d4` | Ask for confirmation, archive, then remove from active history |
-| `/restore` | `/restore a1b2c3d4` | Restore a deleted event from archive |
-| `/export` | `/export all` or `/export 2026-10` | Export all records or one month as CSV |
-| `/backup` | `/backup` or `/backup 2026-10` | Export JSON archive for all records or one month |
-| `/config` | `/config` | Vehicle/service configuration |
+| `GET` | `/health` | وضعیت و وجود تنظیمات Worker؛ عمومی |
+| `GET` | `/` یا `/api` | معرفی API و مسیرها |
+| `POST` | `/telegram` | وب‌هوک خصوصی تلگرام |
+| `GET` | `/api/v1/overview` | شاخص‌های جمع‌بندی |
+| `GET` | `/api/v1/events?month=2026-10&type=fuel&limit=100` | فهرست رویدادهای فیلترشده |
+| `GET` | `/api/v1/due` | موعد سرویس‌ها |
+| `GET` | `/api/v1/config` | تنظیمات خودرو و سرویس‌ها |
+| `GET` | `/api/v1/export?month=2026-10` | خروجی CSV |
+| `POST` | `/api/v1/record` | ثبت متن طبیعی یا رویداد ساختاریافته |
+| `POST` | `/api/v1/event/update` | ویرایش رویداد مجاز |
+| `DELETE` | `/api/v1/event?id=EVENT_ID` | بایگانی و حذف رویداد |
 
-The bot supports common aliases and Persian digits. By default, an event is attributed to «من». Attribution can be supplied in a message (`بنزین زدم؛ توسط بابام؛ توضیح: سفر جاده‌ای`) or by starting it with a person already registered (`بابام: بنزین زدم ...`). Add custom people with `/people add NAME`; the `NAME: ...` form then works for those names too. Every confirmed record gets inline Telegram buttons. Edits are recorded in a bounded `editHistory` audit trail. Deletion requires a second confirmation and first copies the record to `data/deleted-events.json`, so `/restore ID` can recover it. For important records, include amount, unit, and odometer where applicable; do not assume ambiguous text was recorded unless the bot confirms it.
-
-## API
-
-All `/api/v1/*` endpoints require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`. The health route is public. All other `/api/v1/*` routes require the `API_ACCESS_TOKEN` bearer token. The public GitHub Pages app intentionally never receives this token; event management is handed off to the allowlisted Telegram bot.
-
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/health` | Health and configuration presence |
-| `GET` | `/` | API guide |
-| `POST` | `/telegram` | Telegram webhook |
-| `POST` | `/api/v1/record` | Register natural-language text or typed event |
-| `POST` | `/api/v1/command` | Command alias |
-| `GET` | `/api/v1/overview` | Aggregated statistics |
-| `GET` | `/api/v1/events?month=YYYY-MM&type=fuel&limit=100` | Read filtered events |
-| `GET` | `/api/v1/due` | Maintenance deadlines |
-| `GET` | `/api/v1/config` | Vehicle and interval configuration |
-| `GET` | `/api/v1/export?month=2026-10` or `month=all` | CSV export |
-| `POST` | `/api/v1/event/update` | Edit actor, notes, descriptive and supported numeric/status fields |
-| `DELETE` | `/api/v1/event?id=EVENT_ID` | Archive then remove an event from active records |
-
-Example PowerShell API request (replace the token in memory; never commit it):
+نمونهٔ درخواست PowerShell:
 
 ```powershell
 $apiSecure = Read-Host "API_ACCESS_TOKEN" -AsSecureString
 $API_TOKEN = [System.Net.NetworkCredential]::new("", $apiSecure).Password
-$body = @{ text = "20l fuel, cost 700000 toman, km 156321 full" } | ConvertTo-Json
+$body = @{ text = "20l fuel, cost 700000 toman, km 431400 full" } | ConvertTo-Json
 Invoke-RestMethod -Method Post `
   -Uri "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" `
   -Headers @{ Authorization = "Bearer $API_TOKEN" } `
   -ContentType "application/json" -Body $body | ConvertTo-Json -Depth 6
 ```
 
-## Data model and units
+## 🗃️ ساختار فایل‌ها و داده‌ها
 
-- The vehicle profile is **Peugeot 206 SD, white, model year 1387 (2008/09)**. Verify exact engine and trim from the vehicle documents; do not infer it from body style alone.
-- Time zone: `Asia/Tehran`.
-- Costs are stored as integer Iranian **rials** (`costRial`) and displayed as **tomans** by dividing by ten.
-- The `occurredAt` timestamp represents event time; `createdAt` represents record creation time.
-- Monthly log files are selected by event date, and `data/index.json` lists the available months.
-- Fuel consumption estimates need enough consistent odometer/full-tank entries; partial data may not produce a reliable L/100 km result.
-- Service intervals are editable reminders, not manufacturer guarantees. Verify timing belt, brakes, fluids, and oil intervals against the exact engine, maintenance history, and a qualified mechanic.
-
-## Request-driven design
-
-There is no scheduled Worker handler in this project. Incoming Telegram updates and API calls trigger work. Reports such as `/due` are calculated when requested. Automatic messages at a fixed time require a scheduler or another service to initiate a request; they are intentionally not part of this request-only configuration.
-
-## Troubleshooting
-
-| Symptom | Check |
+| مسیر | کاربرد |
 |---|---|
-| Telegram says `Failed to resolve host` | URL must be plain text, not Markdown; verify Worker hostname and public DNS. |
-| `/health` fails | Worker may not be deployed at that hostname; check Wrangler output and Cloudflare dashboard. |
-| Webhook returns 403 | `TELEGRAM_WEBHOOK_SECRET` must match the value supplied to `setWebhook`. |
-| Bot says access denied | `ALLOWED_TELEGRAM_USER_ID` must equal your numeric Telegram user ID. |
-| Bot does not reply | Inspect `getWebhookInfo`, Cloudflare Worker logs, token, and allowed user ID. |
-| `configured.github` is false | Check `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO`. |
-| GitHub read/write fails | Check token expiry, repository scope, `Contents: Read and write`, branch `main`, and GitHub API errors. |
-| Dashboard says data failed | Check Pages deployment and direct HTTP access to `data/index.json` and `data/config.json`. |
-| Car image or icon missing | Verify `assets/img/206-white.svg` and `assets/img/favicon.svg` return HTTP 200. |
-| Changes do not appear | Wait for Pages deployment, then press `Ctrl+F5`; the dashboard is a static site. |
+| `index.html` | پوستهٔ داشبورد Pages |
+| `assets/css/style.css` | طراحی واکنش‌گرا، افکت‌ها و انیمیشن |
+| `assets/js/app.js` | بارگیری، تحلیل، نمودار، فیلتر و خروجی |
+| `assets/img/206-white.svg` | تصویر برداری خودروی ۲۰۶ SD |
+| `assets/img/favicon.svg` | آیکن اختصاصی پروژه |
+| `assets/img/206-sd-garage.webp` | تصویر بنر/فضای گاراژ |
+| `data/config.json` | مشخصات خودرو و بازه‌های سرویس |
+| `data/index.json` | فهرست ماه‌های دارای رویداد |
+| `data/logs/YYYY-MM.json` | رویدادهای هر ماه |
+| `data/deleted-events.json` | بایگانی حذف‌ها؛ در صورت ایجاد |
+| `worker/src/index.js` | وب‌هوک، مدیریت رویداد، API، گزارش و GitHub write |
+| `worker/wrangler.toml` | نام Worker و شناسهٔ مخزن/شاخه |
+| `worker/tests/worker.test.mjs` | آزمون مسیرها، امنیت و رفتارهای کلیدی |
+| `botfather-commands.txt` | فهرست آمادهٔ منوی فرمان BotFather |
 
-## Tests
+### مدل داده و واحدها
 
-From the `worker` directory:
+- زمان‌ها با منطقهٔ `Asia/Tehran` مدیریت می‌شوند؛ تاریخ میلادی برای کلید ماه و برچسب شمسی برای نمایش استفاده می‌شود.
+- هزینه‌ها با عدد صحیح ریال در `costRial` ذخیره و به تومان نمایش داده می‌شوند (هر تومان = ۱۰ ریال).
+- `occurredAt` زمان رخداد و `createdAt` زمان ایجاد ثبت است.
+- مقدار مسافت بر اساس کیلومترشمار فقط هنگامی قابل اتکاست که دو قرائت معتبر و ترتیب زمانی درست داشته باشیم.
+- فاصله‌های سرویس پیش‌فرض و قابل تنظیم‌اند؛ دفترچهٔ دقیق خودرو و نظر تعمیرکار مرجع نهایی است.
 
-```powershell
-npm test
-npm run check
-```
+## 🔐 امنیت و حریم خصوصی
 
-These local tests verify key routing and authorization behavior with mocked requests. They do not prove that deployed Cloudflare secrets, Telegram credentials, or GitHub permissions are valid. Perform one real `/km` record and confirm a new commit in `data/logs/YYYY-MM.json` and `data/index.json` before relying on the system.
+- ربات با `ALLOWED_TELEGRAM_USER_ID` محدود می‌شود؛ این مقدار باید شناسهٔ عددی کاربر مورد اعتماد باشد.
+- توکن‌ها و secretها را فقط در Cloudflare Worker Secrets یا محیط محلی نگهداری کن.
+- اگر مخزن عمومی است، تمام فایل‌های ثبت‌شدهٔ داخل `data/` برای عموم قابل خواندن هستند. برای سوابق شخصی، مخزن خصوصی را ترجیح بده و قابلیت Pages و برنامهٔ اشتراک‌گذاری سازمان/حساب را با تنظیمات فعلی خود بررسی کن.
+- `API_ACCESS_TOKEN` نباید به کد سمت مرورگر یا مخزن GitHub اضافه شود.
+- نوشتن هم‌زمان ممکن است به تعارض GitHub Contents API یا محدودیت نرخ برخورد کند؛ بعد از خطا، قبل از تکرار ثبت، مخزن را بررسی کن تا رکورد تکراری ایجاد نشود.
+- نسخهٔ پشتیبان را جدا از همان مخزن نگه دار؛ پشتیبان تنها در همان شاخه یا مخزن، محافظت مستقل محسوب نمی‌شود.
 
-## Security
+## 🧪 آزمایش و عیب‌یابی
 
-- Restrict the GitHub fine-grained token to this repository and only the permissions needed.
-- Keep all secrets in Cloudflare Worker secrets or local shell memory, never in GitHub files or the public dashboard.
-- The Telegram bot is restricted by numeric user ID; configure the correct ID.
-- A public repository exposes all committed vehicle events. Use a private repository if the records are personal, and confirm that your GitHub Pages setup supports your repository visibility and plan.
-- GitHub Contents API writes may conflict under simultaneous requests or hit rate limits. If a write fails, verify the repository before retrying to avoid duplicate records.
-
-## Links
-
-- Repository: <https://github.com/mehrdadmb2/peugeot-206-garage>
-- Dashboard: <https://mehrdadmb2.github.io/peugeot-206-garage/>
-- Worker health: <https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health>
-- Telegram: <https://t.me/Peugeot206GarageBot>
-- Dashboard ↔ Telegram navigation is also shown in the site header/footer, event cards, and bot replies.
-- Telegram Bot API: <https://core.telegram.org/bots/api>
-- Cloudflare Workers secrets: <https://developers.cloudflare.com/workers/configuration/secrets/>
-- GitHub Contents API: <https://docs.github.com/en/rest/repos/contents>
-
-
-## Garage OS 3.1.0 — Time Intelligence & Driver Attribution
-
-- Analytics can switch between 24 hourly buckets, 30 daily buckets, 12 weekly buckets (Saturday-start Persian week), and 12 monthly buckets.
-- Period cards summarize event count, distance, fuel, paid expense, unpaid fines, and service/repair count for the selected window.
-- Odometer intervals are attributed to the actor on the newer reading. For example, `بابام کیلومتر 431381` assigns the distance since the prior valid reading to `بابام`. This is an estimate based on the interval between readings, not GPS telemetry.
-- The analytics view includes spending by person, driving-distance by person, cost-per-kilometre, and operation-category distribution.
-- Telegram replies use named, clickable navigation links instead of long visible URLs. IDs and key metrics are formatted in monospace; descriptions/notes are rendered as quotations.
-- `/operations` lists the recent operations; `/operations all` sends the whole active history in numbered batches with a short ID and inline buttons for details, edit, and delete. `today`, `week`, and `month` filters are available too.
-
-### Updated deployment
-
-From the repository root, run `npm test` and `npm run check` inside `worker/`, then `npx wrangler deploy`. Push the changed `index.html`, `assets/`, `worker/src/index.js`, the worker tests, and documentation to `main` to publish GitHub Pages. The webhook endpoint is still `/telegram`; keep `callback_query` enabled in Telegram's `allowed_updates` for inline management buttons.
-
-
-## Garage OS 3.2.0 — Purchase Baseline, Full Guide, and Telegram Charts
-
-### Purchase kilometre baseline and current discrepancy
-
-The configured purchase odometer is `428000 km`; the user-provided estimated driven distance is `2400 km`. The existing log snapshot's latest recorded odometer is `431381 km`. Arithmetic from those two odometer values is `431381 - 428000 = 3381 km`, which is `981 km` above the estimate. The app reports this as a discrepancy rather than altering or fabricating an odometer reading. Verify the physical dashboard reading before entering a correction.
-
-- `/purchasekm` shows the configured baseline, latest reading, calculated mileage, estimate and difference.
-- `/purchasekm 428000 estimate=2400` sets the purchase baseline and the estimate. An optional confirmed purchase date can be supplied as `date=YYYY-MM-DD`.
-- Historical mileage between the purchase baseline and the first recorded odometer is attributed to the first reading's actor; legacy records without an actor default to `من`.
-- Since the exact purchase date is unknown, historical baseline mileage appears in lifetime totals, not in an invented hourly/daily/weekly bucket.
-- If a later odometer reading is lower than the prior reading, the new reading is treated as a correction checkpoint for distance attribution. This is useful for correcting a typo; only enter it if it matches the actual vehicle display.
-
-### New reporting commands
-
-| Command | Purpose |
-|---|---|
-| `/guide` | Four detailed Persian help messages covering registration, people, event management, reports and export. |
-| `/analysis hour` | Last 24 hourly buckets. |
-| `/analysis day` | Last 30 daily buckets. |
-| `/analysis week` | Last 12 weekly buckets. |
-| `/analysis month` | Last 12 monthly buckets. |
-| `/fines` | Total fines, total paid, total unpaid, item counts and recent IDs. |
-| `/operations all` | Lists all active operations in small Telegram batches, with inline details/edit/delete buttons. |
-
-`/analysis` sends one text summary and three PNG charts. The chart render request contains aggregated bucket labels and numeric values (expense, fuel litres, distance), not event notes, names or full event records. If the chart provider is unavailable, the bot returns a text fallback.
-
-### Version 3.2 validation
-
-Run the following from `worker/`:
+از پوشهٔ `worker/` اجرا کن:
 
 ```powershell
 npm install
 npm test
 npm run check
-npx wrangler deploy
 ```
 
-The local test suite includes checks for event actor/note storage, distance attribution, clickable dashboard/bot links, operation management formatting, report fine totals, and sending three mocked PNG charts. These tests do not validate the real Cloudflare secrets, Telegram webhook, GitHub permissions, or external chart provider availability.
+تست محلی، رفتار کد با درخواست‌های آزمایشی را بررسی می‌کند؛ معتبر بودن secretهای واقعی، مجوز GitHub، کارکرد واقعی وب‌هوک و دسترس‌پذیری سرویس خارجی نمودار را تضمین نمی‌کند.
+
+| مشکل | بررسی پیشنهادی |
+|---|---|
+| ربات پاسخی نمی‌دهد | `getWebhookInfo`، شناسهٔ مجاز، secret وب‌هوک و Worker Logs را بررسی کن. |
+| وب‌هوک 403 می‌دهد | مقدار `TELEGRAM_WEBHOOK_SECRET` باید دقیقاً با `secret_token` وب‌هوک تطبیق کند. |
+| ثبت در GitHub انجام نمی‌شود | انقضای توکن، مجوز Contents و شاخهٔ `main` را بررسی کن. |
+| داشبورد داده نمی‌خواند | انتشار Pages و دسترسی به `data/index.json` و `data/config.json` را بررسی کن. |
+| نمودار تصویر نمی‌آید | گزارش متنی را بررسی کن؛ برای PNG لازم است دسترسی سرویس تصویر و پاسخ API آن فعال باشد. |
+| عدد پیمایش اختلاف دارد | کیلومتر واقعی خودرو را کنترل کن؛ برآورد تقریبی دلیل کافی برای تغییر قرائت واقعی نیست. |
+| تغییر روی سایت دیده نمی‌شود | وضعیت GitHub Actions/Pages را بررسی و سپس `Ctrl+F5` اجرا کن. |
+
+## 📎 لینک‌های رسمی پروژه
+
+- 🌐 [داشبورد خودرو](https://mehrdadmb2.github.io/peugeot-206-garage/)
+- 🤖 [ربات تلگرام](https://t.me/Peugeot206GarageBot)
+- 🧰 [وضعیت Worker](https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health)
+- 💻 [مخزن GitHub](https://github.com/mehrdadmb2/peugeot-206-garage)
+- 📘 [Telegram Bot API](https://core.telegram.org/bots/api)
+- ☁️ [Cloudflare Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+- 🗂️ [GitHub Contents API](https://docs.github.com/en/rest/repos/contents)
+
+## 🧾 نسخه و مجوز
+
+- نسخهٔ مستندات: **3.2.0**
+- مجوز: [MIT](LICENSE)
+- هر گونه فاصلهٔ سرویس، سابقهٔ مالی یا کیلومتر باید مطابق اطلاعات واقعی خودرو اصلاح شود؛ این نرم‌افزار جایگزین بررسی فنی یا دفترچهٔ سازنده نیست.
+
+<div align="center">
+  <strong>🚘 206 Garage OS</strong><br>
+  <sub>هر کیلومتر، هر هزینه و هر سرویس؛ مرتب، قابل پیگیری و قابل تحلیل.</sub><br><br>
+  <a href="https://mehrdadmb2.github.io/peugeot-206-garage/">🌐 باز کردن داشبورد</a> ·
+  <a href="https://t.me/Peugeot206GarageBot">✈️ باز کردن ربات</a>
+</div>
