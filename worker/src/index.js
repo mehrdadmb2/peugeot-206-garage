@@ -33,7 +33,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.0.0",
+        version: "3.1.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -54,7 +54,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.0.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.1.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -221,6 +221,8 @@ async function handleTelegramUpdate(update, env) {
     const reply = await processMessage(text, message, env);
     if (reply?.document) {
       await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
+    } else if (Array.isArray(reply?.messages)) {
+      for (const item of reply.messages) await sendText(env, chatId, item.text, item.markup || false);
     } else if (reply?.text) {
       const shortId = reply.eventId || eventIdFromReply(reply.text);
       const markup = reply.markup || (shortId ? eventActionKeyboard(shortId) : null);
@@ -337,6 +339,7 @@ const COMMAND_ALIASES = {
   cancel: "cancel", لغو: "cancel",
   restore: "restore", بازگردانی: "restore",
   people: "people", persons: "people", اشخاص: "people", افراد: "people",
+  operations: "operations", records: "operations", list: "operations", allrecords: "operations", عملیات: "operations", سوابق: "operations", فهرست: "operations",
   undo: "undo"
 };
 const KNOWN_COMMANDS = new Set(Object.values(COMMAND_ALIASES));
@@ -360,28 +363,36 @@ function normalizeIntentText(value) {
 function telegramHtml(value) {
   const lines = String(value || "").slice(0, 3800).split("\n");
   let firstContentSeen = false;
-  const escape = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escape = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+  const linkify = html => String(html)
+    .replaceAll(SITE_URL, `<a href="${SITE_URL}">باز کردن داشبورد</a>`)
+    .replaceAll(BOT_URL, `<a href="${BOT_URL}">گفت‌وگو با ربات</a>`);
   const rendered = lines.map(original => {
     const line = original.trimEnd();
     if (!line.trim()) return "";
-    const safe = escape(line);
+    const safe = linkify(escape(line));
     if (!firstContentSeen) { firstContentSeen = true; return `<b>${safe}</b>`; }
+    const heading = line.match(/^(?:🧾|👤|📊|⛽|🚦|🧰|🗂|🛡️|📝|✏️|⚙️|🚘|📦|🔎|📖|💳|✅|❌|⚠️)\s+[^:]{2,70}$/u);
+    if (heading) return `<b>${safe}</b>`;
     const commandMatch = line.match(/^\s*(\/[a-zA-Z0-9_]+)(?:\s+(.*))?$/);
     if (commandMatch) {
-      const commandAndArgs = line.trim();
+      const commandAndArgs = commandMatch[0].trim();
       const delimiter = commandAndArgs.search(/\s+[—-]\s+/);
       if (delimiter >= 0) {
         const command = commandAndArgs.slice(0, delimiter).trim();
         const description = commandAndArgs.slice(delimiter).replace(/^\s+[—-]\s+/, "");
         return `<code>${escape(command)}</code> — ${escape(description)}`;
       }
-      return `<code>${safe.trim()}</code>`;
+      return `<code>${escape(commandAndArgs)}</code>`;
     }
-    const idLine = line.match(/^(شناسه|ID|کد|کیلومتر ثبت\s*شده|موعد کیلومتری بعدی)\s*:\s*(.*)$/i);
-    if (idLine) return `<b>${escape(idLine[1])}:</b> <code>${escape(idLine[2])}</code>`;
     const fieldLine = line.match(/^([^:：]{1,38})\s*[:：]\s*(.*)$/);
-    if (fieldLine && /^(دسته|تاریخ|انجام.?دهنده|شرح عملیات|توضیح تکمیلی|کیلومترشمار|مسافت|سوخت|هزینه|مبلغ|وضعیت جریمه|وضعیت خرابی|سرویس\/قطعه|زمان ثبت|آخرین ویرایش|کارکرد فعلی|رویدادها|شناسه تلگرام شما|شناسه گفتگو)$/i.test(fieldLine[1].trim())) {
-      return `<b>${escape(fieldLine[1].trim())}:</b> ${escape(fieldLine[2])}`;
+    if (fieldLine) {
+      const label = fieldLine[1].trim();
+      const fieldValue = fieldLine[2];
+      if (/^(?:شناسه|ID|کد|شناسه تلگرام شما|شناسه گفتگو)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${escape(fieldValue)}</code>`;
+      if (/^(?:شرح عملیات|توضیح تکمیلی|یادداشت|شرح تعمیر)$/i.test(label)) return `<b>${escape(label)}:</b>\n<blockquote>${escape(fieldValue)}</blockquote>`;
+      if (/^(?:کیلومتر ثبت\s*شده|موعد کیلومتری بعدی|کیلومترشمار|مسافت|سوخت|هزینه|مبلغ|کارکرد فعلی|مسافت از آخرین کیلومتر ثبت\s*شده|مسافت از ثبت قبلی)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${escape(fieldValue)}</code>`;
+      if (/^(?:دسته|تاریخ|انجام.?دهنده|وضعیت جریمه|وضعیت خرابی|سرویس\/قطعه|زمان ثبت|آخرین ویرایش|رویدادها)$/i.test(label)) return `<b>${escape(label)}:</b> ${escape(fieldValue)}`;
     }
     if (/^(?:⚠️|⛔|💡|📌|نکته[:：])/u.test(line)) return `<blockquote>${safe}</blockquote>`;
     return safe.replace(/`([^`]{1,140})`/g, (_, code) => `<code>${escape(code)}</code>`);
@@ -403,6 +414,7 @@ async function processMessage(text, message, env) {
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/cancel\b/i.test(text)) return { text: "✅ هیچ عملیات در انتظار تأییدی وجود ندارد. برای حذف از دکمه حذف در جزئیات رویداد استفاده کن.", keyboard: false };
   if (/^\/people\b|^\/اشخاص\b|^\/افراد\b/i.test(text)) return { text: await peopleCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/operations\b|^\/records\b|^\/list\b|^\/سوابق\b|^\/عملیات\b|^\/فهرست\b/i.test(text)) return { messages: await operationsReport(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/id\b/i.test(text)) return { text: `شناسه تلگرام شما: ${message.from.id}\nشناسه گفتگو: ${message.chat.id}`, keyboard: false };
   if (/^\/(detail|event|info)\b/i.test(text)) {
     const id = text.replace(/^\/\S+/, "").trim();
@@ -531,13 +543,13 @@ async function processMessage(text, message, env) {
 function helpText() {
   return `🚘 دفتر هوشمند پژو ۲۰۶ SD
 
-<b>🧾 ثبت سریع</b>
+🧾 ثبت سریع
 • کیلومتر ۴۳۱۴۰۰ ← ثبت کیلومترشمار
 • امروز ۸۵ کیلومتر رانندگی کردم
 • ۲۰ لیتر بنزین · هزینه ۷۰۰ هزار تومان · کیلومتر ۴۳۱۴۰۰
 • روغن موتور عوض شد · هزینه ۹۰۰ هزار تومان · کیلومتر ۴۳۱۰۰۰
 
-<b>👤 ثبت به نام شخص و توضیح</b>
+👤 ثبت به نام شخص و توضیح
 • بنزین زدم؛ توسط بابام؛ توضیح: سفر جاده‌ای
 • بابام: ۲۰ لیتر بنزین زدم · هزینه ۷۰۰ هزار تومان
 • /people add مهرزاد — افزودن نام دلخواه به فهرست
@@ -545,7 +557,7 @@ function helpText() {
 • /annotate شناسه توضیح اضافه
 اگر شخصی مشخص نشود، انجام‌دهنده «من» ثبت می‌شود. نام هر شخص دلخواه پشتیبانی می‌شود.
 
-<b>🛠 مدیریت عملیات</b>
+🛠 مدیریت عملیات
 /detail a1b2c3d4 — جزئیات کامل + دکمه‌های مدیریت
 /edit a1b2c3d4 عنوان=... | شرح=... | توضیح=... | شخص=... | مبلغ=... | کیلومتر=...
 /annotate a1b2c3d4 متن توضیح
@@ -553,7 +565,7 @@ function helpText() {
 /delete a1b2c3d4 — حذف با تأیید و نگهداری بایگانی
 /restore a1b2c3d4 — بازگردانی عملیات بایگانی‌شده
 
-<b>📊 گزارش و خروجی</b>
+📊 گزارش و خروجی
 /km 431400 — کارکرد مطلق
 /trip 85 — مسافت
 /fuel 20l cost=700000 toman km=431400 full
@@ -563,6 +575,9 @@ function helpText() {
 /export — CSV ماه جاری · /export all — CSV همه سوابق
 /backup — پشتیبان کامل JSON · /backup 2026-10 — پشتیبان ماه
 /latest — آخرین رویدادها
+/operations — فهرست ۲۰ عملیات اخیر با شناسه و دکمه مدیریت
+/operations all — تمام عملیات با شناسه، جزئیات، ویرایش و حذف
+/operations today|week|month — فهرست یک بازه مشخص
 
 💡 عدد فارسی و انگلیسی، تاریخ شمسی/میلادی، هزار/میلیون، تومان/ریال، km و l پشتیبانی می‌شود. از دکمه‌های زیر هر پیام ثبت برای جزئیات، ویرایش، توضیح، تغییر شخص یا حذف استفاده کن.
 
@@ -619,6 +634,8 @@ async function saveEvent(input, env) {
   const eventsBefore = await loadAllEvents(env);
   const latestOdo = calculateCurrentOdometer(eventsBefore);
   const config = await readConfig(env);
+  const occurredEpoch = Date.parse((input.occurredAt ? parseOccurredInput(input.occurredAt) : nowTehran()).iso);
+  const previousOdometerEvent = input.type === "odometer" ? eventsBefore.filter(item => item.type === "odometer" && Number.isFinite(Number(item.odometerKm)) && Date.parse(item.occurredAt || item.createdAt || "") <= occurredEpoch).sort((a,b) => Date.parse(a.occurredAt || a.createdAt || "") - Date.parse(b.occurredAt || b.createdAt || "" )).slice(-1)[0] : null;
   const explicitOdo = Number.isFinite(input.odometerKm) && input.odometerKm > 0 ? Math.round(input.odometerKm) : null;
   const metaSource = String(input.description || input.sourceText || "");
   const parsedMeta = extractEventMetadata(metaSource, input.actor, input.note, config.people || []);
@@ -656,6 +673,14 @@ async function saveEvent(input, env) {
     event.odometerBeforeKm = latestOdo;
     event.odometerAfterKm = latestOdo !== null && event.distanceKm !== null ? Math.round(latestOdo + event.distanceKm) : null;
   }
+  if (event.type === "odometer" && previousOdometerEvent) {
+    const delta = Number(event.odometerKm) - Number(previousOdometerEvent.odometerKm);
+    if (delta > 0 && delta <= 5000) {
+      event.previousOdometerKm = Number(previousOdometerEvent.odometerKm);
+      event.distanceActor = event.actor || "من";
+      event.deltaSincePreviousKm = delta;
+    }
+  }
   if (event.type === "service" && event.serviceKey && !config.serviceIntervals?.[event.serviceKey]) event.metadata.intervalWarning = "service key is not configured";
   const month = event.date.slice(0, 7);
   const file = `data/logs/${month}.json`;
@@ -676,6 +701,7 @@ async function saveEvent(input, env) {
   const id = event.id.slice(0, 8);
   const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `دسته: ${eventTypeLabel(event.type)} · تاریخ: ${event.jalaliDate}، ساعت ${event.time}`, `انجام‌دهنده: ${event.actor || "من"}`];
   if (event.odometerKm !== null) lines.push(`کیلومتر ثبت‌شده: ${formatNum(event.odometerKm)} km`);
+  if (event.deltaSincePreviousKm != null) lines.push(`مسافت از آخرین کیلومتر ثبت‌شده: ${formatNum(event.deltaSincePreviousKm)} km · راننده: ${event.distanceActor || event.actor || "من"}`);
   if (event.distanceKm !== null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km${event.odometerAfterKm !== null ? ` · کارکرد تخمینی جدید: ${formatNum(event.odometerAfterKm)} km` : " · برای تخمین کارکرد، ابتدا /km ثبت کن"}`);
   if (event.liters !== null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر`);
   if (event.costRial !== null) lines.push(`هزینه: ${formatMoneyToman(event.costRial)}`);
@@ -691,6 +717,52 @@ async function saveEvent(input, env) {
 🤖 ربات: ${BOT_URL}
 از دکمه‌های زیر پیام برای جزئیات یا مدیریت همین عملیات استفاده کن.`);
   return lines.join("\n");
+}
+
+async function operationsReport(raw, env) {
+  const arg = normalizeIntentText(raw || "");
+  const all = await loadAllEvents(env);
+  const now = nowTehran();
+  let rows = all.slice().sort((a,b) => eventTimestampForReport(b) - eventTimestampForReport(a));
+  let label = "۲۰ عملیات اخیر";
+  if (/^(?:all|همه|کل)(?:\s|$)/i.test(arg)) label = "تمام عملیات";
+  else if (/^(?:today|امروز)(?:\s|$)/i.test(arg)) {
+    rows = rows.filter(e => String(e.date || e.occurredAt || "").slice(0,10) === now.date); label = "عملیات امروز";
+  } else if (/^(?:week|هفته|7d)(?:\s|$)/i.test(arg)) {
+    const cutoff = Date.now() - 7 * 86400000;
+    rows = rows.filter(e => eventTimestampForReport(e) >= cutoff); label = "عملیات ۷ روز اخیر";
+  } else if (/^(?:month|ماه)(?:\s|$)/i.test(arg)) {
+    rows = rows.filter(e => String(e.date || e.occurredAt || "").slice(0,7) === now.date.slice(0,7)); label = "عملیات ماه جاری";
+  } else rows = rows.slice(0,20);
+  if (!rows.length) return [{ text: `🗂 ${label}\n\nدر این بازه عملیاتی ثبت نشده است.\nبرای ثبت مورد جدید، از /help استفاده کن.` }];
+  const groups = [];
+  for (let i = 0; i < rows.length; i += 7) groups.push(rows.slice(i, i + 7));
+  return groups.map((group, groupIndex) => {
+    const first = groupIndex * 7 + 1;
+    const content = group.map((event, index) => {
+      const id = String(event.id || "").slice(0,8);
+      const date = event.jalaliDate || event.date || "—";
+      const amount = Number(event.costRial) > 0 ? `\nهزینه: ${formatMoneyToman(event.costRial)}` : "";
+      const value = event.odometerKm != null ? `\nکیلومترشمار: ${formatNum(event.odometerKm)} km` : event.liters != null ? `\nسوخت: ${formatNum(event.liters,1)} لیتر` : event.distanceKm != null ? `\nمسافت: ${formatNum(event.distanceKm)} km` : "";
+      const note = event.note ? `\nتوضیح تکمیلی: ${String(event.note).slice(0,90)}` : "";
+      return `${first + index}. ${eventTypeEmoji(event.type)} ${event.title || eventTypeLabel(event.type)}\nشناسه: ${id}\nدسته: ${eventTypeLabel(event.type)}\nتاریخ: ${date} · ${event.time || "—"}\nانجام‌دهنده: ${event.actor || "من"}${value}${amount}${note}`;
+    }).join("\n\n────────────\n\n");
+    const keyboard = { inline_keyboard: group.map(event => [
+      { text: `🔎 ${String(event.id).slice(0,8)} · جزئیات`, callback_data: `evt:${String(event.id).slice(0,8)}:detail` },
+      { text: "✏️ ویرایش", callback_data: `evt:${String(event.id).slice(0,8)}:edit` },
+      { text: "🗑 حذف", callback_data: `evt:${String(event.id).slice(0,8)}:delete` }
+    ]) };
+    return { text: `🗂 ${label} · ${formatNum(first)} تا ${formatNum(first + group.length - 1)} از ${formatNum(rows.length)}\n\n${content}\n\nبرای تمام سوابق:\n/operations all\nخروجی فایل:\n/export all`, markup: keyboard };
+  });
+}
+
+function eventTimestampForReport(event) {
+  const value = event?.occurredAt || (event?.date ? `${event.date}T${event.time || "12:00"}:00+03:30` : event?.createdAt);
+  const stamp = Date.parse(value || "");
+  return Number.isFinite(stamp) ? stamp : 0;
+}
+function escapeTelegramText(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 async function peopleCommand(raw, env) {
@@ -748,7 +820,7 @@ function extractEventMetadata(source, explicitActor, explicitNote, people = []) 
     const family = description.match(/^(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)\s*[:：,،-]?\s+/i);
     if (family) { actor = family[1]; description = description.slice(family[0].length); }
   }
-  const actorMatch = description.match(/(?:توسط|از طرف|انجام(?:\s*دهنده)?|شخص|شخصیت|actor|person|by)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
+  const actorMatch = description.match(/(?:توسط|از طرف|به\s*نام|انجام(?:\s*دهنده)?|شخص|شخصیت|actor|person|by)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
   if (!actor && actorMatch) actor = actorMatch[1].trim();
   if (actorMatch) description = description.replace(actorMatch[0], " ");
   // Explicit assignment syntax is useful for slash commands and automation clients.
@@ -768,6 +840,7 @@ function formatEventDetails(event) {
   if (event.description) lines.push(`شرح عملیات: ${event.description}`);
   if (event.note) lines.push(`توضیح تکمیلی: ${event.note}`);
   if (event.odometerKm != null) lines.push(`کیلومترشمار: ${formatNum(event.odometerKm)} km`);
+  if (event.deltaSincePreviousKm != null) lines.push(`مسافت از ثبت قبلی: ${formatNum(event.deltaSincePreviousKm)} km · به نام ${event.distanceActor || event.actor || "من"}`);
   if (event.distanceKm != null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km`);
   if (event.liters != null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر${event.fullTank ? " · باک کامل" : ""}`);
   if (Number(event.costRial) > 0) lines.push(`مبلغ: ${formatMoneyToman(event.costRial)}`);
@@ -990,17 +1063,23 @@ function calculateDistanceEntries(events) {
     const delta = Number(current.odometerKm) - Number(previous.odometerKm);
     if (delta <= 0 || delta > 5000) continue;
     const start = Date.parse(previous.occurredAt), end = Date.parse(current.occurredAt);
-    for (const trip of events) {
-      if (trip.type === "trip") {
-        const when = Date.parse(trip.occurredAt);
-        if (when > start && when <= end) coveredTrips.add(trip.id);
-      }
+    const trips = events.filter(trip => trip.type === "trip" && Date.parse(trip.occurredAt) > start && Date.parse(trip.occurredAt) <= end && Number(trip.distanceKm) > 0)
+      .sort((a,b)=>String(a.occurredAt).localeCompare(String(b.occurredAt)));
+    const tripDistance = trips.reduce((sum, trip) => sum + Number(trip.distanceKm || 0), 0);
+    trips.forEach(trip => coveredTrips.add(trip.id));
+    if (trips.length && tripDistance <= delta) {
+      // Explicit trip rows get their own drivers; attribute only the unexplained remainder to the newer odometer's actor.
+      for (const trip of trips) result.push({ date: trip.date || String(trip.occurredAt).slice(0, 10), occurredAt: trip.occurredAt, distanceKm: Number(trip.distanceKm), actor: String(trip.actor || "من").trim() || "من", source: "trip_within_odometer", eventId: trip.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
+      const residual = delta - tripDistance;
+      if (residual > 0) result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: residual, actor: String(current.actor || "من").trim() || "من", source: "odometer_residual", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
+    } else {
+      // With no explicit trips (or inconsistent trip totals), use the odometer interval as a single estimate.
+      result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: delta, actor: String(current.actor || "من").trim() || "من", source: "odometer_delta", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
     }
-    result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: delta, source: "odometer_delta", fromId: previous.id, toId: current.id });
   }
   for (const event of events) {
     if (event.type === "trip" && !coveredTrips.has(event.id) && Number(event.distanceKm) > 0) {
-      result.push({ date: event.date || String(event.occurredAt).slice(0, 10), occurredAt: event.occurredAt, distanceKm: Number(event.distanceKm), source: "trip", eventId: event.id });
+      result.push({ date: event.date || String(event.occurredAt).slice(0, 10), occurredAt: event.occurredAt, distanceKm: Number(event.distanceKm), actor: String(event.actor || "من").trim() || "من", source: "trip", eventId: event.id });
     }
   }
   return result.sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)));
@@ -1300,10 +1379,10 @@ async function sendText(env, chatId, text, keyboard = false) {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN secret is missing.");
   const rawText = String(text || "");
   const boundedText = rawText.length > 3300 ? `${rawText.slice(0, 3150)}\n… ادامه برای جلوگیری از محدودیت طول پیام کوتاه شد.` : rawText;
-  const withNavigation = boundedText.includes(SITE_URL) ? boundedText : `${boundedText}\n\n🌐 داشبورد: ${SITE_URL}\n🤖 ربات: ${BOT_URL}`;
+  const withNavigation = boundedText.includes(SITE_URL) && boundedText.includes(BOT_URL) ? boundedText : `${boundedText}\n\n🌐 داشبورد: ${SITE_URL}\n🤖 ربات: ${BOT_URL}`;
   const body = { chat_id: chatId, text: telegramHtml(withNavigation), parse_mode: "HTML", disable_web_page_preview: true };
   if (keyboard && typeof keyboard === "object") body.reply_markup = keyboard;
-  else if (keyboard) body.reply_markup = { keyboard: [[{ text: "/km" }, { text: "/summary" }, { text: "/due" }], [{ text: "/fuelstats" }, { text: "/fines" }, { text: "/export" }, { text: "/backup" }]], resize_keyboard: true, is_persistent: true };
+  else if (keyboard) body.reply_markup = { keyboard: [[{ text: "/km" }, { text: "/summary" }, { text: "/due" }], [{ text: "/fuelstats" }, { text: "/fines" }, { text: "/operations" }, { text: "/export all" }], [{ text: "/backup" }]], resize_keyboard: true, is_persistent: true };
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(`Telegram sendMessage failed: ${JSON.stringify(data).slice(0, 300)}`);
@@ -1313,8 +1392,9 @@ async function sendDocument(env, chatId, filename, blob, caption) {
   const form = new FormData();
   form.set("chat_id", String(chatId));
   const captionText = String(caption || "");
-  const captionWithLinks = captionText.includes(SITE_URL) ? captionText : `${captionText}\n🌐 ${SITE_URL}\n🤖 ${BOT_URL}`;
-  form.set("caption", captionWithLinks.slice(0, 1000));
+  const captionWithLinks = captionText.includes(SITE_URL) && captionText.includes(BOT_URL) ? captionText : `${captionText}\n🌐 ${SITE_URL}\n🤖 ${BOT_URL}`;
+  form.set("caption", telegramHtml(captionWithLinks).slice(0, 1000));
+  form.set("parse_mode", "HTML");
   form.set("document", blob, filename);
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
   const data = await response.json().catch(() => ({}));

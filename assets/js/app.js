@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], range: 6, shown: 12, filtered: [], refreshedAt: null };
+  const state = { events: [], config: null, months: [], range: 6, analyticsPeriod: 'month', shown: 12, filtered: [], refreshedAt: null };
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
     expense: 'هزینه', fine: 'جریمه', wash: 'کارواش', issue: 'خرابی', repair: 'تعمیر', note: 'یادداشت'
@@ -42,10 +42,15 @@
     $('#monthFilter').addEventListener('change', updateJournal);
     $('#actorFilter')?.addEventListener('change', updateJournal);
     $('#loadMoreButton').addEventListener('click', () => { state.shown += 12; renderJournal(); });
+    $$('[data-analytics-period]').forEach(button => button.addEventListener('click', () => {
+      $$('[data-analytics-period]').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', active ? 'true' : 'false'); });
+      state.analyticsPeriod = button.dataset.analyticsPeriod || 'month';
+      renderAnalytics();
+    }));
     $$('.range-button').forEach(button => button.addEventListener('click', () => {
       $$('.range-button').forEach(x => x.classList.toggle('active', x === button));
       state.range = Number(button.dataset.range) || 6;
-      renderAnalytics();
+      renderFuelPage(); renderExpensePage();
     }));
     $('#copyHelpButton').addEventListener('click', async () => {
       const help = 'کیلومتر ۱۵۶۲۰۰\nامروز ۸۵ کیلومتر رانندگی کردم\n۲۰ لیتر بنزین · هزینه ۷۰۰ هزار تومان · کیلومتر ۱۵۶۲۰۰\nروغن موتور را عوض کردم · هزینه ۹۰۰ هزار تومان · کیلومتر ۱۵۶۰۰۰\nخرابی: صدای جلوبندی\nجریمه سرعت ۵۰۰ هزار تومان\nکارواش ۱۸۰ هزار تومان';
@@ -221,35 +226,115 @@
   }
 
   function renderAnalytics() {
-    const nowMonth = localDateString(new Date()).slice(0, 7);
-    const months = getMonthKeys(nowMonth, state.range);
+    const period = state.analyticsPeriod || 'month';
+    const buckets = buildAnalyticsBuckets(period);
     const distanceEntries = calculateDistanceEntries(state.events);
-    const datasets = months.map(month => {
-      const items = state.events.filter(e => String(e.date || e.occurredAt || '').slice(0, 7) === month);
+    const bucketIndex = timestamp => buckets.findIndex(bucket => timestamp >= bucket.start && timestamp < bucket.end);
+    const eventTime = event => eventEpoch(event);
+    const expenseTime = event => {
+      const value = event.type === 'fine' && event.paid && event.paidAt ? event.paidAt
+        : event.type === 'issue' && Number(event.repairCostRial) > 0 && event.resolvedAt ? event.resolvedAt
+        : event.occurredAt || (event.date ? `${event.date}T${event.time || '12:00'}:00+03:30` : event.createdAt);
+      const t = Date.parse(value || ''); return Number.isFinite(t) ? t : 0;
+    };
+    const rangeEvents = state.events.filter(event => bucketIndex(eventTime(event)) >= 0);
+    const rangeExpenses = state.events.filter(event => isActualExpense(event) && bucketIndex(expenseTime(event)) >= 0);
+    const rangeDistance = distanceEntries.filter(entry => bucketIndex(eventEpoch(entry)) >= 0);
+    const datasets = buckets.map((bucket, index) => {
+      const items = rangeEvents.filter(event => bucketIndex(eventTime(event)) === index);
+      const costs = rangeExpenses.filter(event => bucketIndex(expenseTime(event)) === index);
+      const dist = rangeDistance.filter(entry => bucketIndex(eventEpoch(entry)) === index);
       return {
-        month,
-        label: monthShort(month),
-        cost: sum(state.events.filter(e => isActualExpense(e) && expenseDate(e).slice(0, 7) === month), e => e.costRial) / 10,
+        month: bucket.key, label: bucket.label, start: bucket.start, end: bucket.end,
+        cost: sum(costs, e => e.costRial) / 10,
         fuel: sum(items.filter(e => e.type === 'fuel'), e => e.liters),
-        distance: distanceEntries.filter(entry => String(entry.date).slice(0, 7) === month).reduce((total, entry) => total + entry.distanceKm, 0)
+        distance: sum(dist, e => e.distanceKm),
+        eventCount: items.length,
+        services: items.filter(e => ['service','part','repair'].includes(e.type)).length,
+        expenses: costs.length,
+        unpaidFines: items.filter(e => e.type === 'fine' && !e.paid).length,
+        fuelCost: sum(items.filter(e => e.type === 'fuel'), e => e.costRial) / 10
       };
     });
-    const totalCost = datasets.reduce((s, d) => s + d.cost, 0);
-    const totalFuel = datasets.reduce((s, d) => s + d.fuel, 0);
+    const totalCost = sum(datasets, d => d.cost);
+    const totalFuel = sum(datasets, d => d.fuel);
+    const totalDistance = sum(datasets, d => d.distance);
+    const selectedUnpaid = rangeEvents.filter(e => e.type === 'fine' && !e.paid);
+    const selectedUnpaidRial = sum(selectedUnpaid, e => e.costRial);
     $('#costChartTotal').textContent = moneyText(totalCost) + ' تومان';
     $('#fuelChartTotal').textContent = `${formatNumber(totalFuel, 1)} لیتر`;
-    $('#costChart').innerHTML = barChart(datasets, 'cost', { id: 'expense', color: 'cyan', empty: 'در بازه انتخابی هزینه‌ای ثبت نشده است.' });
+    $('#costChart').innerHTML = barChart(datasets, 'cost', { id: 'expense', color: 'cyan', unit: 'تومان', empty: 'در بازه انتخابی هزینه‌ای ثبت نشده است.' });
     $('#fuelChart').innerHTML = mixedChart(datasets);
-    renderActorInsights();
-    renderCostPerKm();
-    renderInsights(datasets);
+    const periodLabels = { hour: '۲۴ ساعت اخیر', day: '۳۰ روز اخیر', week: '۱۲ هفته اخیر', month: '۱۲ ماه اخیر' };
+    const chartTitles = { hour: ['هزینه به تفکیک ساعت','سوخت و مسافت ساعتی'], day: ['هزینه به تفکیک روز','سوخت و مسافت روزانه'], week: ['هزینه به تفکیک هفته','سوخت و مسافت هفتگی'], month: ['روند هزینه ماهانه','سوخت و مسافت ماهانه'] };
+    const labelRoot = $('#analyticsPeriodLabel'); if (labelRoot) labelRoot.textContent = periodLabels[period] || periodLabels.month;
+    const titles = chartTitles[period] || chartTitles.month;
+    if ($('#costChartTitle')) $('#costChartTitle').textContent = titles[0];
+    if ($('#fuelChartTitle')) $('#fuelChartTitle').textContent = titles[1];
+    const put = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
+    put('#periodEventsNumber', formatNumber(rangeEvents.length));
+    put('#periodDistanceNumber', formatNumber(totalDistance));
+    put('#periodFuelNumber', `${formatNumber(totalFuel, 1)} L`);
+    put('#periodCostNumber', compactMoney(totalCost));
+    put('#periodFineNumber', formatNumber(selectedUnpaid.length));
+    put('#periodFineFoot', selectedUnpaid.length ? `بدهی ثبت‌شده: ${moneyText(selectedUnpaidRial / 10)} تومان` : 'جریمهٔ پرداخت‌نشده در این بازه نیست');
+    put('#periodServiceNumber', formatNumber(sum(datasets, d => d.services)));
+    const currentBucket = datasets[datasets.length - 1];
+    put('#analyticsChartCaption', `${periodLabels[period]} · ${formatNumber(sum(datasets,d=>d.eventCount))} رویداد · ${formatNumber(totalDistance)} کیلومتر · ${moneyText(totalCost)} تومان هزینهٔ پرداخت‌شده`);
+    renderActorInsights(rangeExpenses);
+    renderDriverInsights(rangeDistance);
+    renderCostPerKm(rangeExpenses, rangeDistance);
+    renderAnalyticsCategories(rangeEvents);
+    renderInsights(datasets, period);
   }
 
-  function renderActorInsights() {
+  function buildAnalyticsBuckets(period) {
+    const now = Date.now(), offset = 210 * 60 * 1000, hour = 3600000, day = 86400000;
+    const local = new Date(now + offset);
+    let starts = [], count, base, unit;
+    if (period === 'hour') {
+      count = 24; unit = hour; base = Math.floor((now + offset) / hour) * hour - offset;
+      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+    } else if (period === 'day') {
+      count = 30; unit = day; base = Math.floor((now + offset) / day) * day - offset;
+      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+    } else if (period === 'week') {
+      count = 12; unit = 7 * day;
+      const localMidnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - offset;
+      base = localMidnight - ((local.getUTCDay() + 1) % 7) * day;
+      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
+    } else {
+      count = 12;
+      for (let i = count - 1; i >= 0; i--) starts.push(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - i, 1) - offset);
+    }
+    return starts.map((start, index) => {
+      const end = starts[index + 1] || (period === 'month' ? Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 1) - offset : start + unit);
+      const d = new Date(start + offset);
+      const dateString = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      let label = '';
+      if (period === 'hour') label = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', hourCycle: 'h23' }).format(new Date(start));
+      else if (period === 'day') label = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', day: 'numeric', month: 'numeric' }).format(new Date(start + 12 * hour));
+      else if (period === 'week') label = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', day: 'numeric', month: 'short' }).format(new Date(start + 12 * hour));
+      else label = monthShort(dateString.slice(0,7));
+      return { start, end, key: period + ':' + start, date: dateString, label, period };
+    });
+  }
+
+  function renderAnalyticsCategories(events) {
+    const root = $('#analyticsCategoryBreakdown'); if (!root) return;
+    const counts = new Map();
+    events.forEach(event => { const key = event.type || 'note'; counts.set(key, (counts.get(key) || 0) + 1); });
+    const rows = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+    if (!rows.length) { root.innerHTML = '<div class="empty-state">در بازهٔ انتخابی رویدادی ثبت نشده است.</div>'; return; }
+    const max = Math.max(1,...rows.map(row=>row[1]));
+    root.innerHTML = rows.map(([type,count],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${typeIcons[type]||'◈'}</i>${escapeHtml(typeLabels[type]||type)}</span><strong>${formatNumber(count)} <small>رویداد</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,count/max*100)}%"></span></div></div>`).join('');
+  }
+
+  function renderActorInsights(expenseEvents = state.events.filter(isActualExpense)) {
     const root = $('#actorCostBreakdown');
     if (!root) return;
     const totals = new Map();
-    state.events.filter(e => isActualExpense(e) && Number(e.costRial) > 0).forEach(event => {
+    expenseEvents.filter(e => isActualExpense(e) && Number(e.costRial) > 0).forEach(event => {
       const actor = String(event.actor || 'من').trim() || 'من';
       totals.set(actor, (totals.get(actor) || 0) + Number(event.costRial) / 10);
     });
@@ -259,11 +344,21 @@
     root.innerHTML = rows.map(([actor, cost], index) => `<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index + 1}</i>${escapeHtml(actor)}</span><strong>${escapeHtml(moneyText(cost))} <small>تومان</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2, cost / max * 100)}%"></span></div><small class="actor-cost-share">${formatNumber(cost / rows.reduce((n, row) => n + row[1], 0) * 100, 1)}٪ از هزینه‌های تفکیک‌شده</small></div>`).join('');
   }
 
-  function renderCostPerKm() {
+  function renderDriverInsights(distanceEntries = calculateDistanceEntries(state.events)) {
+    const root = $('#actorDistanceBreakdown'); if (!root) return;
+    const totals = new Map();
+    distanceEntries.forEach(entry => { const actor = String(entry.actor || 'من').trim() || 'من'; totals.set(actor, (totals.get(actor) || 0) + (Number(entry.distanceKm) || 0)); });
+    const rows = [...totals.entries()].sort((a,b)=>b[1]-a[1]);
+    if (!rows.length) { root.innerHTML = '<div class="empty-state">برای محاسبه مسافت هر راننده، کیلومترشمار را در دو یا چند نوبت ثبت کن. رانندهٔ ثبت دوم به فاصلهٔ بین دو ثبت منتسب می‌شود.</div>'; return; }
+    const total = rows.reduce((n,row)=>n+row[1],0), max = Math.max(1,...rows.map(row=>row[1]));
+    root.innerHTML = rows.map(([actor,km],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index+1}</i>${escapeHtml(actor)}</span><strong>${formatNumber(km)} <small>km</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,km/max*100)}%"></span></div><small class="actor-cost-share">${formatNumber(total ? km/total*100 : 0,1)}٪ از مسافت قابل محاسبه در بازه</small></div>`).join('');
+  }
+
+  function renderCostPerKm(expenseEvents = state.events.filter(isActualExpense), distanceEntries = calculateDistanceEntries(state.events)) {
     const value = $('#costPerKmValue');
     if (!value) return;
-    const costRial = sum(state.events.filter(e => isActualExpense(e)), e => e.costRial);
-    const kms = calculateDistanceEntries(state.events).reduce((total, entry) => total + (Number(entry.distanceKm) || 0), 0);
+    const costRial = sum(expenseEvents.filter(e => isActualExpense(e)), e => e.costRial);
+    const kms = distanceEntries.reduce((total, entry) => total + (Number(entry.distanceKm) || 0), 0);
     if (!(kms > 0) || !(costRial > 0)) {
       value.textContent = '—';
       $('#costPerKmFoot').textContent = 'هنوز هم‌زمان هزینه و مسافت قابل محاسبه کافی ثبت نشده است.';
@@ -286,11 +381,13 @@
       const y = top + plotH * t;
       return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${width-right}" y="${y-4}" text-anchor="end">${axisShort(max * (1-t))}</text>`;
     }).join('');
+    const labelEvery = data.length > 20 ? 4 : data.length > 12 ? 2 : 1;
     const bars = data.map((d, i) => {
       const bh = (d[key] / max) * plotH;
       const x = left + i * slot + (slot - barW) / 2;
       const y = top + plotH - bh;
-      return `<g><title>${escapeHtml(d.month)}: ${formatNumber(d[key], 1)} ${escapeHtml(options.unit || 'تومان')}</title><rect class="bar-expense" x="${x}" y="${y}" width="${barW}" height="${Math.max(0,bh)}" rx="5"/><text class="axis-text" x="${x+barW/2}" y="${height-10}" text-anchor="middle">${escapeHtml(d.label)}</text></g>`;
+      const tick = i % labelEvery === 0 || i === data.length - 1 ? d.label : '';
+      return `<g><title>${escapeHtml(d.month)}: ${formatNumber(d[key], 1)} ${escapeHtml(options.unit || 'تومان')}</title><rect class="bar-expense" x="${x}" y="${y}" width="${barW}" height="${Math.max(0,bh)}" rx="5"/><text class="axis-text" x="${x+barW/2}" y="${height-10}" text-anchor="middle">${escapeHtml(tick)}</text></g>`;
     }).join('');
     return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار میله‌ای هزینه‌های ماهانه"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#71f0f7"/><stop offset="1" stop-color="#2f79d7" stop-opacity=".56"/></linearGradient></defs>${lines}${bars}</svg>`;
   }
@@ -307,11 +404,12 @@
     const points = data.map((d,i)=>({x:left+i*slot+slot/2,y:top+plotH-(d.distance/maxDist*plotH),d}));
     const path = points.map((p,i)=>`${i?'L':'M'} ${p.x} ${p.y}`).join(' ');
     const circles = points.map(p=>`<g><title>${escapeHtml(p.d.month)}: ${formatNumber(p.d.distance)} کیلومتر</title><circle class="point-distance" cx="${p.x}" cy="${p.y}" r="3.5"/></g>`).join('');
-    const labels = data.map((d,i)=>`<text class="axis-text" x="${left+i*slot+slot/2}" y="${height-10}" text-anchor="middle">${escapeHtml(d.label)}</text>`).join('');
+    const labelEvery = data.length > 20 ? 4 : data.length > 12 ? 2 : 1;
+    const labels = data.map((d,i)=>`<text class="axis-text" x="${left+i*slot+slot/2}" y="${height-10}" text-anchor="middle">${escapeHtml(i % labelEvery === 0 || i === data.length - 1 ? d.label : '')}</text>`).join('');
     return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار سوخت و مسافت"><defs><linearGradient id="fuelGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffbc79"/><stop offset="1" stop-color="#bb6a4b" stop-opacity=".42"/></linearGradient></defs>${grid}${bars}<path class="line-distance" d="${path}"/>${circles}${labels}</svg><div class="chart-legend"><span><i class="legend-fuel"></i>سوخت (لیتر)</span><span><i class="legend-distance"></i>مسافت (کیلومتر، مقیاس مستقل)</span></div>`;
   }
 
-  function renderInsights(datasets) {
+  function renderInsights(datasets, period = 'month') {
     const allFuel = state.events.filter(e => e.type === 'fuel');
     const fullTanks = allFuel.filter(e => e.fullTank && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
     let consumption = 'برای محاسبه دقیق‌تر، دو سوخت‌گیری با باک کامل و کیلومترشمار ثبت کن.';
@@ -328,7 +426,8 @@
     $('#topCostInsight').textContent = top ? `${typeLabels[top[0]] || top[0]} با حدود ${moneyText(top[1]/10)} تومان، بیشترین هزینه ثبت‌شده را دارد.` : 'هنوز هزینه کافی برای مقایسه دسته‌ها ثبت نشده است.';
     const totalDistance = datasets.reduce((s,d)=>s+d.distance,0);
     const activeMonths = datasets.filter(d=>d.distance>0).length;
-    $('#driveInsight').textContent = totalDistance ? `در ${formatNumber(activeMonths)} ماه از بازه انتخابی، ${formatNumber(totalDistance)} کیلومتر مسافت ثبت شده است. اگر فقط کارکرد کیلومترشمار را ثبت کرده باشی، مسافت بین ثبت‌ها جداگانه قابل تخمین است.` : 'مسافتی در بازه انتخابی محاسبه نشده؛ ثبت کیلومترشمار در چند نوبت روز یا استفاده از /trip تحلیل را دقیق‌تر می‌کند.';
+    const windowLabel = ({hour:'ساعت',day:'روز',week:'هفته',month:'ماه'})[period] || 'بازه';
+    $('#driveInsight').textContent = totalDistance ? `در ${formatNumber(activeMonths)} ${windowLabel} از بازهٔ انتخابی، ${formatNumber(totalDistance)} کیلومتر مسافت محاسبه شده است. فاصلهٔ بین دو کیلومترشمار به نام راننده‌ای منظور می‌شود که کیلومتر جدید را ثبت کرده است.` : 'مسافتی در بازه انتخابی محاسبه نشده؛ کیلومترشمار را در چند نوبت با نام راننده ثبت کن یا از /trip استفاده کن.';
   }
 
   function renderOverviewExtras() {
@@ -444,7 +543,7 @@
   function exportExpensesCsv() {
     const rows = state.events.filter(e=>isActualExpense(e)&&Number(e.costRial)>0);
     if (!rows.length) { showToast('هزینه‌ای برای خروجی وجود ندارد.'); return; }
-    const keys=['id','type','title','description','occurredAt','jalaliDate','odometerKm','costRial','paid','paidAt','resolvedAt'];
+    const keys=['id','type','title','description','actor','note','occurredAt','jalaliDate','odometerKm','distanceKm','liters','costRial','paid','paidAt','resolvedAt','updatedAt','revision'];
     const csv=[keys.join(','),...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-expenses-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('خروجی هزینه‌های قابل محاسبه آماده شد.');
   }
@@ -519,7 +618,7 @@
   function exportCsv() {
     const rows = state.filtered.slice();
     if (!rows.length) { showToast('با فیلتر فعلی داده‌ای برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-${localDateString(new Date())}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8');
     showToast('خروجی CSV آماده شد.');
@@ -560,15 +659,27 @@
       const delta=Number(current.odometerKm)-Number(previous.odometerKm);
       if (delta<=0 || delta>5000) continue;
       const start=eventEpoch(previous), end=eventEpoch(current);
-      for (const trip of events) if (trip.type==='trip' && eventEpoch(trip)>start && eventEpoch(trip)<=end) coveredTrips.add(trip.id);
-      result.push({date:current.date || String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:delta,source:'odometer_delta'});
+      const trips=events.filter(trip=>trip.type==='trip'&&eventEpoch(trip)>start&&eventEpoch(trip)<=end&&Number(trip.distanceKm)>0).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+      const tripDistance=trips.reduce((total,trip)=>total+(Number(trip.distanceKm)||0),0);
+      trips.forEach(trip=>coveredTrips.add(trip.id));
+      if(trips.length&&tripDistance<=delta){
+        for(const trip of trips) result.push({date:trip.date||String(trip.occurredAt||'').slice(0,10),occurredAt:trip.occurredAt,distanceKm:Number(trip.distanceKm),actor:String(trip.actor||'من').trim()||'من',source:'trip_within_odometer',eventId:trip.id,fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm)});
+        const residual=delta-tripDistance;
+        if(residual>0) result.push({date:current.date||String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:residual,actor:String(current.actor||'من').trim()||'من',source:'odometer_residual',fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm)});
+      } else {
+        result.push({date:current.date||String(current.occurredAt||'').slice(0,10),occurredAt:current.occurredAt,distanceKm:delta,actor:String(current.actor||'من').trim()||'من',fromOdometerKm:Number(previous.odometerKm),toOdometerKm:Number(current.odometerKm),source:'odometer_delta'});
+      }
     }
-    for (const event of events) if (event.type==='trip' && !coveredTrips.has(event.id) && Number(event.distanceKm)>0) result.push({date:event.date || String(event.occurredAt||'').slice(0,10),occurredAt:event.occurredAt,distanceKm:Number(event.distanceKm),source:'trip'});
+    for (const event of events) if (event.type==='trip' && !coveredTrips.has(event.id) && Number(event.distanceKm)>0) result.push({date:event.date||String(event.occurredAt||'').slice(0,10),occurredAt:event.occurredAt,distanceKm:Number(event.distanceKm),actor:String(event.actor||'من').trim()||'من',source:'trip',eventId:event.id});
     return result.sort((a,b)=>eventEpoch(a)-eventEpoch(b));
   }
+
   function countOdometerSources(events) { return events.filter(e=>e.type==='odometer'||e.type==='trip').length; }
   function sum(rows, selector) { return rows.reduce((total,row)=>total+(Number(selector(row))||0),0); }
-  function eventEpoch(event) { const t = Date.parse(event?.occurredAt || event?.date || event?.createdAt || ''); return Number.isFinite(t) ? t : 0; }
+  function eventEpoch(event) {
+    const value = event?.occurredAt || (event?.date ? `${String(event.date).slice(0,10)}T${event?.time || '12:00'}:00+03:30` : event?.createdAt);
+    const t = Date.parse(value || ''); return Number.isFinite(t) ? t : 0;
+  }
   function localDateString(date) {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
     const p = Object.fromEntries(parts.filter(x=>x.type!=='literal').map(x=>[x.type,x.value])); return `${p.year}-${p.month}-${p.day}`;

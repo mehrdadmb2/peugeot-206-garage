@@ -56,7 +56,7 @@
         <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR CAR. EVERY DETAIL. ONE TIMELINE.</div>
         <h1>دفتر هوشمند<br><span>پژو ۲۰۶</span></h1>
         <p class="hero-lead">هر کیلومتر، هر لیتر، هر سرویس و هر هزینه؛ ثبت‌شده در تلگرام، مرتب در گیت‌هاب، قابل بررسی در یک داشبورد زنده.</p>
-        <div class="hero-tags"><span>PEUGEOT</span><span>206 SD</span><span>MODEL YEAR 1387</span><span class="tag-live"><i></i> TELEGRAM LINK</span></div>
+        <div class="hero-tags"><span>🚘 PEUGEOT</span><span>💎 206 SD</span><span>📅 MODEL YEAR 1387</span><span>🧭 DRIVER LOG</span><span class="tag-live"><i></i> LIVE TELEGRAM</span></div>
         <div class="hero-actions"><a class="primary-button" href="#activity"><span>⌁</span> مشاهده دفتر وقایع</a><button class="secondary-button" id="copyHelpButton" type="button">کپی نمونه دستورها <span>↗</span></button><a class="secondary-button hero-telegram-link" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">مدیریت از تلگرام ✈</a></div>
         <div class="hero-meta"><span class="tiny-pulse"></span><span id="lastUpdated">در انتظار اولین ثبت اطلاعات</span><span class="meta-divider"></span><span>زمان محلی: ایران · Asia/Tehran</span></div>
       </div>
@@ -106,14 +106,30 @@
     </div>
     <div class="view-pane" data-view-pane="analytics" id="page-analytics">
 <section class="section-block" id="analytics" aria-labelledby="analyticsTitle">
-      <div class="section-heading"><div><span class="section-kicker">COST INTELLIGENCE / 03</span><h2 id="analyticsTitle">تحلیل هزینه و رانندگی</h2></div><div class="range-switch" role="group" aria-label="بازه نمودار"><button class="range-button active" data-range="6" type="button">۶ ماه</button><button class="range-button" data-range="12" type="button">۱۲ ماه</button></div></div>
+      <div class="section-heading"><div><span class="section-kicker">GARAGE INTELLIGENCE / LIVE</span><h2 id="analyticsTitle">مرکز تحلیل و آمار خودرو</h2><p id="analyticsChartCaption" class="analytics-live-caption">تحلیل داده‌های واقعی ثبت‌شده؛ به‌روزرسانی بر اساس بازهٔ انتخابی</p></div><span id="analyticsPeriodLabel" class="analytics-window-badge">۱۲ ماه اخیر</span></div>
+      <div class="analytics-period-control" role="group" aria-label="بازه زمانی تحلیل">
+        <button type="button" data-analytics-period="hour" aria-pressed="false"><span>◷</span><b>ساعتی</b><small>۲۴ ساعت</small></button>
+        <button type="button" data-analytics-period="day" aria-pressed="false"><span>▦</span><b>روزانه</b><small>۳۰ روز</small></button>
+        <button type="button" data-analytics-period="week" aria-pressed="false"><span>▤</span><b>هفتگی</b><small>۱۲ هفته</small></button>
+        <button type="button" data-analytics-period="month" class="active" aria-pressed="true"><span>▥</span><b>ماهانه</b><small>۱۲ ماه</small></button>
+      </div>
+      <div class="period-summary-grid" aria-label="خلاصه بازه انتخابی">
+        <article class="period-summary-card"><span>🧾 رویدادها</span><strong id="periodEventsNumber">—</strong><small>تعداد ثبت‌ها در بازه</small></article>
+        <article class="period-summary-card"><span>🚗 مسافت محاسبه‌شده</span><strong id="periodDistanceNumber">—</strong><small>کیلومتر · با انتساب به راننده</small></article>
+        <article class="period-summary-card"><span>⛽ سوخت مصرفی ثبت‌شده</span><strong id="periodFuelNumber">—</strong><small>لیتر بنزین ثبت‌شده</small></article>
+        <article class="period-summary-card"><span>💳 هزینهٔ پرداخت‌شده</span><strong id="periodCostNumber">—</strong><small>تومان · بدون جریمه‌های پرداخت‌نشده</small></article>
+        <article class="period-summary-card period-summary-warning"><span>🚦 جریمه‌های باز</span><strong id="periodFineNumber">—</strong><small id="periodFineFoot">مجموع جریمه‌های باز در بازه</small></article>
+        <article class="period-summary-card"><span>🧰 سرویس و تعمیر</span><strong id="periodServiceNumber">—</strong><small>تعداد سرویس، قطعه و تعمیر</small></article>
+      </div>
       <div class="analytics-grid">
-        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">MONTHLY EXPENSES</span><h3>هزینه‌های ماهانه</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="costChart" class="chart-wrap"><div class="empty-state">با ثبت هزینه‌ها، نمودار اینجا ساخته می‌شود.</div></div><div class="chart-footer"><span>مجموع بازه انتخابی</span><strong id="costChartTotal">—</strong></div></article>
-        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">FUEL & DISTANCE</span><h3>سوخت و مسافت ثبت‌شده</h3></div><span class="chart-tag chart-tag-cyan"><i></i> L / KM</span></div><div id="fuelChart" class="chart-wrap"><div class="empty-state">هنوز داده‌ای برای تحلیل سوخت وجود ندارد.</div></div><div class="chart-footer"><span>سوخت در بازه انتخابی</span><strong id="fuelChartTotal">—</strong></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">MONTHLY EXPENSES</span><h3 id="costChartTitle">روند هزینه</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="costChart" class="chart-wrap"><div class="empty-state">با ثبت هزینه‌ها، نمودار اینجا ساخته می‌شود.</div></div><div class="chart-footer"><span>مجموع بازه انتخابی</span><strong id="costChartTotal">—</strong></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">FUEL & DISTANCE</span><h3 id="fuelChartTitle">سوخت و مسافت ثبت‌شده</h3></div><span class="chart-tag chart-tag-cyan"><i></i> L / KM</span></div><div id="fuelChart" class="chart-wrap"><div class="empty-state">هنوز داده‌ای برای تحلیل سوخت وجود ندارد.</div></div><div class="chart-footer"><span>سوخت در بازه انتخابی</span><strong id="fuelChartTotal">—</strong></div></article>
       </div>
       <section class="section-block analytics-grid actor-analytics-grid" aria-label="هزینه بر اساس شخص">
         <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">SPENDING BY PERSON</span><h3>هزینه‌های هر شخص</h3></div><span class="chart-tag chart-tag-cyan"><i></i> تومان</span></div><div id="actorCostBreakdown" class="actor-cost-breakdown"><div class="empty-state">آمار شخصی پس از بارگیری سوابق محاسبه می‌شود.</div></div><p class="analytics-footnote">هزینه‌ها بر اساس فیلد «انجام‌دهنده» جمع می‌شوند؛ رویدادهای جریمه فقط پس از پرداخت در هزینهٔ واقعی شمرده می‌شوند.</p></article>
         <article class="chart-card panel cost-per-km-card"><div class="chart-heading"><div><span class="card-overline">COST EFFICIENCY</span><h3>هزینه به‌ازای هر کیلومتر</h3></div><span class="chart-tag"><i></i> تومان / km</span></div><div class="cost-per-km-metric"><strong id="costPerKmValue">—</strong><span>تومان برای هر کیلومتر</span></div><p id="costPerKmFoot" class="analytics-footnote">برای محاسبه به هزینه و مسافت قابل محاسبه نیاز است.</p><div class="cost-ratio-track"><span id="costPerKmTrack"></span></div></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">DRIVER DISTANCE SHARE</span><h3>مسافت رانندگی هر شخص</h3></div><span class="chart-tag chart-tag-cyan"><i></i> کیلومتر</span></div><div id="actorDistanceBreakdown" class="actor-cost-breakdown"><div class="empty-state">برای محاسبه مسافت هر راننده، کیلومترشمار را در دو یا چند نوبت ثبت کن.</div></div><p class="analytics-footnote">اگر در پیام «بابام کیلومتر ۴۳۱۳۸۱» بنویسی، فاصلهٔ بین کیلومتر ثبت قبلی و این عدد به نام بابات محاسبه می‌شود؛ تا زمانی که کیلومتر بعدی ثبت شود، این فاصله تقریبی است.</p></article>
+        <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">ACTIVITY MIX</span><h3>ترکیب عملیات ثبت‌شده</h3></div><span class="chart-tag"><i></i> تعداد</span></div><div id="analyticsCategoryBreakdown" class="actor-cost-breakdown"><div class="empty-state">تحلیل دسته‌ها در حال آماده‌سازی است.</div></div><p class="analytics-footnote">ترکیب دسته‌ها با انتخاب بازهٔ ساعتی، روزانه، هفتگی یا ماهانه به‌روزرسانی می‌شود.</p></article>
       </section>
       <div class="insights-grid">
         <article class="insight-card panel"><div class="insight-icon">⛽</div><div><span class="card-overline">FUEL INTELLIGENCE</span><h3>مصرف واقعی سوخت</h3><p id="fuelInsight">برای به‌دست‌آوردن مصرف تقریبی در لیتر بر ۱۰۰ کیلومتر، حداقل دو سوخت‌گیری با علامت «باک کامل» و کیلومتر ثبت‌شده لازم است.</p></div></article>
@@ -175,6 +191,7 @@
         <article class="command-card"><span>⇩ EXPORT</span><code>/export all</code><p>ارسال CSV همه سوابق؛ /backup نسخه JSON کامل را به تلگرام می‌فرستد.</p></article>
         <article class="command-card"><span>👤 PEOPLE</span><code>/people add بابام</code><p>افزودن شخص دلخواه؛ شروع پیام با «بابام: ...» انتساب را ثبت می‌کند.</p></article>
         <article class="command-card"><span>✏️ EDIT</span><code>/detail a1b2c3d4</code><p>جزئیات رویداد و دکمه‌های ویرایش، تغییر شخص، توضیح و حذف تأییدشده.</p></article>
+        <article class="command-card"><span>🗂 OPERATION INDEX</span><code>/operations all</code><p>ارسال تمام عملیات با شناسه و دکمه‌های جزئیات، ویرایش و حذف؛ با /operations today یا week نیز می‌توان بازه را محدود کرد.</p></article>
       </div></section>
     </div>
 <section class="section-block workflow-banner panel">
@@ -182,7 +199,7 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <a class="secondary-button" href="#top">بازگشت به بالا ↑</a>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.0.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.1.0</b></span></footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>

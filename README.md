@@ -351,3 +351,17 @@ These local tests verify key routing and authorization behavior with mocked requ
 - Telegram Bot API: <https://core.telegram.org/bots/api>
 - Cloudflare Workers secrets: <https://developers.cloudflare.com/workers/configuration/secrets/>
 - GitHub Contents API: <https://docs.github.com/en/rest/repos/contents>
+
+
+## Garage OS 3.1.0 — Time Intelligence & Driver Attribution
+
+- Analytics can switch between 24 hourly buckets, 30 daily buckets, 12 weekly buckets (Saturday-start Persian week), and 12 monthly buckets.
+- Period cards summarize event count, distance, fuel, paid expense, unpaid fines, and service/repair count for the selected window.
+- Odometer intervals are attributed to the actor on the newer reading. For example, `بابام کیلومتر 431381` assigns the distance since the prior valid reading to `بابام`. This is an estimate based on the interval between readings, not GPS telemetry.
+- The analytics view includes spending by person, driving-distance by person, cost-per-kilometre, and operation-category distribution.
+- Telegram replies use named, clickable navigation links instead of long visible URLs. IDs and key metrics are formatted in monospace; descriptions/notes are rendered as quotations.
+- `/operations` lists the recent operations; `/operations all` sends the whole active history in numbered batches with a short ID and inline buttons for details, edit, and delete. `today`, `week`, and `month` filters are available too.
+
+### Updated deployment
+
+From the repository root, run `npm test` and `npm run check` inside `worker/`, then `npx wrangler deploy`. Push the changed `index.html`, `assets/`, `worker/src/index.js`, the worker tests, and documentation to `main` to publish GitHub Pages. The webhook endpoint is still `/telegram`; keep `callback_query` enabled in Telegram's `allowed_updates` for inline management buttons.
