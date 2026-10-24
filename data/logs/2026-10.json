@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-24T17:59:00+03:30",
+  "updatedAt": "2026-10-24T18:01:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -305,6 +305,36 @@
       "metadata": {
         "source": "telegram-or-api"
       }
+    },
+    {
+      "id": "3ba8d58a-fbb1-4422-a968-017007ea37ee",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "کیلومتر 431443",
+      "actor": "بابام",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T14:31:05.006Z",
+      "occurredAt": "2026-10-24T18:01:00+03:30",
+      "date": "2026-10-24",
+      "time": "18:01",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431443,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "fullTank": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      },
+      "previousOdometerKm": 431440,
+      "distanceActor": "بابام",
+      "deltaSincePreviousKm": 3
     }
   ]
 }
