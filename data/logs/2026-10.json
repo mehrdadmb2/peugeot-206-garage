@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-24T18:07:00+03:30",
+  "updatedAt": "2026-10-24T20:24:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -312,6 +312,53 @@
       "previousOdometerKm": 431440,
       "distanceActor": "بابام",
       "deltaSincePreviousKm": 3
+    },
+    {
+      "id": "1422439d-0155-4f3c-adca-0ff0837ca702",
+      "type": "issue",
+      "title": "خرابی: خودرو روشن نشد",
+      "description": "خودرو شب قبل روشن نشد · برای عیب‌یابی به تعمیرگاه مراجعه شد.",
+      "actor": "بابام",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T16:54:56.565Z",
+      "occurredAt": "2026-10-24T20:24:00+03:30",
+      "date": "2026-10-24",
+      "time": "20:24",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431462,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": "f130b094-fc54-466a-962c-7263511af835",
+      "symptom": "روشن نشدن خودرو",
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "status": "fixed",
+      "metadata": {
+        "source": "telegram-or-api"
+      }
     }
   ]
 }
