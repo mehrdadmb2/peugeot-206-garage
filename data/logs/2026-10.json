@@ -543,6 +543,52 @@
       "metadata": {
         "source": "telegram-or-api"
       }
+    },
+    {
+      "id": "09d3be08-aa64-4203-80a3-0e1fdc1c1df2",
+      "type": "part",
+      "title": "تعویض قطعه: وایر شمع",
+      "description": "وایر شمع",
+      "actor": "بابام",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T16:55:11.585Z",
+      "occurredAt": "2026-10-24T20:24:00+03:30",
+      "date": "2026-10-24",
+      "time": "20:24",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431462,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": "وایر شمع",
+      "serviceCatalogKey": null,
+      "componentKey": "spark_plug_wires",
+      "componentName": "وایر شمع",
+      "componentCategory": "موتور و سوخت‌رسانی هوا",
+      "componentMode": "condition",
+      "componentReplaced": true,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": "f130b094-fc54-466a-962c-7263511af835",
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
     }
   ]
 }
