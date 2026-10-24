@@ -36,7 +36,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.2.0",
+        version: "3.3.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -59,7 +59,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.2.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.3.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -200,7 +200,7 @@ async function handleExternalApi(request, url, env) {
     } else return json({ ok: false, error: "missing_text_or_type", example: { text: "20l بنزین زدم، هزینه 700 هزار تومان، کیلومتر 156200" } }, 400);
     // State-changing commands have completed their GitHub Contents API writes before processMessage/saveEvent resolves.
     const replyText = String(reply?.text || "درخواست پردازش شد.");
-    const persisted = /✅ ثبت شد:|چند مورد سرویس از پیام تشخیص داده شد و جداگانه ثبت شد|بازه .+ ذخیره شد|پرداخت جریمه ثبت شد|خرابی بسته شد/i.test(replyText);
+    const persisted = /✅ ثبت شد:|چند مورد سرویس از پیام تشخیص داده شد و جداگانه ثبت شد|بازه .+ ذخیره شد|پرداخت جریمه ثبت شد|خرابی بسته شد|مراجعه و تعمیر چندبخشی ثبت شد|ثبت سرویس:|ثبت\/تعویض قطعه/i.test(replyText);
     if (reply?.document) return json({ ok: false, error: "use_csv_endpoint", message: "برای دریافت CSV از GET /api/v1/export?month=YYYY-MM استفاده کن." }, 400);
     return json({ ok: true, persisted, source: "github", reply: replyText, filename: reply?.filename || null, note: "در رویدادهای تغییردهنده، پاسخ موفق پس از پایان commitهای GitHub ارسال می‌شود؛ گزارش‌ها فقط داده‌های ذخیره‌شده را می‌خوانند." });
   }
@@ -324,6 +324,11 @@ function deleteConfirmationKeyboard(id) {
 function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*:\s*([a-f0-9-]{6,36})/i)?.[1] || null; }
 
 const COMMAND_ALIASES = {
+  catalog: "catalog", parts: "catalog", قطعات: "catalog", کاتالوگ: "catalog",
+  components: "components", installed: "components", قطعات_نصب: "components",
+  services: "services", servicecatalog: "services", فهرست_سرویس: "services",
+  repairjob: "repairjob", workshop: "repairjob", تعمیرگاه: "repairjob", مراجعه: "repairjob",
+  fineinfo: "fineinfo", جزئیات_جریمه: "fineinfo",
   start: "start", begin: "start", شروع: "start", help: "help", commands: "help", command: "help", راهنما: "help", کمک: "help", دستورها: "help",
   guide: "guide", manual: "guide", fullguide: "guide", راهنمای_کامل: "guide", دفترچه: "guide",
   analysis: "analysis", analytics: "analysis", charts: "analysis", نمودار: "analysis", تحلیل: "analysis",
@@ -377,42 +382,37 @@ function normalizeIntentText(value) {
 }
 function telegramHtml(value) {
   const lines = String(value || "").slice(0, 3800).split("\n");
-  let firstContentSeen = false;
-  const escape = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-  const linkify = html => String(html)
-    .replaceAll(SITE_URL, `<a href="${SITE_URL}">باز کردن داشبورد</a>`)
-    .replaceAll(BOT_URL, `<a href="${BOT_URL}">گفت‌وگو با ربات</a>`);
-  const rendered = lines.map(original => {
-    const line = original.trimEnd();
-    if (!line.trim()) return "";
-    const safe = linkify(escape(line));
-    if (!firstContentSeen) { firstContentSeen = true; return `<b>${safe}</b>`; }
-    const heading = line.match(/^(?:🧾|👤|📊|⛽|🚦|🧰|🗂|🛡️|📝|✏️|⚙️|🚘|📦|🔎|📖|💳|✅|❌|⚠️)\s+[^:]{2,70}$/u);
-    if (heading) return `<b>${safe}</b>`;
-    const commandMatch = line.match(/^\s*(\/[a-zA-Z0-9_]+)(?:\s+(.*))?$/);
-    if (commandMatch) {
-      const commandAndArgs = commandMatch[0].trim();
-      const delimiter = commandAndArgs.search(/\s+[—-]\s+/);
-      if (delimiter >= 0) {
-        const command = commandAndArgs.slice(0, delimiter).trim();
-        const description = commandAndArgs.slice(delimiter).replace(/^\s+[—-]\s+/, "");
-        return `<code>${escape(command)}</code> — ${escape(description)}`;
-      }
-      return `<code>${escape(commandAndArgs)}</code>`;
+  let firstContentSeen=false;
+  const escape = value => String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");
+  const trusted = value => {
+    const tags=[];
+    const tokenized=String(value||"").replace(/<\/?(?:code|blockquote|b|i|u|s)>/gi,tag=>{const token=`__SAFE_TAG_${tags.length}__`;tags.push(tag);return token;});
+    let output=escape(tokenized);
+    tags.forEach((tag,i)=>{output=output.replace(`__SAFE_TAG_${i}__`,tag);});
+    return output;
+  };
+  const namedLinks = html => String(html).replaceAll(SITE_URL,`<a href="${SITE_URL}">باز کردن داشبورد</a>`).replaceAll(BOT_URL,`<a href="${BOT_URL}">گفت‌وگو با ربات</a>`);
+  const headingPattern=/^(?:🧾|👤|📊|⛽|🚦|🧰|🗂|🛡️|📝|✏️|⚙️|🚘|📦|🔎|📖|💳|✅|❌|⚠️|🔩|🔧|🧪|🔋|🛠️|🧭)\s+[^:]{2,70}$/u;
+  return lines.map(original=>{
+    const line=original.trimEnd(); if(!line.trim())return "";
+    let safe=namedLinks(trusted(line));
+    if(!firstContentSeen){firstContentSeen=true;return `<b>${safe}</b>`;}
+    if(headingPattern.test(line))return `<b>${safe}</b>`;
+    const command=line.match(/^\s*(\/[a-zA-Z0-9_]+)(?:\s+(.*))?$/);
+    if(command && !/<(?:code|b|a)\b/i.test(safe))return `<code>${escape(command[0].trim())}</code>`;
+    const field=line.match(/^([^:：]{1,38})\s*[:：]\s*(.*)$/);
+    if(field){
+      const label=field[1].trim(), rawValue=field[2];
+      if (rawValue.includes(SITE_URL)) return `<b>${escape(label)}:</b> <a href="${SITE_URL}">باز کردن داشبورد</a>`;
+      if (rawValue.includes(BOT_URL)) return `<b>${escape(label)}:</b> <a href="${BOT_URL}">گفت‌وگو با ربات</a>`;
+      if(/^(?:شناسه|ID|کد|شناسه تلگرام شما|شناسه گفتگو|شماره قبض|کد پیگیری پرداخت|شناسه گروه|شناسه مراجعه)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${trusted(rawValue)}</code>`;
+      if(/^(?:شرح عملیات|توضیح تکمیلی|یادداشت|شرح تعمیر|علت|توضیح)$/i.test(label)) return `<b>${escape(label)}:</b>\n<blockquote>${escape(rawValue)}</blockquote>`;
+      if(/^(?:کیلومتر ثبت\s*شده|موعد کیلومتری بعدی|کیلومترشمار|مسافت|سوخت|هزینه|مبلغ|کارکرد فعلی|مسافت از آخرین کیلومتر ثبت\s*شده|مسافت از ثبت قبلی|ولتاژ|ظرفیت)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${escape(rawValue)}</code>`;
+      return `<b>${escape(label)}:</b> ${trusted(rawValue)}`;
     }
-    const fieldLine = line.match(/^([^:：]{1,38})\s*[:：]\s*(.*)$/);
-    if (fieldLine) {
-      const label = fieldLine[1].trim();
-      const fieldValue = fieldLine[2];
-      if (/^(?:شناسه|ID|کد|شناسه تلگرام شما|شناسه گفتگو)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${escape(fieldValue)}</code>`;
-      if (/^(?:شرح عملیات|توضیح تکمیلی|یادداشت|شرح تعمیر)$/i.test(label)) return `<b>${escape(label)}:</b>\n<blockquote>${escape(fieldValue)}</blockquote>`;
-      if (/^(?:کیلومتر ثبت\s*شده|موعد کیلومتری بعدی|کیلومترشمار|مسافت|سوخت|هزینه|مبلغ|کارکرد فعلی|مسافت از آخرین کیلومتر ثبت\s*شده|مسافت از ثبت قبلی)$/i.test(label)) return `<b>${escape(label)}:</b> <code>${escape(fieldValue)}</code>`;
-      if (/^(?:دسته|تاریخ|انجام.?دهنده|وضعیت جریمه|وضعیت خرابی|سرویس\/قطعه|زمان ثبت|آخرین ویرایش|رویدادها)$/i.test(label)) return `<b>${escape(label)}:</b> ${escape(fieldValue)}`;
-    }
-    if (/^(?:⚠️|⛔|💡|📌|نکته[:：])/u.test(line)) return `<blockquote>${safe}</blockquote>`;
-    return safe.replace(/`([^`]{1,140})`/g, (_, code) => `<code>${escape(code)}</code>`);
-  });
-  return rendered.join("\n");
+    if(/^(?:⚠️|⛔|💡|📌|نکته[:：])/u.test(line)||/^>\s*/.test(line)) return `<blockquote>${safe.replace(/^&gt;\s*/,"")}</blockquote>`;
+    return safe.replace(/`([^`]{1,140})`/g,(_,code)=>`<code>${escape(code)}</code>`);
+  }).join("\n");
 }
 
 async function processMessage(text, message, env) {
@@ -428,6 +428,11 @@ async function processMessage(text, message, env) {
   }
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
+  if (/^\/catalog\b|^\/parts\b|^\/قطعات\b|^\/کاتالوگ\b/i.test(text)) return { messages: await catalogGuideMessages(env), keyboard: false };
+  if (/^\/components\b|^\/installed\b/i.test(text)) return { messages: await componentInventoryReport(env), keyboard: false };
+  if (/^\/services\b|^\/servicecatalog\b|^\/فهرست_سرویس\b/i.test(text)) return { messages: await serviceCatalogMessages(env), keyboard: false };
+  if (/^\/repairjob\b|^\/workshop\b|^\/تعمیرگاه\b|^\/مراجعه\b/i.test(text)) return { text: await recordRepairJob(text.replace(/^\/\S+/, "").trim(), message, env), keyboard: false };
+  if (/^\/fineinfo\b|^\/جزئیات_جریمه\b/i.test(text)) return { text: await fineInfoCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/purchasekm\b|^\/کیلومترخرید\b/i.test(text)) return { text: await purchaseOdometerCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/analysis\b|^\/charts\b|^\/نمودار\b|^\/تحلیل\b/i.test(text)) return await createAnalysisReply(text.replace(/^\S+/, "").trim(), env);
   if (/^\/cancel\b/i.test(text)) return { text: "✅ هیچ عملیات در انتظار تأییدی وجود ندارد. برای حذف از دکمه حذف در جزئیات رویداد استفاده کن.", keyboard: false };
@@ -498,7 +503,7 @@ async function processMessage(text, message, env) {
     const raw = text.replace(/^\/\S+/, "").trim();
     const cost = extractMoneyRial(raw);
     if (!cost) return { text: "نمونه: /fine 500000 toman سرعت غیرمجاز km=156200\nمبلغ و دلیل را بنویس.", keyboard: false };
-    return { text: await saveEvent({ type: "fine", title: "ثبت جریمه", description: raw, costRial: cost, odometerKm: extractOdometer(raw), paid: false, occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
+    return { text: await saveEvent({ type: "fine", title: "ثبت جریمه", description: raw, costRial: cost, odometerKm: extractOdometer(raw), paid: false, ticketDate: normalizeFlexibleDate(raw) || getOccurredAt(text, fromDate).date, deadlineDate: normalizeFlexibleDate(raw.match(/(?:مهلت|deadline)\s*[:=：]?\s*([0-9۰-۹٠-٩]{4}[\/.-][0-9۰-۹٠-٩]{1,2}[\/.-][0-9۰-۹٠-٩]{1,2})/i)?.[1]), appealed: /اعتراض|appeal/i.test(raw), ticketNumber: extractFineTicketNumber(raw), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
   }
   if (/^\/paid\b|^\/payfine\b|^\/پرداخت(?:-جریمه)?\b/i.test(text)) return { text: await markFinePaid(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/repair\b|^\/fixed\b|^\/تعمیر\b|^\/رفع\b/i.test(text)) return { text: await recordRepair(text.replace(/^\/\S+/, "").trim(), getOccurredAt(text, fromDate), env), keyboard: true };
@@ -521,6 +526,7 @@ async function processMessage(text, message, env) {
   const km = extractOdometer(text);
   const money = extractMoneyRial(text);
   const liters = parseLiters(text);
+  if (isRepairJobNarrative(lower)) return { text: await recordRepairJob(text, message, env), keyboard: false };
   const isFuel = /بنزین|سوخت.?گیری|پمپ\s*بنزین|باک\s*(?:زدم|پر)|\bpetrol\b|\brefuel(?:led|ing)?\b|\bfuel\b|\bfilled\s*(?:up|the\s*tank)\b|\bgas(?:oline)?\b|\d+(?:\.\d+)?\s*l\b/i.test(lower) && liters > 0;
   if (isFuel) {
     return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: text, liters, costRial: money, odometerKm: km, fullTank: /\bfull\b|باک\s*را\s*پر|باک\s*کامل|پر\s*کردم/i.test(text), occurredAt, sourceText: text }, env), keyboard: true };
@@ -576,6 +582,10 @@ function helpText() {
 • /annotate a1b2c3d4 توضیح تکمیلی — افزودن توضیح
 
 📚 راهنمای کامل در چند پیام: /guide
+🔩 فرهنگ قطعات: /catalog · قطعات نصب‌شده و عمرشان: /components
+🧰 فهرست خدمات: /services
+🛠 ثبت یک مراجعه با چند قطعه/سرویس: /repairjob
+🚦 جزئیات جریمه: /fineinfo شناسه
 📈 گزارش تصویری با نمودار: /analysis month
 گزینه‌های تحلیل: hour · day · week · month
 
@@ -871,22 +881,211 @@ async function recordServiceOrPart(rawText, type, occurredAt, env) {
   const money = extractMoneyRial(rawText);
   const odo = extractOdometer(rawText);
   if (!keys.length && type === "service") {
-    return "نوع سرویس از پیام تشخیص داده نشد. نمونه: /service oil cost=900000 toman km=156000\nاز /config برای دیدن کلیدها استفاده کن.";
+    return "نوع سرویس یا قطعه از پیام تشخیص داده نشد. از /catalog و /services برای دیدن فرهنگ قطعات و سرویس‌ها استفاده کن.";
   }
-  if (keys.length > 1 && type === "service") {
-    const confirmations = [];
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i];
-      const label = config.serviceIntervals?.[key]?.label || key;
-      const saved = await saveEvent({ type: "service", title: `ثبت سرویس: ${label}`, description: rawText, serviceKey: key, serviceLabel: label, odometerKm: odo, costRial: i === 0 ? money : null, occurredAt, sourceText: rawText }, env);
-      confirmations.push(`• ${label}: ${saved.split("\n").slice(0, 3).join(" · ")}`);
+  if (keys.length > 1) {
+    const saved = [];
+    for (let i=0;i<keys.length;i++) {
+      const info = describeCatalogKey(keys[i], config);
+      const reply = await saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: i === 0 ? money : null }, env);
+      saved.push(`${info.icon || "🔧"} ${info.label}: ${reply.split("\n").slice(0,2).join(" · ")}`);
     }
-    return `✅ چند مورد سرویس از پیام تشخیص داده شد و جداگانه ثبت شد:\n${confirmations.join("\n")}\nمبلغ کل فقط یک بار در گزارش هزینه محاسبه شده است.`;
+    return `✅ چند عملیات/قطعه به‌صورت جداگانه ثبت شد\n${saved.join("\n")}\nمبلغ پیام فقط یک بار به اولین مورد نسبت داده شد؛ اگر مبلغ‌ها متفاوت‌اند هر عملیات را جداگانه ثبت کن.`;
   }
-  const key = keys[0] || null;
-  const label = key ? config.serviceIntervals?.[key]?.label || key : "قطعه/سرویس متفرقه";
-  return await saveEvent({ type: type === "part" ? "part" : "service", title: `${type === "part" ? "ثبت قطعه" : "ثبت سرویس"}: ${label}`, description: rawText, serviceKey: key || null, serviceLabel: label, odometerKm: odo, costRial: money, occurredAt, sourceText: rawText }, env);
+  const info = keys.length ? describeCatalogKey(keys[0], config) : null;
+  if (info) return saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: money }, env);
+  return await saveEvent({ type: type === "part" ? "part" : "service", title: `${type === "part" ? "ثبت قطعه" : "ثبت سرویس"}: ${rawText.slice(0,100)}`, description: rawText, odometerKm: odo, costRial: money, occurredAt, sourceText: rawText }, env);
 }
+
+function describeCatalogKey(key, config) {
+  const catalog = config.partCatalog || {};
+  if (String(key).startsWith("serviceCatalog:")) {
+    const serviceKey = String(key).slice("serviceCatalog:".length);
+    const item = catalog.services?.[serviceKey] || {};
+    const category = catalog.categories?.[item.category] || {};
+    return { key: serviceKey, serviceCatalogKey: serviceKey, label: item.label || serviceKey, categoryKey: item.category || "service", categoryLabel: category.label || item.category || "سرویس", icon: item.icon || category.icon || "🧰", mode: "service", note: item.note || "", service: true, item };
+  }
+  const item = catalog.items?.[key];
+  if (item) {
+    const category = catalog.categories?.[item.category] || {};
+    return { key, componentKey: key, label: item.label || key, categoryKey: item.category || "other", categoryLabel: category.label || item.category || "قطعات", icon: item.icon || category.icon || "🔩", mode: item.mode || "condition", note: item.note || "", serviceKey: item.serviceKey || null, service: false, item };
+  }
+  const service = config.serviceIntervals?.[key];
+  if (service) return { key, componentKey: key, label: service.label || key, categoryKey: service.category || "service", categoryLabel: service.category || "سرویس", icon: "🧰", mode: service.mode || "periodic", note: service.note || "", serviceKey: key, service: false, item: service };
+  return { key, label: key, categoryKey: "other", categoryLabel: "سایر", icon: "🔧", mode: "condition", note: "", service: false, item: {} };
+}
+
+async function saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm, costRial, actor = null, repairGroupId = null, brand = null, model = null, partNumber = null, specs = null, quantity = 1, status = null }, env) {
+  const eventType = info.service ? "service" : "part";
+  const input = {
+    type: eventType,
+    title: `${info.service ? "سرویس" : "ثبت/تعویض قطعه"}: ${info.label}`,
+    description: `${info.label}${info.note ? ` · ${info.note}` : ""}`,
+    sourceText: rawText,
+    actor: actor || extractEventMetadata(rawText, null, null, []).actor || "من",
+    odometerKm: odometerKm ?? extractOdometer(rawText),
+    costRial: costRial ?? null,
+    occurredAt,
+    serviceKey: info.serviceKey || null,
+    serviceCatalogKey: info.serviceCatalogKey || null,
+    serviceLabel: info.label,
+    componentKey: info.componentKey || null,
+    componentName: info.service ? null : info.label,
+    componentCategory: info.categoryLabel || null,
+    componentMode: info.mode || null,
+    componentReplaced: !info.service && /تعویض|عوض|جایگزین|نصب/i.test(normalizeIntentText(rawText)),
+    brand, model, partNumber, specs, quantity, repairGroupId,
+    status
+  };
+  return saveEvent(input, env);
+}
+
+async function catalogGuideMessages(env) {
+  const config = await readConfig(env);
+  const catalog = config.partCatalog || {};
+  const categories = catalog.categories || {};
+  const items = Object.entries(catalog.items || {});
+  if (!items.length) return [{ text: "فرهنگ قطعات هنوز در data/config.json موجود نیست. فایل تنظیمات نسخهٔ ۳.۳ را ادغام کن." }];
+  const messages = [{ text: `📚 فرهنگ قطعات پژو ۲۰۶ SD\n${items.length} قطعه در ${Object.keys(categories).length} گروه\n\nنکته: فاصله‌های کیلومتری/زمانی در این فهرست یادآور قابل‌تنظیم‌اند، نه جایگزین دفترچهٔ دقیق موتور و شرایط رانندگی.` }];
+  for (const [categoryKey, category] of Object.entries(categories)) {
+    const rows = items.filter(([, item]) => item.category === categoryKey);
+    if (!rows.length) continue;
+    const body = rows.map(([key,item]) => {
+      const mode = item.mode === "periodic" ? `دوره‌ای · ${item.intervalKm ? `${formatNum(item.intervalKm)} km` : "بدون فاصلهٔ km"}${item.intervalDays ? ` / ${formatNum(item.intervalDays)} روز` : ""}` : "عمرمحور/شرطی · تاریخ و کیلومتر نصب را ثبت کن";
+      return `${item.icon || category.icon || "🔩"} <b>${item.label}</b> <code>${key}</code>\n${mode}\n${item.note || "بازهٔ ثابت تنظیم نشده است."}`;
+    });
+    for (let i=0;i<body.length;i+=7) messages.push({ text: `${category.icon || "🧩"} ${category.label || categoryKey} · ${i+1}-${Math.min(i+7,body.length)} از ${body.length}\n\n${body.slice(i,i+7).join("\n\n")}` });
+  }
+  messages.push({ text: "ثبت قطعه: /part شمع موتور تعویض شد کیلومتر=431462\nثبت مشخصات: /part باتری 12 ولت 60 آمپر برند=... مدل=... شماره‌قطعه=... قیمت=... تومان\nفهرست نصب‌ها: /components\nراهنمای سرویس‌ها: /services" });
+  return messages;
+}
+
+async function serviceCatalogMessages(env) {
+  const config = await readConfig(env);
+  const rows = Object.entries(config.partCatalog?.services || {});
+  if (!rows.length) return [{ text: "فهرست سرویس‌ها هنوز در config.json وجود ندارد." }];
+  const messages = [];
+  for (let start=0;start<rows.length;start+=8) {
+    const chunk = rows.slice(start,start+8).map(([key,item]) => {
+      const cat = config.partCatalog?.categories?.[item.category] || {};
+      return `${item.icon || cat.icon || "🧰"} <b>${item.label}</b> <code>${key}</code>\n${item.note || "توضیح ثبت نشده"}\nنمونه: <code>/service ${String(item.aliases?.[0] || item.label).replace(/[<>]/g,"")}</code>`;
+    });
+    messages.push({ text: `🧰 کاتالوگ خدمات خودرو · ${start+1}-${Math.min(start+8,rows.length)} از ${rows.length}\n\n${chunk.join("\n\n")}` });
+  }
+  return messages;
+}
+
+async function componentInventoryReport(env) {
+  const [events, config] = await Promise.all([loadAllEvents(env), readConfig(env)]);
+  const installed = events.filter(event => event.type === "part" && event.componentKey && event.componentReplaced)
+    .sort((a,b)=>String(b.occurredAt||"").localeCompare(String(a.occurredAt||"")));
+  if (!installed.length) return [{ text: "🔩 هنوز قطعه‌ای با تاریخ نصب/تعویض ثبت نشده است.\nنمونه: /part باتری تعویض شد 12 ولت 60 آمپر برند=نامشخص کیلومتر=431462\nبرای فرهنگ قطعات: /catalog" }];
+  const latest = new Map();
+  for (const event of installed) if (!latest.has(event.componentKey)) latest.set(event.componentKey,event);
+  const odo = calculateCurrentOdometer(events);
+  const results=[];
+  const lines=[...latest.values()].map(event=>{
+    const item=config.partCatalog?.items?.[event.componentKey] || {};
+    const elapsedDays=daysBetween(String(event.date||event.occurredAt||"").slice(0,10),nowTehran().date);
+    const elapsedKm=odo!=null && event.odometerKm!=null && odo>=Number(event.odometerKm) ? odo-Number(event.odometerKm) : null;
+    return `${item.icon || "🔩"} <b>${event.componentName || item.label || event.componentKey}</b>\nگروه: ${event.componentCategory || item.category || "—"} · آخرین نصب: ${event.jalaliDate || event.date}\nکارکرد هنگام نصب: ${event.odometerKm==null?"ثبت نشده":`${formatNum(event.odometerKm)} km`} · عمر فعلی: ${elapsedKm==null?"—":`${formatNum(elapsedKm)} km`} / ${elapsedDays==null?"—":`${formatNum(elapsedDays)} روز`}\nبرند: ${event.brand || "ثبت نشده"} · مدل: ${event.model || "ثبت نشده"}\nشناسه: <code>${event.id.slice(0,8)}</code>`;
+  });
+  for (let start=0;start<lines.length;start+=8) results.push({ text: `🔩 قطعات نصب‌شده و عمر کارکرد\n${start+1}-${Math.min(start+8,lines.length)} از ${lines.length}\n\n${lines.slice(start,start+8).join("\n\n")}` });
+  return results;
+}
+
+function isRepairJobNarrative(lower) {
+  const hasWorkshop = /تعمیر\s*گاه|مکانیک|برق.?کار|دیاگ/.test(lower);
+  const hasSymptom = /روشن نشد|استارت نخورد|روشن نمیشد|روشن نمی.?شد|خراب/.test(lower);
+  const markers = [/دیاگ/, /شمع/, /وایر/, /باتری|باطری/, /ترموستات/, /محفظه/, /هواگیری/, /دور فن|درجه آب/].filter(pattern=>pattern.test(lower)).length;
+  return hasWorkshop && (markers >= 2 || hasSymptom && markers >= 1);
+}
+
+function findCatalogCost(raw, targetPattern, stopPattern = null, useLastMatch = true) {
+  const flags = targetPattern.flags.includes("g") ? targetPattern.flags : `${targetPattern.flags}g`;
+  const pattern = new RegExp(targetPattern.source, flags);
+  const matches = [...String(raw).matchAll(pattern)];
+  if (!matches.length) return null;
+  const match = useLastMatch ? matches[matches.length-1] : matches[0];
+  const start = match.index || 0;
+  let end = Math.min(String(raw).length, start+220);
+  if (stopPattern) {
+    const tail = String(raw).slice(start+match[0].length);
+    const stop = stopPattern.exec(tail);
+    if (stop) end = Math.min(end, start+match[0].length+(stop.index||0));
+  }
+  const segment = String(raw).slice(start,end);
+  return extractMoneyRial(segment);
+}
+
+function makeRepairJobInputs(rawText, config, message) {
+  const lower = normalizeIntentText(rawText);
+  const occurredAt = getOccurredAt(rawText, new Date((message?.date || Math.floor(Date.now()/1000))*1000));
+  const actor = extractEventMetadata(rawText, null, null, config.people || []).actor || "من";
+  const odometerKm = extractOdometer(rawText);
+  const repairGroupId = crypto.randomUUID();
+  const items = config.partCatalog?.items || {};
+  const services = config.partCatalog?.services || {};
+  const created = [];
+  const isReplacement = /تعویض|عوض|جایگزین|نصب شد|نصب کردم|عوض شدن|عوض شدن|عوض شدند|تعویض شدند|replace/i.test(lower);
+  const addService = (key, description, costRial = null) => {
+    const service=services[key]; if (!service) return;
+    created.push({ type: "service", title: `سرویس: ${service.label}`, description, occurredAt, actor, odometerKm, costRial, sourceText: rawText, serviceCatalogKey:key, serviceLabel:service.label, componentCategory:config.partCatalog?.categories?.[service.category]?.label || service.category, componentName:service.label, componentMode:"service", repairGroupId });
+  };
+  const addPart = (key, costRial = null, specs = null, brand = null) => {
+    const item=items[key]; if (!item) return;
+    created.push({ type: "part", title: `${isReplacement ? "تعویض قطعه" : "ثبت قطعه"}: ${item.label}`, description: item.label, occurredAt, actor, odometerKm, costRial, sourceText: rawText, serviceKey:item.serviceKey || null, serviceLabel:item.label, componentKey:key, componentName:item.label, componentCategory:config.partCatalog?.categories?.[item.category]?.label || item.category, componentMode:item.mode || "condition", componentReplaced:isReplacement, brand, specs, repairGroupId, quantity:1 });
+  };
+  const money = (pat, stop, last=true) => findCatalogCost(rawText,pat,stop,last);
+
+  if (/روشن نشد|استارت نخورد|روشن نمیشد|روشن نمی.?شد|استارت/.test(lower)) {
+    created.push({ type:"issue", title:"خرابی: خودرو روشن نشد", description:"خودرو شب قبل روشن نشد؛ برای عیب‌یابی به تعمیرگاه مراجعه شد.", occurredAt, actor, odometerKm, costRial:null, sourceText:rawText, status:"fixed", repairDescription:"طبق گزارش، دیاگ/تنظیم سیستم خنک‌کاری و تعویض قطعات انجام شد.", repairGroupId, symptom:"روشن نشدن خودرو" });
+  }
+  if (/دیاگ|اسکن خطا|عیب.?یابی/.test(lower)) addService("engine_diagnostics", "دیاگ و عیب‌یابی موتور؛ کد خطا در صورت وجود در شرح کامل پیام نگهداری شود.");
+  if (/درجه آب|دور فن|تنظیم.*فن|فن.*تنظیم/.test(lower)) addService("cooling_fan_adjustment", "بررسی/تنظیم درجه آب و دور فن طبق گزارش تعمیرگاه.");
+  if (/هواگیری/.test(lower)) addService("cooling_bleed", "هواگیری مدار خنک‌کاری پس از سرویس ترموستات/محفظه ترموستات.");
+  if (/شمع/.test(lower) && isReplacement) addPart("spark_plugs", money(/شمع(?:‌ها| ها| موتور)?/i, /وایر|باتری|باطری|ترموستات|محفظه|هواگیری/i, false));
+  if (/وایر/.test(lower) && isReplacement) addPart("spark_plug_wires", money(/وایر(?:\s*شمع)?/i, /باتری|باطری|ترموستات|محفظه|هواگیری/i, false));
+  if (/باتری|باطری/.test(lower) && isReplacement) {
+    const voltage = rawText.match(/(\d+(?:[.,]\d+)?)\s*ولت/i);
+    const capacity = rawText.match(/(\d+(?:[.,]\d+)?)\s*(?:[اآ]?مپر\s*ساعت|[اآ]?مپر\s*ساعتی|[اآ]?مپر|ah)/i);
+    const volts = voltage ? Number(voltage[1].replace(",",".")) : null;
+    const ah = capacity ? Number(capacity[1].replace(",",".")) : null;
+    const specs = {};
+    if (volts != null) specs.voltageV=volts;
+    if (ah != null) specs.capacityAh=ah;
+    const unknownBrand = /برند\s*(?:باتری|باطری)?\s*(?:را|رو)?\s*(?:نمی.?دانم|نمی.?دونم|نمیدانم|نمیدونم|نامشخص|معلوم نیست|unknown)/i.test(rawText);
+    const brand = unknownBrand ? "نامشخص" : rawText.match(/برند\s*(?:باتری|باطری)?\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:مدل|شماره|قیمت|هزینه|با قیمت|مشخصات)|[,;؛|]|$)/i)?.[1]?.trim() || null;
+    addPart("battery", money(/(?:باتری|باطری)/i, /ترموستات|محفظه|هواگیری/i, true), Object.keys(specs).length?specs:null, brand);
+  }
+  if (/ترموستات/.test(lower) && isReplacement) {
+    addPart("thermostat", money(/ترموستات(?!\s*(?:و\s*)?محفظه)/i, /محفظه\s*ترموستات/i, false));
+    if (/محفظه\s*ترموستات/.test(lower)) addPart("thermostat_housing", money(/محفظه\s*ترموستات/i, /هواگیری|با اجرت|اجرت|دستمزد/i, true));
+  }
+  if (/اجرت|دستمزد/.test(lower)) {
+    const labor = money(/(?:اجرت|دستمزد)/i, null, true);
+    if (labor != null) created.push({ type:"expense", title:"اجرت تعمیرگاه", description:"اجرت/دستمزد ثبت‌شده برای مراجعه تعمیرگاه", expenseCategory:"labor", occurredAt, actor, odometerKm, costRial:labor, sourceText:rawText, repairGroupId });
+  }
+  if (!created.length) return [];
+  return created;
+}
+
+async function recordRepairJob(rawText, message, env) {
+  const config = await readConfig(env);
+  const raw = String(rawText || "").trim();
+  if (!raw) return `🧰 ثبت چندبخشی تعمیرگاه\nنمونه:\n/repairjob بابام امروز کیلومتر 431462؛ ماشین دیشب روشن نشد؛ دیاگ زده شد؛ درجه آب و دور فن تنظیم شد؛ شمع و وایر شمع عوض شدند؛ باتری 12 ولت 60 آمپر برند=نامشخص قیمت 4.5 میلیون تومان؛ ترموستات و محفظه ترموستات تعویض؛ قیمت محفظه 1.5 میلیون تومان؛ هواگیری شد؛ اجرت=... تومان`;
+  const rows = makeRepairJobInputs(raw, config, message);
+  if (!rows.length) return "هیچ عملیات مشخصی با اطمینان تشخیص داده نشد. نام قطعه/سرویس و فعل انجام‌شده را بنویس؛ نمونه: /repairjob بابام کیلومتر 431462 دیاگ زده شد و شمع تعویض شد.";
+  const details = [];
+  for (const row of rows) {
+    const response = await saveEvent(row, env);
+    details.push(`${row.type === "part" ? "🔩" : row.type === "service" ? "🧰" : row.type === "issue" ? "⚠️" : "💳"} ${row.title} · ${row.costRial == null ? "مبلغ ثبت نشده" : formatMoneyToman(row.costRial)} · ID ${eventIdFromReply(response) || "ثبت شد"}`);
+  }
+  const group = rows[0].repairGroupId?.slice(0,8) || "—";
+  const totalKnown = rows.reduce((sum,row)=>sum+(Number(row.costRial)||0),0);
+  return `✅ مراجعه و تعمیر چندبخشی ثبت شد\n\n🧰 تعداد ردیف‌ها: ${formatNum(rows.length)}\n👤 انجام‌دهنده: ${rows[0].actor || "من"}\n⌁ کیلومتر: ${rows[0].odometerKm == null ? "ثبت نشده" : `${formatNum(rows[0].odometerKm)} km`}\n💳 مجموع هزینه‌های مشخص‌شده: ${formatMoneyToman(totalKnown)}\n🧾 شناسه گروه: <code>${group}</code>\n\n${details.join("\n")}\n\n📝 اجرت ثبت نشده مگر اینکه مبلغ آن را صریحاً نوشته باشی. هزینهٔ قطعات نامشخص خالی می‌ماند. برای ویرایش هر ردیف از /detail شناسه استفاده کن.\n\n📌 «ثبت قطعی این تاریخچه براساس متن ارسالی انجام شد؛ اطلاعات ناموجود مانند برند ناشناخته و مبلغ نامشخص حدس زده نشد.»`;
+}
+
 
 async function updateInterval(raw, env) {
   const parts = raw.split(/\s+/).filter(Boolean);
@@ -939,10 +1138,33 @@ async function saveEvent(input, env) {
     costRial: Number.isFinite(input.costRial) ? Math.max(0, Math.round(input.costRial)) : null,
     serviceKey: input.serviceKey || null,
     serviceLabel: input.serviceLabel || null,
+    serviceCatalogKey: input.serviceCatalogKey || null,
+    componentKey: input.componentKey || null,
+    componentName: input.componentName || null,
+    componentCategory: input.componentCategory || null,
+    componentMode: input.componentMode || null,
+    componentReplaced: Boolean(input.componentReplaced),
+    brand: input.brand || null,
+    model: input.model || null,
+    partNumber: input.partNumber || null,
+    specs: input.specs || null,
+    quantity: Number(input.quantity) > 0 ? Number(input.quantity) : 1,
+    expenseCategory: input.expenseCategory || null,
+    repairGroupId: input.repairGroupId || null,
+    symptom: input.symptom || null,
     fullTank: Boolean(input.fullTank),
     paid: input.type === "fine" ? Boolean(input.paid) : undefined,
-    paidAt: null,
-    status: input.status || (input.type === "issue" ? "open" : undefined),
+    paidAt: input.paidAt || null,
+    ticketDate: input.type === "fine" ? (normalizeFlexibleDate(input.ticketDate) || occurred.date) : undefined,
+    deadlineDate: input.type === "fine" ? normalizeFlexibleDate(input.deadlineDate) : undefined,
+    appealed: input.type === "fine" ? Boolean(input.appealed) : undefined,
+    appealDecisionDate: input.type === "fine" ? normalizeFlexibleDate(input.appealDecisionDate) : undefined,
+    ticketNumber: input.ticketNumber || extractFineTicketNumber(metaSource),
+    fineLocation: input.fineLocation || null,
+    officialCurrentAmountRial: Number.isFinite(input.officialCurrentAmountRial) ? input.officialCurrentAmountRial : null,
+    paidAmountRial: Number.isFinite(input.paidAmountRial) ? input.paidAmountRial : null,
+    paymentReference: input.paymentReference || null,
+    status: input.status || (input.type === "issue" ? "open" : input.type === "fine" ? (input.paid ? "paid" : "unpaid") : undefined),
     metadata: { source: input.source || "telegram-or-api" }
   };
   if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
@@ -985,6 +1207,15 @@ async function saveEvent(input, env) {
   if (event.liters !== null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر`);
   if (event.costRial !== null) lines.push(`هزینه: ${formatMoneyToman(event.costRial)}`);
   if (event.note) lines.push(`توضیح تکمیلی: ${event.note}`);
+  if (event.componentName || event.componentKey) lines.push(`قطعه: ${event.componentName || event.componentKey}${event.componentCategory ? ` · گروه ${event.componentCategory}` : ""}`);
+  if (event.brand) lines.push(`برند: ${event.brand}`);
+  if (event.model) lines.push(`مدل: ${event.model}`);
+  if (event.specs && typeof event.specs === "object") lines.push(`مشخصات: ${Object.entries(event.specs).map(([key,value])=>`${key}=${value}`).join(" · ")}`);
+  if (event.repairGroupId) lines.push(`شناسه مراجعه: ${String(event.repairGroupId).slice(0,8)}`);
+  if (event.type === "fine") {
+    const fine = fineTimeline(event);
+    lines.push(`وضعیت جریمه: ${fine.statusLabel}`, `تاریخ جریمه: ${fine.ticketDate || "—"} · گذشت زمان: ${fine.elapsedDays == null ? "—" : `${formatNum(fine.elapsedDays)} روز`}`, `مهلت پیگیری/پرداخت: ${fine.deadlineDate || "نیازمند بررسی"}${fine.daysToDeadline != null ? ` · ${fine.daysToDeadline < 0 ? `${formatNum(Math.abs(fine.daysToDeadline))} روز از مهلت گذشته` : `${formatNum(fine.daysToDeadline)} روز باقی‌مانده`}` : ""}`);
+  }
   if (event.type === "service" && event.serviceKey) {
     const interval = config.serviceIntervals?.[event.serviceKey];
     if (interval && event.odometerKm !== null && interval.intervalKm > 0) lines.push(`موعد کیلومتری بعدی: حدود ${formatNum(event.odometerKm + interval.intervalKm)} km (${formatNum(interval.intervalKm)} km دیگر)`);
@@ -1099,6 +1330,10 @@ function extractEventMetadata(source, explicitActor, explicitNote, people = []) 
     const family = description.match(/^(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)\s*[:：,،-]?\s+/i);
     if (family) { actor = family[1]; description = description.slice(family[0].length); }
   }
+  if (!actor) {
+    const actorAnywhere = description.match(/(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)(?=[^\n]{0,55}(?:برد|بردش|انجام داد|رانندگی|تعویض|عوض|تنظیم|تعمیر|دیاگ|استارت|زد|گرفت|پر کرد|نصب))/i);
+    if (actorAnywhere) actor = actorAnywhere[1].trim();
+  }
   const actorMatch = description.match(/(?:توسط|از طرف|به\s*نام|انجام(?:\s*دهنده)?|شخص|شخصیت|actor|person|by)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
   if (!actor && actorMatch) actor = actorMatch[1].trim();
   if (actorMatch) description = description.replace(actorMatch[0], " ");
@@ -1123,8 +1358,21 @@ function formatEventDetails(event) {
   if (event.distanceKm != null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km`);
   if (event.liters != null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر${event.fullTank ? " · باک کامل" : ""}`);
   if (Number(event.costRial) > 0) lines.push(`مبلغ: ${formatMoneyToman(event.costRial)}`);
-  if (event.type === "fine") lines.push(`وضعیت جریمه: ${event.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده"}`);
+  if (event.type === "fine") {
+    const timeline = fineTimeline(event);
+    lines.push(`وضعیت جریمه: ${timeline.statusLabel}`, `تاریخ جریمه: ${timeline.ticketDate || "—"} · ${timeline.elapsedDays == null ? "—" : `${formatNum(timeline.elapsedDays)} روز گذشته`}`, `مهلت محاسباتی: ${timeline.deadlineDate || "نامشخص"}`);
+    if (event.ticketNumber) lines.push(`شماره قبض: <code>${event.ticketNumber}</code>`);
+    if (event.paid) lines.push(`تاریخ پرداخت: ${event.paymentDate || event.paidAt || "ثبت نشده"}`, `مبلغ پرداختی: ${event.paidAmountRial ? formatMoneyToman(event.paidAmountRial) : "—"}`, `کد پیگیری پرداخت: ${event.paymentReference || "ثبت نشده"}`);
+    if (timeline.potentialAmountRial != null) lines.push(`برآورد هشدار احتمالی: ${formatMoneyToman(timeline.potentialAmountRial)} (غیرقطعی؛ استعلام رسمی لازم است)`);
+  }
   if (event.type === "issue") lines.push(`وضعیت خرابی: ${event.status === "fixed" ? "✅ رفع‌شده" : "🟠 باز"}`);
+  if (event.componentName || event.componentKey) lines.push(`قطعه: ${event.componentName || event.componentKey} · گروه: ${event.componentCategory || "نامشخص"} · حالت: ${event.componentMode || "عمرمحور/شرطی"}`);
+  if (event.brand) lines.push(`برند: ${event.brand}`);
+  if (event.model) lines.push(`مدل: ${event.model}`);
+  if (event.partNumber) lines.push(`کد فنی: ${event.partNumber}`);
+  if (event.specs && typeof event.specs === "object") lines.push(`مشخصات فنی: ${Object.entries(event.specs).map(([k,v])=>`${k}=${v}`).join(" · ")}`);
+  if (event.quantity) lines.push(`تعداد: ${formatNum(event.quantity)}`);
+  if (event.repairGroupId) lines.push(`شناسه گروه تعمیرگاه: <code>${event.repairGroupId}</code>`);
   if (event.serviceLabel) lines.push(`سرویس/قطعه: ${event.serviceLabel}`);
   if (event.repairDescription) lines.push(`شرح تعمیر: ${event.repairDescription}`);
   if (event.repairCostRial) lines.push(`هزینه تعمیر: ${formatMoneyToman(event.repairCostRial)}`);
@@ -1399,7 +1647,7 @@ function calculateDueItems(events, config, currentOdo, now) {
   const today = now.date;
   const items = [];
   for (const [key, interval] of Object.entries(config.serviceIntervals || {})) {
-    const previous = events.filter(e => e.type === "service" && e.serviceKey === key).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)))[0];
+    const previous = events.filter(e => (e.type === "service" || e.type === "part") && e.serviceKey === key).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)))[0];
     if (!previous) continue;
     const kmInterval = Number(interval.intervalKm) || 0;
     const dayInterval = Number(interval.intervalDays) || 0;
@@ -1511,35 +1759,106 @@ async function latestReport(env) {
   return "🧾 آخرین رویدادها\n\n" + events.map(e => `${e.jalaliDate || e.date} ${e.time || ""} · ${eventTypeLabel(e.type)}\n${e.title}\n${(e.description || "").slice(0, 120)}\nID: ${e.id.slice(0, 8)}${e.odometerKm ? ` · ${formatNum(e.odometerKm)} km` : ""}${e.costRial ? ` · ${formatMoneyToman(e.costRial)}` : ""}`).join("\n\n");
 }
 
+function normalizeFlexibleDate(value) {
+  if (!value) return null;
+  const source = normalizeDigits(String(value).trim());
+  const match = source.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
+  if (!match) return null;
+  let year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (year < 1700) [year, month, day] = jalaliToGregorian(year, month, day);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const maxDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > maxDays) return null;
+  return `${String(year).padStart(4,"0")}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+}
+
+function extractFineTicketNumber(text) {
+  return String(text || "").match(/(?:شماره\s*(?:قبض|جریمه|پیگیری)|شناسه\s*(?:جریمه|قبض)|ticket(?:\s*(?:no|number|id))?)\s*[:=：#]?\s*([\da-zA-Z_-]{4,40})/i)?.[1] || null;
+}
+
+function fineTimeline(event, nowDate = nowTehran().date) {
+  const ticketDate = normalizeFlexibleDate(event.ticketDate) || normalizeFlexibleDate(event.date) || String(event.occurredAt || "").slice(0,10) || null;
+  const appealDate = normalizeFlexibleDate(event.appealDecisionDate);
+  const explicitDeadline = normalizeFlexibleDate(event.deadlineDate);
+  const deadlineDate = explicitDeadline || (event.appealed && appealDate ? addDaysToDate(appealDate, 20) : (!event.appealed && ticketDate ? addDaysToDate(ticketDate, 60) : null));
+  const elapsedDays = ticketDate ? daysBetween(ticketDate, nowDate) : null;
+  const daysToDeadline = deadlineDate ? daysBetween(nowDate, deadlineDate) : null;
+  let statusLabel = event.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده";
+  if (!event.paid && daysToDeadline != null) {
+    if (daysToDeadline < 0) statusLabel = "⚠️ مهلت ثبت‌شده گذشته";
+    else if (daysToDeadline <= 10) statusLabel = "🟠 نزدیک پایان مهلت";
+    else statusLabel = "🟡 در مهلت پیگیری";
+  } else if (!event.paid && event.appealed && !appealDate && !explicitDeadline) {
+    statusLabel = "🟡 در انتظار نتیجه اعتراض";
+  }
+  const potentialAmountRial = !event.paid && daysToDeadline != null && daysToDeadline < 0 ? (Number(event.costRial) || 0) * 2 : null;
+  return { ticketDate, deadlineDate, appealDate, elapsedDays, daysToDeadline, statusLabel, potentialAmountRial };
+}
+
+async function fineInfoCommand(raw, env) {
+  const all = (await loadAllEvents(env)).filter(e => e.type === "fine").sort((a,b)=>String(b.occurredAt||"").localeCompare(String(a.occurredAt||"")));
+  if (!all.length) return "✅ هنوز جریمه‌ای ثبت نشده است.\nبرای ثبت: /fine 500000 تومان سرعت غیرمجاز";
+  const id = String(raw || "").trim().split(/\s+/)[0];
+  if (id) {
+    const target = all.find(e => String(e.id).startsWith(id));
+    if (!target) return "جریمه‌ای با این شناسه پیدا نشد. از /fines شناسه را بردار.";
+    const t = fineTimeline(target);
+    const lines = [`🚦 جزئیات جریمه`, `شناسه: <code>${target.id}</code>`, `شرح: ${target.description || "—"}`, `مبلغ درج‌شده در ثبت: ${formatMoneyToman(target.costRial || 0)}`, `وضعیت: ${t.statusLabel}`, `تاریخ جریمه: ${t.ticketDate || "—"}`, `مدت گذشته از ثبت جریمه: ${t.elapsedDays == null ? "—" : `${formatNum(t.elapsedDays)} روز`}`, `مهلت محاسباتی: ${t.deadlineDate || "مشخص نشده؛ به وضعیت رسمی قبض مراجعه کن"}`];
+    if (t.daysToDeadline != null) lines.push(t.daysToDeadline < 0 ? `⏳ مهلت ${formatNum(Math.abs(t.daysToDeadline))} روز پیش گذشته است.` : `⏳ ${formatNum(t.daysToDeadline)} روز تا مهلت محاسباتی باقی مانده است.`);
+    if (target.ticketNumber) lines.push(`شماره قبض: <code>${target.ticketNumber}</code>`);
+    if (target.paid) lines.push(`تاریخ ثبت پرداخت: ${target.paidAt || "ثبت نشده"}`, `مبلغ پرداختی ثبت‌شده: ${target.paidAmountRial ? formatMoneyToman(target.paidAmountRial) : "از مبلغ جریمه استفاده شده/مشخص نشده"}`, `کد پیگیری: ${target.paymentReference || "ثبت نشده"}`);
+    if (t.potentialAmountRial != null) lines.push(`برآورد هشدار (نه مبلغ رسمی): ${formatMoneyToman(t.potentialAmountRial)} در صورت شمول قاعده دوبرابری؛ استعلام رسمی لازم است.`);
+    lines.push("برای ثبت پرداخت: /paid " + target.id.slice(0,8) + " date=1405/08/03 amount=... تومان ref=...", "مهلت‌ها و مبلغ نهایی را از وضعیت رسمی قبض/راهور تأیید کن؛ این محاسبه حکم قطعی قانونی نیست.");
+    return lines.join("\n");
+  }
+  const unpaid = all.filter(e=>!e.paid);
+  const total = all.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const unpaidAmount = unpaid.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  return `🚦 دفتر مدیریت جریمه\n\nکل: ${formatNum(all.length)} مورد · ${formatMoneyToman(total)}\nپرداخت‌نشده: ${formatNum(unpaid.length)} مورد · ${formatMoneyToman(unpaidAmount)}\n\n` + all.slice(0,20).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate||"—"} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${String(e.id).slice(0,8)}</code>`;}).join("\n\n") + "\n\nبرای جزئیات یک مورد: /fineinfo شناسه";
+}
+
 async function finesReport(env) {
   const events = (await loadAllEvents(env)).filter(e => e.type === "fine").sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)));
-  if (!events.length) return "✅ جریمه‌ای ثبت نشده است.\n\nبرای دیدن کل هزینه‌ها و پیمایش از /summary all استفاده کن.";
+  if (!events.length) return "✅ جریمه‌ای ثبت نشده است.\n\nثبت جریمه: /fine 500000 تومان سرعت غیرمجاز";
   const unpaid = events.filter(e => !e.paid);
   const paid = events.filter(e => e.paid);
   const totalRial = events.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
-  const paidRial = paid.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
+  const paidRial = paid.reduce((sum,e)=>sum+(Number(e.paidAmountRial ?? e.costRial)||0),0);
   const unpaidRial = unpaid.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
-  return `🚦 گزارش جامع جریمه‌ها\n\n📋 تعداد کل: ${formatNum(events.length)} مورد\n💰 مجموع مبلغ تمام جریمه‌ها: ${formatMoneyToman(totalRial)}\n✅ مجموع پرداخت‌شده: ${formatMoneyToman(paidRial)} (${formatNum(paid.length)} مورد)\n🔴 بدهی پرداخت‌نشده: ${formatMoneyToman(unpaidRial)} (${formatNum(unpaid.length)} مورد)\n\n🧾 ریزسوابق اخیر\n` + events.slice(0, 25).map(e => `${e.paid ? "✅ پرداخت‌شده" : "🔴 پرداخت‌نشده"} · ${formatMoneyToman(e.costRial || 0)}\n${e.description}\nتاریخ: ${e.jalaliDate || e.date} · شناسه: ${e.id.slice(0, 8)}`).join("\n\n") + "\n\nبرای ثبت پرداخت: /paid شناسه\nبرای گزارش نموداری هزینه‌ها: /analysis month";
+  const overdue = unpaid.filter(e=>{const t=fineTimeline(e);return t.daysToDeadline != null && t.daysToDeadline < 0;});
+  return `🚦 گزارش جامع جریمه‌ها\n\n📋 تعداد کل: ${formatNum(events.length)} مورد\n💰 مجموع مبلغ تمام جریمه‌ها: ${formatMoneyToman(totalRial)}\n✅ مجموع پرداخت‌شده: ${formatMoneyToman(paidRial)} (${formatNum(paid.length)} مورد)\n🔴 بدهی پرداخت‌نشده: ${formatMoneyToman(unpaidRial)} (${formatNum(unpaid.length)} مورد)\n⚠️ مهلت محاسباتی گذشته: ${formatNum(overdue.length)} مورد\n\n🧾 آخرین سوابق\n` + events.slice(0,25).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate||e.date||"—"} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${e.id.slice(0,8)}</code>`;}).join("\n\n") + "\n\nجزئیات یک مورد: /fineinfo شناسه\nثبت پرداخت: /paid شناسه date=1405/08/03 amount=... تومان ref=...\n⚠️ مهلت‌های محاسبه‌شده یادآوری هستند؛ مبلغ قطعی را از سامانه رسمی بررسی کن.";
 }
 
 async function markFinePaid(input, env) {
-  const id = (input || "").replace(/[^a-zA-Z0-9-]/g, "").trim();
+  const raw = String(input || "").trim();
+  const id = raw.split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, "");
   const events = await loadAllEvents(env);
   const fines = events.filter(e => e.type === "fine" && !e.paid);
   if (!id) return fines.length ? "شناسه جریمه پرداخت‌شده را بفرست؛ جریمه‌های پرداخت‌نشده:\n" + fines.map(e => `${e.id.slice(0, 8)} · ${formatMoneyToman(e.costRial || 0)} · ${e.description}`).join("\n") : "✅ جریمه پرداخت‌نشده‌ای وجود ندارد.";
   const target = fines.find(e => e.id === id || e.id.startsWith(id));
   if (!target) return "جریمه پرداخت‌نشده‌ای با این شناسه پیدا نشد. برای فهرست: /fines";
+  const dateRaw = raw.match(/(?:date|تاریخ)\s*[=:：]?\s*([0-9۰-۹٠-٩]{4}[\/.\-][0-9۰-۹٠-٩]{1,2}[\/.\-][0-9۰-۹٠-٩]{1,2})/i)?.[1];
+  const paidDate = normalizeFlexibleDate(dateRaw) || nowTehran().date;
+  const amountRaw = raw.match(/(?:amount|مبلغ|پرداختی)\s*[=:：]?\s*([^,;؛|]+)/i)?.[1];
+  const paidAmountRial = amountRaw ? extractMoneyRial(`مبلغ ${amountRaw}`) : null;
+  const reference = raw.match(/(?:ref|receipt|پیگیری|کد\s*پیگیری|شناسه\s*پرداخت)\s*[=:：#]?\s*([^,;؛|\s]+)/i)?.[1] || null;
+  const paymentDate = `${paidDate}T12:00:00+03:30`;
   const month = String(target.date).slice(0, 7);
   await mutateJsonFile(`data/logs/${month}.json`, env, () => ({ month, events: [] }), current => {
     current.events ||= [];
     const item = current.events.find(e => e.id === target.id);
-    if (item) { item.paid = true; item.paidAt = nowTehran().iso; item.status = "paid"; }
-    current.updatedAt = nowTehran().iso;
-    return current;
+    if (item) {
+      item.paid = true; item.status = "paid"; item.paidAt = paymentDate;
+      item.paidAmountRial = paidAmountRial ?? Number(item.costRial || 0);
+      item.paymentReference = reference;
+      item.paymentDate = paidDate;
+      item.updatedAt = nowTehran().iso; item.revision = (Number(item.revision) || 1) + 1;
+      item.editHistory = [...(item.editHistory || []), { at: nowTehran().iso, by: "telegram", action: "fine_payment", after: { paid: true, paidAt: paymentDate, paidAmountRial: item.paidAmountRial, paymentReference: reference } }].slice(-20);
+    }
+    current.updatedAt = nowTehran().iso; return current;
   });
-  return `✅ پرداخت جریمه ثبت شد.\nمبلغ: ${formatMoneyToman(target.costRial || 0)}\nشناسه: ${target.id.slice(0, 8)}\nاین جریمه از بدهی پرداخت‌نشده کم شد.`;
+  return `✅ پرداخت جریمه ثبت شد\n\nمبلغ درج‌شده در جریمه: ${formatMoneyToman(target.costRial || 0)}\nمبلغ پرداختی ثبت‌شده: ${formatMoneyToman(paidAmountRial ?? target.costRial ?? 0)}\nتاریخ پرداخت: ${jalaliDateLabel(paidDate)}\nکد پیگیری: ${reference || "ثبت نشده"}\nشناسه: <code>${target.id.slice(0,8)}</code>\n\nبرای مشاهده سابقه: /fineinfo ${target.id.slice(0,8)}`;
 }
-
 async function recordRepair(raw, occurredAt, env) {
   const events = await loadAllEvents(env);
   const target = events.filter(e => e.type === "issue" && e.status !== "fixed").slice(-1)[0];
@@ -1582,27 +1901,38 @@ async function fuelReport(env) {
 }
 
 function detectServiceKeys(text, config) {
-  const lower = normalizeDigits(String(text || "")).toLowerCase();
-  const matches = [];
-  for (const [key, aliases] of Object.entries(SERVICE_ALIASES)) {
-    if (!config.serviceIntervals?.[key]) continue;
-    for (const alias of aliases) {
-      const needle = alias.toLowerCase();
+  const lower = normalizeIntentText(text);
+  const candidates = [];
+  const addAliases = (key, aliases, prefix = "", rank = 0) => {
+    for (const aliasValue of aliases || []) {
+      const alias = normalizeIntentText(aliasValue);
+      if (!alias || alias.length < 2) continue;
       let from = 0;
-      while (needle && (from = lower.indexOf(needle, from)) >= 0) {
-        matches.push({ key, start: from, end: from + needle.length, length: needle.length, alias: needle });
-        from += Math.max(needle.length, 1);
+      while ((from = lower.indexOf(alias, from)) >= 0) {
+        candidates.push({ key: `${prefix}${key}`, start: from, end: from + alias.length, length: alias.length, rank });
+        from += Math.max(1, alias.length);
       }
     }
+  };
+  const catalog = config.partCatalog || {};
+  for (const [key, item] of Object.entries(catalog.items || {})) {
+    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "", 3);
   }
-  matches.sort((a, b) => b.length - a.length || a.start - b.start);
+  for (const [key, item] of Object.entries(catalog.services || {})) {
+    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "serviceCatalog:", 4);
+  }
+  for (const [key, aliases] of Object.entries(SERVICE_ALIASES)) {
+    if (!config.serviceIntervals?.[key] && !catalog.items?.[key]) continue;
+    addAliases(key, aliases, "", 1);
+  }
+  candidates.sort((a,b) => a.start - b.start || b.length - a.length || b.rank - a.rank);
   const accepted = [];
-  for (const match of matches) {
-    const covered = accepted.some(existing => existing.start <= match.start && existing.end >= match.end);
-    if (!covered) accepted.push(match);
+  for (const candidate of candidates) {
+    const overlaps = accepted.some(existing => candidate.start < existing.end && candidate.end > existing.start);
+    if (!overlaps) accepted.push(candidate);
   }
   const keys = [];
-  for (const match of accepted.sort((a, b) => a.start - b.start)) if (!keys.includes(match.key)) keys.push(match.key);
+  for (const item of accepted.sort((a,b) => a.start - b.start)) if (!keys.includes(item.key)) keys.push(item.key);
   return keys;
 }
 function detectServiceKey(text, config) {
@@ -1731,7 +2061,7 @@ async function sendPhoto(env, chatId, filename, blob, caption) {
 }
 
 function eventsToCsv(events) {
-  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "paid", "paidAt", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
+  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "previousOdometerKm", "deltaSincePreviousKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceCatalogKey", "serviceLabel", "componentKey", "componentName", "componentCategory", "componentMode", "componentReplaced", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "paid", "ticketDate", "deadlineDate", "appealed", "appealDecisionDate", "ticketNumber", "fineLocation", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
   const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [headers.join(","), ...events.map(event => headers.map(key => quote(event[key])).join(","))].join("\r\n");
 }
@@ -1739,15 +2069,15 @@ function eventsToCsv(events) {
 function extractMoneyRial(text) {
   const source = normalizeDigits(String(text || ""));
   const patterns = [
-    /(?:هزینه|مبلغ|قیمت|جریمه|پرداخت|cost|price|fine|amount|مجموع|قیمتش)\s*(?:[:=]|حدود|مبلغ)?\s*([\d][\d,._]*)(?:\s*(هزار|میلیون|k|m))?\s*(تومان|تومن|ریال|rial|toman|tomans)?/i,
-    /([\d][\d,._]*)\s*(هزار|میلیون|k|m)?\s*(تومان|تومن|ریال|rial|toman|tomans)/i
+    /(?:هزینه|مبلغ|قیمت|جریمه|پرداخت|cost|price|fine|amount|مجموع|قیمتش)\s*(?:[:=]|حدود|مبلغ)?\s*([\d][\d,._]*)(?:\s*(هزار|میلیون|ملیون|میليون|k|m))?\s*(تومان|تومن|ریال|rial|toman|tomans)?/i,
+    /([\d][\d,._]*)\s*(هزار|میلیون|ملیون|میليون|k|m)?\s*(تومان|تومن|ریال|rial|toman|tomans)/i
   ];
   for (const pattern of patterns) {
     const match = source.match(pattern);
     if (!match) continue;
     let amount = parseNumericToken(match[1]);
     if (!Number.isFinite(amount)) continue;
-    const multiplier = /میلیون|^m$/i.test(match[2] || "") ? 1000000 : /هزار|^k$/i.test(match[2] || "") ? 1000 : 1;
+    const multiplier = /میلیون|ملیون|میليون|^m$/i.test(match[2] || "") ? 1000000 : /هزار|^k$/i.test(match[2] || "") ? 1000 : 1;
     amount *= multiplier;
     const unit = (match[3] || "تومان").toLowerCase();
     if (/ریال|rial/.test(unit)) return Math.round(amount);

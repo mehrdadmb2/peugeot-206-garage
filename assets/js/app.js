@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], range: 6, analyticsPeriod: 'month', shown: 12, filtered: [], refreshedAt: null };
+  const state = { events: [], config: null, months: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
     expense: 'هزینه', fine: 'جریمه', wash: 'کارواش', issue: 'خرابی', repair: 'تعمیر', note: 'یادداشت'
@@ -19,6 +19,12 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', event => {
+      const categoryButton = event.target.closest('[data-component-category]');
+      if (categoryButton) {
+        state.componentCategoryFilter = categoryButton.dataset.componentCategory || 'all';
+        renderComponentCatalog();
+        return;
+      }
       const tab = event.target.closest('[data-tab]');
       if (tab) { event.preventDefault(); activateTab(tab.dataset.tab); return; }
       const anchor = event.target.closest('a[href^="#"]');
@@ -31,6 +37,13 @@
       }
     });
     $('#refreshButton').addEventListener('click', () => loadDashboard(true));
+    document.addEventListener('click', async event => {
+      const commandButton = event.target.closest('[data-component-command]');
+      if (!commandButton) return;
+      const command = commandButton.dataset.componentCommand || '';
+      try { await navigator.clipboard.writeText(command); showToast('نمونه دستور ثبت قطعه/سرویس کپی شد.'); }
+      catch { showToast(command); }
+    });
     $('#exportCsv').addEventListener('click', exportCsv);
     $('#exportJson').addEventListener('click', exportJson);
     $('#exportCsvAll').addEventListener('click', exportCsvAll);
@@ -176,11 +189,12 @@
     const services = Object.entries(config.serviceIntervals || {});
     const events = state.events;
     if (!services.length) {
-      $('#serviceGrid').innerHTML = '<div class="empty-state">فهرست سرویس‌ها در data/config.json پیدا نشد.</div>'; return;
+      $('#serviceGrid').innerHTML = '<div class="empty-state">فهرست سرویس‌ها در data/config.json پیدا نشد.</div>';
+      renderComponentCatalog(); renderInstalledComponents(); renderServiceCatalog(); return;
     }
     const currentOdo = calculateOdometer(events);
     const cards = services.map(([key, service]) => {
-      const latest = events.filter(e => e.type === 'service' && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+      const latest = events.filter(e => (e.type === 'service' || e.type === 'part') && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
       if (!latest) return serviceCard({ key, service, latest: null, status: 'بدون سابقه', statusClass: '', headline: 'ثبت نشده', subline: 'اولین سرویس را در تلگرام ثبت کن', progress: 0, foot: 'تا قبل از ثبت سرویس قبلی، موعد بعدی قابل محاسبه نیست.' });
       const intervalKm = Number(service.intervalKm) || 0;
       const intervalDays = Number(service.intervalDays) || 0;
@@ -200,6 +214,75 @@
       return serviceCard({ key, service, latest, status, statusClass, headline, subline, progress, foot: footParts.join(' · '), remainingKm, remainingDays, currentOdo });
     });
     $('#serviceGrid').innerHTML = cards.join('');
+    renderComponentCatalog();
+    renderInstalledComponents();
+    renderServiceCatalog();
+  }
+
+  function renderComponentCatalog() {
+    const root = $('#componentCatalog');
+    const filters = $('#componentCategoryFilters');
+    if (!root || !filters) return;
+    const catalog = state.config?.partCatalog || {};
+    const categories = catalog.categories || {};
+    const items = Object.entries(catalog.items || {});
+    if (!items.length) { root.innerHTML = '<div class="empty-state">دیکشنری قطعات هنوز در data/config.json تعریف نشده است.</div>'; return; }
+    const selected = state.componentCategoryFilter || 'all';
+    filters.innerHTML = `<button type="button" class="component-filter ${selected === 'all' ? 'active' : ''}" data-component-category="all">🌐 همه <small>${formatNumber(items.length)}</small></button>` + Object.entries(categories).map(([key, category]) => {
+      const count = items.filter(([, item]) => item.category === key).length;
+      return `<button type="button" class="component-filter ${selected === key ? 'active' : ''}" data-component-category="${escapeAttr(key)}" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}">${escapeHtml(category.icon || '🔧')} ${escapeHtml(category.label || key)} <small>${formatNumber(count)}</small></button>`;
+    }).join('');
+    const filtered = selected === 'all' ? items : items.filter(([, item]) => item.category === selected);
+    root.innerHTML = filtered.map(([key, item]) => {
+      const category = categories[item.category] || { label: 'سایر', icon: '🔩', theme: '#36c7e8' };
+      const isPeriodic = item.mode === 'periodic';
+      const interval = [Number(item.intervalKm) > 0 ? `${formatNumber(item.intervalKm)} km` : '', Number(item.intervalDays) > 0 ? `${formatNumber(item.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || (isPeriodic ? 'بازه تنظیم نشده' : 'عمرمحور / شرط‌محور');
+      const latest = state.events.filter(event => event.componentKey === key && event.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
+      const fitment = latest ? `آخرین نصب: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز در سوابق نصب ثبت نشده';
+      const technical = [latest?.brand ? `برند ${latest.brand}` : '', latest?.model ? `مدل ${latest.model}` : '', latest?.partNumber ? `کد ${latest.partNumber}` : ''].filter(Boolean).join(' · ');
+      const modeLabel = isPeriodic ? 'مصرفی / موعدمحور' : 'عمرمحور / بازدیدمحور';
+      const latestDetails = latest && latest.odometerKm != null && calculateOdometer(state.events) != null ? Math.max(0, calculateOdometer(state.events) - Number(latest.odometerKm)) : null;
+      const tracking = latest ? (isPeriodic ? `آخرین تعویض ثبت شده${latestDetails != null ? ` · ${formatNumber(latestDetails)} km پیموده‌شده` : ''}` : `مدت ثبت‌شده از نصب: ${formatNumber(daysBetween(latest.date || String(latest.occurredAt).slice(0,10), localDateString(new Date())))} روز${latestDetails != null ? ` · ${formatNumber(latestDetails)} km` : ''}`) : 'برای شروع پایش، نصب/تعویض را ثبت کن';
+      return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
+    }).join('');
+  }
+
+  function renderInstalledComponents() {
+    const root = $('#installedComponentGrid');
+    if (!root) return;
+    const items = state.config?.partCatalog?.items || {};
+    const latestByKey = new Map();
+    state.events.filter(event => event.componentKey && event.componentReplaced).sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event => latestByKey.set(event.componentKey, event));
+    const currentOdo = calculateOdometer(state.events);
+    const rows = [...latestByKey.entries()].map(([key,event]) => ({ key, event, item: items[key] || {} })).sort((a,b)=>String(a.item.category||'').localeCompare(String(b.item.category||''),'en'));
+    if (!rows.length) { root.innerHTML = '<div class="empty-state">هنوز تعویضی به دیکشنری متصل نشده است. برای نمونه: /part باتری 12 ولت 60 آمپر برند=نامشخص km=431462</div>'; return; }
+    root.innerHTML = rows.map(({key,event,item}) => {
+      const category = state.config?.partCatalog?.categories?.[item.category] || {label:item.category || 'سایر',icon:'🔩',theme:'#36c7e8'};
+      const kmSince = currentOdo != null && event.odometerKm != null ? currentOdo - Number(event.odometerKm) : null;
+      const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(new Date()))) : null;
+      const age = [kmSince != null && kmSince >= 0 ? `${formatNumber(kmSince)} km` : '',daysSince != null ? `${formatNumber(daysSince)} روز` : ''].filter(Boolean).join(' · ');
+      const intervalKm = Number(item.intervalKm)||0;
+      const intervalDays = Number(item.intervalDays)||0;
+      const remainingKm = item.mode === 'periodic' && intervalKm > 0 && kmSince != null ? intervalKm-kmSince : null;
+      const dueDate = item.mode === 'periodic' && intervalDays > 0 && event.date ? addDays(event.date,intervalDays) : null;
+      const remainingDays = dueDate ? daysBetween(localDateString(new Date()),dueDate) : null;
+      const status = item.mode === 'periodic' ? ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0) ? 'موعد گذشته' : 'یادآور موعد') : 'عمر ثبت‌شده · سلامت نیازمند بازدید';
+      const specs = event.specs && typeof event.specs === 'object' ? Object.entries(event.specs).map(([k,v])=>`${k}: ${v}`).join(' · ') : '';
+      return `<article class="installed-component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="installed-component-heading"><span>${escapeHtml(item.icon || category.icon || '🔩')}</span><div><b>${escapeHtml(item.label || event.componentName || key)}</b><small>${escapeHtml(category.label || item.category || 'قطعه')}</small></div><em>${escapeHtml(status)}</em></div><div class="installed-component-age">${age ? `از نصب: ${escapeHtml(age)}` : 'زمان/کیلومتر نصب کامل نیست'}</div><div class="installed-component-meta">نصب: ${escapeHtml(event.jalaliDate || event.date || '—')}${event.odometerKm != null ? ` · ${formatNumber(event.odometerKm)} km` : ''}</div>${event.brand ? `<div class="installed-component-meta">برند: ${escapeHtml(event.brand)}${event.model ? ` · مدل: ${escapeHtml(event.model)}` : ''}</div>` : ''}${specs ? `<div class="installed-component-meta">${escapeHtml(specs)}</div>` : ''}${item.mode === 'periodic' ? `<div class="installed-component-meta">${remainingKm != null ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از بازه` : `${formatNumber(remainingKm)} km تا بازه`) : ''}${remainingDays != null ? ` · ${remainingDays < 0 ? `${formatNumber(Math.abs(remainingDays))} روز از موعد گذشته` : `${formatNumber(remainingDays)} روز باقی‌مانده`}` : ''}</div>` : ''}<div class="installed-component-foot">شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code> · عمر/موعد تخمینی جایگزین بازدید قطعه نیست.</div></article>`;
+    }).join('');
+  }
+
+  function renderServiceCatalog() {
+    const root = $('#serviceCatalogGrid');
+    if (!root) return;
+    const catalog = state.config?.partCatalog || {};
+    const services = Object.entries(catalog.services || {});
+    if (!services.length) { root.innerHTML = '<div class="empty-state">دیکشنری سرویس‌ها در config.json تعریف نشده است.</div>'; return; }
+    root.innerHTML = services.map(([key,item]) => {
+      const category = catalog.categories?.[item.category] || {label:item.category || 'سرویس',icon:'🧰',theme:'#4ade80'};
+      const latest = state.events.filter(event => event.type === 'service' && event.serviceCatalogKey === key).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
+      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین ثبت: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز سابقه ثبت نشده'}</small></div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
+    }).join('');
   }
 
   function serviceCard(data) {
@@ -213,7 +296,7 @@
   function calculateDue(events, config, currentOdo) {
     const result = [];
     for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
-      const latest = events.filter(e => e.type === 'service' && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+      const latest = events.filter(e => (e.type === 'service' || e.type === 'part') && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
       if (!latest) continue;
       const kmInterval = Number(service.intervalKm) || 0;
       const dayInterval = Number(service.intervalDays) || 0;
@@ -512,7 +595,7 @@
 
   function renderTrafficDetails() {
     const unpaid = state.events.filter(e=>e.type==='fine'&&!e.paid).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    $('#unpaidFinesList').innerHTML = unpaid.length ? unpaid.slice(0,10).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description||'جریمه')}</div><div class="mini-row-meta">ID ${escapeHtml(String(e.id).slice(0,8))} · ${escapeHtml(e.jalaliDate||e.date||'—')}</div></div><div class="mini-row-value">${moneyText(Number(e.costRial||0)/10)} تومان</div></div>`).join('') : '<div class="empty-state">جریمه‌ی پرداخت‌نشده‌ای ثبت نشده است.</div>';
+    $('#unpaidFinesList').innerHTML = unpaid.length ? unpaid.slice(0,10).map(e=>{ const ticketDate=String(e.ticketDate||e.date||e.occurredAt||'').slice(0,10); const deadline=e.deadlineDate || (ticketDate ? addDays(ticketDate,e.appealed&&e.appealDecisionDate?20:60) : null); const days=deadline ? daysBetween(localDateString(new Date()),deadline) : null; const age=ticketDate ? Math.max(0,daysBetween(ticketDate,localDateString(new Date()))) : null; return `<div class="mini-row fine-unpaid-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description||'جریمه')}</div><div class="mini-row-meta">ID ${escapeHtml(String(e.id).slice(0,8))} · ${escapeHtml(e.jalaliDate||ticketDate||'—')}${age!=null?` · ${formatNumber(age)} روز گذشته`:''}</div><div class="mini-row-meta fine-deadline-meta">${days==null?'مهلت نیازمند بررسی':days<0?`⚠️ ${formatNumber(Math.abs(days))} روز از مهلت محاسباتی گذشته`:`⏳ ${formatNumber(days)} روز تا مهلت محاسباتی`}</div></div><div class="mini-row-value">${moneyText(Number(e.costRial||0)/10)} تومان</div></div>`; }).join('') : '<div class="empty-state">جریمه‌ی پرداخت‌نشده‌ای ثبت نشده است.</div>';
     const open = state.events.filter(e=>e.type==='issue'&&e.status!=='fixed').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     $('#openIssuesList').innerHTML = open.length ? open.slice(0,10).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.title||'خرابی ثبت‌شده')}</div><div class="mini-row-desc">${escapeHtml((e.description||'').slice(0,100))}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate||e.date||'—')} · ID ${escapeHtml(String(e.id).slice(0,8))}</div></div><div class="mini-row-value negative">باز</div></div>`).join('') : '<div class="empty-state">خرابی بازی ثبت نشده است.</div>';
   }
@@ -535,7 +618,7 @@
 
   function exportCsvAll() {
     if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','fineLocation','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...state.events.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-all-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('CSV کامل همه‌ی رویدادها آماده شد.');
   }
@@ -652,7 +735,7 @@
     if ($('#fineTotalPaid')) $('#fineTotalPaid').textContent = `${moneyText(paidFine)} تومان`;
     if ($('#fineTotalUnpaid')) $('#fineTotalUnpaid').textContent = `${moneyText(unpaidFine)} تومان`;
     if ($('#fineCountAll')) $('#fineCountAll').textContent = `${formatNumber(fines.length)} مورد ثبت‌شده`;
-    $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description || 'جریمه ثبت‌شده')}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || e.date || '—')} · ${String(e.id).slice(0,8)}</div></div><div class="mini-row-value ${e.paid?'paid':''}">${escapeHtml(moneyText((Number(e.costRial)||0)/10))}<div class="mini-row-meta">${e.paid?'پرداخت شد':'پرداخت‌نشده'}</div></div></div>`).join('') : '<div class="empty-state">جریمه‌ای ثبت نشده است.</div>';
+    $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e=>{ const ticketDate=String(e.ticketDate||e.date||e.occurredAt||'').slice(0,10); const deadline=e.deadlineDate || (ticketDate ? addDays(ticketDate, e.appealed && e.appealDecisionDate ? 20 : 60) : null); const days=deadline ? daysBetween(localDateString(new Date()),deadline) : null; const age=ticketDate ? Math.max(0,daysBetween(ticketDate,localDateString(new Date()))) : null; return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description || 'جریمه ثبت‌شده')}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || ticketDate || '—')} · ${String(e.id).slice(0,8)}${age != null ? ` · ${formatNumber(age)} روز گذشته` : ''}</div><div class="mini-row-meta fine-deadline-meta">${e.paid ? `پرداخت: ${escapeHtml(e.paymentDate||String(e.paidAt||'').slice(0,10)||'تاریخ نامشخص')}${e.paymentReference ? ` · پیگیری ${escapeHtml(e.paymentReference)}` : ''}` : days == null ? 'مهلت: نیازمند بررسی' : days < 0 ? `${formatNumber(Math.abs(days))} روز از مهلت محاسباتی گذشته؛ استعلام رسمی` : `${formatNumber(days)} روز تا مهلت محاسباتی`}</div></div><div class="mini-row-value ${e.paid?'paid':''}">${escapeHtml(moneyText((Number(e.costRial)||0)/10))}<div class="mini-row-meta">${e.paid?'پرداخت شد':'پرداخت‌نشده'}</div></div></div>`; }).join('') : '<div class="empty-state">جریمه‌ای ثبت نشده است.</div>';
     const issues = state.events.filter(e => e.type === 'issue' || e.type === 'repair').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     const open = issues.filter(e=>e.type==='issue' && e.status!=='fixed');
     $('#issueTotals').textContent = `خرابی باز: ${formatNumber(open.length)}`;
@@ -679,7 +762,7 @@
   function exportCsv() {
     const rows = state.filtered.slice();
     if (!rows.length) { showToast('با فیلتر فعلی داده‌ای برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','distanceKm','liters','costRial','serviceKey','paid','paidAt','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','fineLocation','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-${localDateString(new Date())}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8');
     showToast('خروجی CSV آماده شد.');

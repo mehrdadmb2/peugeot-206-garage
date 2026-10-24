@@ -75,3 +75,48 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 @media(max-width:1000px){.ownership-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.guide-command-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.ownership-overview{padding:17px;border-radius:19px}.ownership-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ownership-kpi{padding:13px;border-radius:14px}.ownership-kpi strong{font-size:21px}.ownership-driver-breakdown{grid-template-columns:1fr;gap:2px}.ownership-driver-panel{padding:14px}.fine-financial-strip{grid-template-columns:1fr;gap:9px}.fine-financial-card{padding:16px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px}.fine-financial-card span{grid-column:1}.fine-financial-card strong{grid-column:2;grid-row:1/3;text-align:left;font-size:19px}.fine-financial-card small{grid-column:1}.guide-command-grid{grid-template-columns:1fr}.guide-card{min-height:unset}.full-guide-search{grid-template-columns:20px minmax(0,1fr);gap:8px;padding-inline:11px}.full-guide-search small{grid-column:2;grid-row:2;text-align:right;margin-top:-7px;margin-bottom:3px}.guide-link-row{flex-direction:column;align-items:stretch}.guide-link-row>a{width:100%}.workflow-actions{width:100%}.workflow-actions>a{flex:1 1 120px}}
 @media(max-width:420px){.ownership-kpi strong{font-size:18px}.ownership-kpi span{font-size:9px}.ownership-driver-title{align-items:flex-start;flex-direction:column;gap:4px}.ownership-driver-panel-heading{align-items:flex-start;flex-direction:column}.workflow-actions>a{flex:1 1 100%}}
+
+/* ── GARAGE OS 3.3 · component intelligence, workshop & service library ── */
+.component-directory{margin-top:20px;padding:clamp(16px,2.5vw,28px);border:1px solid rgba(130,180,212,.15);border-radius:22px;background:linear-gradient(145deg,rgba(13,27,43,.82),rgba(7,14,25,.72));overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 18px 52px rgba(0,0,0,.12)}
+.component-directory-heading{margin-bottom:16px}
+.component-directory-heading .section-note{max-width:620px;display:block;line-height:1.9}
+.component-category-filters{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 19px}
+.component-filter{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 32%,transparent);border-radius:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--component-color,#36c7e8) 10%,transparent),rgba(8,18,30,.65));color:#c7dce9;font-size:10px;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s}
+.component-filter small{color:var(--component-color,#36c7e8);font:800 9px Arial,sans-serif}
+.component-filter:hover{transform:translateY(-2px)}
+.component-filter.active{border-color:var(--component-color,#40e5f4);box-shadow:0 0 0 1px color-mix(in srgb,var(--component-color,#40e5f4) 16%,transparent),0 8px 22px rgba(0,0,0,.12);color:#fff}
+.component-catalog-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.component-card,.installed-component-card,.service-catalog-card{min-width:0;position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 22%,rgba(150,180,204,.12));border-radius:17px;background:linear-gradient(145deg,color-mix(in srgb,var(--component-color,#36c7e8) 6%,rgba(15,26,42,.88)),rgba(5,12,23,.8));padding:15px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:transform .22s,border-color .22s,box-shadow .22s}
+.component-card:before,.installed-component-card:before,.service-catalog-card:before{content:'';position:absolute;inset:0 auto 0 0;width:2px;background:linear-gradient(180deg,transparent,var(--component-color,#36c7e8),transparent);opacity:.9}
+.component-card:hover,.installed-component-card:hover,.service-catalog-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--component-color,#36c7e8) 45%,transparent);box-shadow:0 14px 28px rgba(0,0,0,.17),0 0 19px color-mix(in srgb,var(--component-color,#36c7e8) 6%,transparent)}
+.component-card-top{display:flex;justify-content:space-between;align-items:center;gap:7px}
+.component-icon{display:grid;place-items:center;width:40px;height:40px;border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 35%,transparent);border-radius:13px;background:color-mix(in srgb,var(--component-color,#36c7e8) 12%,transparent);font-size:23px}
+.component-category-pill,.service-catalog-tags span{max-width:70%;font-size:8px;color:var(--component-color,#36c7e8);border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 25%,transparent);border-radius:99px;padding:5px 7px;overflow-wrap:anywhere}
+.component-card h3{font-size:12px;line-height:1.7;margin:12px 0 6px}
+.component-mode-badge{display:inline-flex;padding:4px 7px;border-radius:7px;font-size:8px;margin-bottom:8px}
+.component-mode-badge.periodic{color:#ffca88;background:rgba(255,175,104,.08);border:1px solid rgba(255,175,104,.18)}
+.component-mode-badge.condition{color:#a8d6ff;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.18)}
+.component-note{min-height:54px;margin:0 0 12px;color:var(--muted);font-size:9px;line-height:1.9}
+.component-interval{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid rgba(160,190,220,.1);border-radius:10px;color:#d9eef7;background:rgba(0,0,0,.12);font-size:9px}
+.component-interval span{color:var(--component-color,#36c7e8)}
+.component-track-status,.component-technical,.installed-component-meta{margin-top:8px;color:var(--muted);font-size:8px;line-height:1.8;overflow-wrap:anywhere}
+.component-card-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(160,190,220,.08)}
+.component-command-copy{padding:6px 8px;border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 28%,transparent);border-radius:8px;background:color-mix(in srgb,var(--component-color,#36c7e8) 7%,transparent);color:#bce6ef;font-size:8px;cursor:pointer}
+.component-key{font:8px ui-monospace,Consolas,monospace;color:var(--muted2);direction:ltr;overflow-wrap:anywhere}
+.installed-component-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.installed-component-heading{display:grid;grid-template-columns:35px minmax(0,1fr);gap:8px;align-items:center}
+.installed-component-heading>span{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:color-mix(in srgb,var(--component-color,#36c7e8) 15%,transparent);font-size:19px}
+.installed-component-heading>div b,.installed-component-heading>div small{display:block}.installed-component-heading>div b{font-size:10px}.installed-component-heading>div small{margin-top:3px;color:var(--muted2);font-size:8px}
+.installed-component-heading em{grid-column:1/-1;font-style:normal;font-size:8px;color:var(--component-color,#36c7e8);padding:6px 7px;border-radius:8px;background:color-mix(in srgb,var(--component-color,#36c7e8) 7%,transparent)}
+.installed-component-age{font-size:12px;font-weight:800;color:#e9faff;margin-top:13px}
+.installed-component-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(160,190,220,.09);font-size:8px;color:var(--muted2);line-height:1.8}
+.service-catalog-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.service-catalog-card{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:start}
+.service-catalog-icon{display:grid;place-items:center;width:38px;height:38px;border:1px solid color-mix(in srgb,var(--component-color,#36c7e8) 33%,transparent);border-radius:13px;background:color-mix(in srgb,var(--component-color,#36c7e8) 11%,transparent);font-size:22px}
+.service-catalog-body{min-width:0}.service-catalog-tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.service-catalog-tags small{font:8px ui-monospace,Consolas,monospace;color:var(--muted2);direction:ltr;overflow-wrap:anywhere}
+.service-catalog-card h3{font-size:11px;line-height:1.7;margin:8px 0 5px}.service-catalog-card p{font-size:9px;line-height:1.9;color:var(--muted);margin:0}
+.service-catalog-card .component-command-copy{grid-column:2;justify-self:start;margin-top:5px}.service-last-entry{display:block;color:var(--muted2);font-size:8px;margin-top:8px;line-height:1.8}
+.fine-deadline-meta{color:#f0bb77!important}
+@media(max-width:1000px){.component-catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.component-directory{padding:15px}.component-catalog-grid,.installed-component-grid,.service-catalog-grid{grid-template-columns:1fr}.component-note{min-height:0}.component-directory-heading{align-items:flex-start;gap:8px}.component-filter{font-size:9px;padding:7px 8px}}
+@media(prefers-reduced-motion:reduce){.component-card,.installed-component-card,.service-catalog-card,.component-filter{transition:none}}

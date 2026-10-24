@@ -37,7 +37,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.2.0");
+ assert.equal(body.version, "3.3.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -303,4 +303,50 @@ test("/purchasekm surfaces the arithmetic discrepancy without changing odometer 
   assert.match(sentMessages[0].text,/کیلومتر واقعی روی کیلومترشمار را تأیید کن/);
   assert.equal(JSON.parse(files.get("data/logs/2026-10.json")).events[0].odometerKm,431381,"report must not rewrite the odometer to fit the estimate");
  }finally{globalThis.fetch=originalFetch;}
+});
+
+
+test("repairjob expands a multi-part workshop visit, preserves actor/specs and keeps unknown costs blank", async () => {
+ const token = "r".repeat(64);
+ const log = { schemaVersion: 1, month: "2026-10", events: [{ id: "odo-before-0001", type: "odometer", title: "ثبت کیلومتر", description: "/km 431381", actor: "من", occurredAt: "2026-10-23T10:00:00+03:30", date: "2026-10-23", time: "10:00", odometerKm: 431381, createdAt: "2026-10-23T06:30:00.000Z" }] };
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: ["بابام"], ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 }, serviceIntervals: { spark_plugs: { label: "شمع موتور", intervalKm: 20000, intervalDays: 730 } }, partCatalog: { categories: {}, items: { spark_plugs: { label: "شمع موتور", category: "engine", mode: "periodic" }, spark_plug_wires: { label: "وایر شمع", category: "engine", mode: "condition" }, battery: { label: "باتری", category: "electrical", mode: "condition" }, thermostat: { label: "ترموستات", category: "cooling", mode: "condition" }, thermostat_housing: { label: "محفظه ترموستات", category: "cooling", mode: "condition" } }, services: { engine_diagnostics: { label: "دیاگ", aliases: ["دیاگ"] }, cooling_fan_adjustment: { label: "تنظیم فن", aliases: ["تنظیم دور فن"] }, cooling_bleed: { label: "هواگیری", aliases: ["هواگیری"] } } } })],
+  ["data/logs/2026-10.json", JSON.stringify(log)]
+ ]);
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const suffix = url.pathname.split("/contents/")[1];
+  const path = suffix.split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") {
+   const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (init.method === "PUT") {
+   const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+   return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected method", { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/api/v1/record", {
+   method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+   body: JSON.stringify({ text: "امروز ماشین دیشب روشن نشد امروز بابام بردش تعمیرگاه و روی کیلومتر 431462 دیاگ زده شد درجه آب و دور فن تنظیم شد شمع ها عوض شدن وایر شمع ها عوض شدن باتری عوض شد با مشخصات 12 ولت 60 امپر برند باتری را نمیدونم با قیمت 4.5 ملیون تومان ترموستات و محفظه ترموستات قسمت محفظه ترموستات 1.5 ملیون تومان عوض شد و هوا گیری شد" })
+  }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  const body = await response.json(); assert.equal(body.persisted, true, body.reply);
+  const currentLog = JSON.parse(files.get("data/logs/2026-10.json"));
+  const created = currentLog.events.filter(e => e.repairGroupId);
+  assert.ok(created.length >= 7, `expected multiple repair rows; got ${created.length}`);
+  assert.ok(created.every(e => e.actor === "بابام"));
+  const battery = created.find(e => e.componentKey === "battery");
+  assert.ok(battery); assert.equal(battery.costRial, 45000000); assert.equal(battery.brand, "نامشخص");
+  assert.equal(battery.specs.voltageV, 12); assert.equal(battery.specs.capacityAh, 60);
+  const housing = created.find(e => e.componentKey === "thermostat_housing");
+  assert.ok(housing); assert.equal(housing.costRial, 15000000);
+  const thermostat = created.find(e => e.componentKey === "thermostat"); assert.ok(thermostat); assert.equal(thermostat.costRial, null);
+  const issue = created.find(e => e.type === "issue"); assert.equal(issue.status, "fixed");
+ } finally { globalThis.fetch = originalFetch; }
 });
