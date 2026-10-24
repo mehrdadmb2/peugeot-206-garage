@@ -9,6 +9,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /no scheduled handler/);
+ assert.equal(body.version, "3.4.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -37,7 +38,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.3.0");
+ assert.equal(body.version, "3.4.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -349,4 +350,199 @@ test("repairjob expands a multi-part workshop visit, preserves actor/specs and k
   const thermostat = created.find(e => e.componentKey === "thermostat"); assert.ok(thermostat); assert.equal(thermostat.costRial, null);
   const issue = created.find(e => e.type === "issue"); assert.equal(issue.status, "fixed");
  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("Telegram webhook acknowledges immediately when waitUntil is available and later sends the response", async () => {
+ const sent = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sent.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sent.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ let backgroundTask;
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 99001, message: { message_id: 1, date: Math.floor(Date.now()/1000), text: "/start", from: { id: 42 }, chat: { id: 101 } } })
+  }), { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-token" }, { waitUntil(promise) { backgroundTask = promise; } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.accepted, true);
+  assert.equal(body.processing, "background");
+  assert.ok(backgroundTask instanceof Promise);
+  await backgroundTask;
+  assert.ok(sent.length >= 1);
+  assert.match(sent[0].text, /دفتر هوشمند|شروع|فرمان/);
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test("exact duplicate Telegram message is not saved without confirmation and offers yes/no actions", async () => {
+ const text = "/note تکرار آزمایشی";
+ const normalized = text.normalize("NFKC").toLowerCase().replace(/[\u064B-\u065F\u0670]/g, "").replace(/\s+/g, " ").trim().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+ const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+ const fingerprint = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {} })],
+  ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [{ id: "duplicate-old-0001", type: "note", title: "یادداشت خودرو", description: "تکرار آزمایشی", actor: "من", occurredAt: "2026-10-24T10:00:00+03:30", date: "2026-10-24", createdAt: "2026-10-24T06:30:00.000Z", metadata: { messageFingerprint: fingerprint } }] })]
+ ]);
+ const sentMessages = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.github.com") {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   const method = (init.method || "GET").toUpperCase();
+   const content = files.get(path);
+   if (method === "GET") {
+    if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content,"utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (method === "PUT") {
+    const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content,"base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sentMessages.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sentMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/answerCallbackQuery")) return new Response(JSON.stringify({ ok: true, result: true }), { status: 200, headers: { "content-type": "application/json" } });
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ const env = { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ const sendUpdate = (body) => worker.fetch(new Request("https://unit.test/telegram", { method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" }, body: JSON.stringify(body) }), env);
+ try {
+  const response = await sendUpdate({ update_id: 99002, message: { message_id: 2, date: Math.floor(Date.now()/1000), text, from: { id: 42 }, chat: { id: 101 } } });
+  assert.equal(response.status, 200);
+  assert.equal(sentMessages.length, 2, "receipt + duplicate confirmation prompt");
+  assert.match(sentMessages[1].text, /احتمال ثبت تکراری/);
+  assert.ok(sentMessages[1].reply_markup.inline_keyboard.flat().some(button => /dupc:[a-f0-9]{8}:yes/.test(button.callback_data || "")));
+  assert.equal(JSON.parse(files.get("data/logs/2026-10.json")).events.length, 1, "no duplicate event is written before confirmation");
+  const pending = JSON.parse(files.get("data/pending-duplicates.json"));
+  const token = Object.keys(pending.items)[0]; assert.ok(token);
+  await sendUpdate({ update_id: 99003, callback_query: { id: "cb-no", data: `dupc:${token}:no`, from: { id: 42 }, message: { message_id: 20, chat: { id: 101 } } } });
+  assert.equal(JSON.parse(files.get("data/logs/2026-10.json")).events.length, 1, "declining the prompt keeps the prior history unchanged");
+  assert.match(sentMessages.at(-1).text, /هیچ عملیات جدیدی ثبت نشد|سوابق قبلی بدون تغییر/);
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+
+test("repeated multi-part repairjob prompts before writing a second workshop visit", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 3, vehicle: { label: "206 SD" }, people: ["بابام"], serviceIntervals: {}, partCatalog: {
+   categories: { engine: { label: "موتور", icon: "⚙️" }, electrical: { label: "برق", icon: "🔋" } },
+   items: { battery: { label: "باتری", category: "electrical", mode: "condition", aliases: ["باتری"] } },
+   services: { engine_diagnostics: { label: "دیاگ موتور", category: "engine", aliases: ["دیاگ"] } }
+  } })]
+ ]);
+ const sentMessages=[];
+ const timeline=[];
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{
+  const url=new URL(input);
+  if(url.hostname==="api.github.com"){
+   timeline.push(`github:${(init.method||"GET").toUpperCase()}`);
+   const path=url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   const method=(init.method||"GET").toUpperCase();
+   const content=files.get(path);
+   if(method==="GET"){
+    if(content===undefined)return new Response("not found",{status:404});
+    return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}});
+   }
+   if(method==="PUT"){
+    const body=JSON.parse(init.body);files.set(path,Buffer.from(body.content,"base64").toString("utf8"));
+    return new Response(JSON.stringify({content:{path}}),{status:201,headers:{"content-type":"application/json"}});
+   }
+  }
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){timeline.push("telegram:sendMessage");sentMessages.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sentMessages.length}}),{status:200,headers:{"content-type":"application/json"}})}
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/answerCallbackQuery"))return new Response(JSON.stringify({ok:true,result:true}),{status:200,headers:{"content-type":"application/json"}});
+  return new Response(`unexpected upstream ${url.hostname}${url.pathname}`,{status:500});
+ };
+ const env={TELEGRAM_WEBHOOK_SECRET:"test-secret",ALLOWED_TELEGRAM_USER_ID:"42",TELEGRAM_BOT_TOKEN:"fake-token",GITHUB_TOKEN:"fake-github-token",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"};
+ const text="/repairjob بابام کیلومتر 431462 دیاگ زده شد و باتری عوض شد";
+ const sendUpdate=(id,updateId,body)=>worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"test-secret"},body:JSON.stringify({update_id:updateId,message:{message_id:id,date:Math.floor(Date.now()/1000),text,from:{id:42},chat:{id:101}}})}),env);
+ try{
+  const first=await sendUpdate(1,99101,{});assert.equal(first.status,200);
+  assert.equal(timeline[0], "telegram:sendMessage", "user receipt must be sent before the first GitHub call");
+  const indexAfterFirst=JSON.parse(files.get("data/index.json"));
+  const month=indexAfterFirst.months[0];
+  const before=JSON.parse(files.get(`data/logs/${month}.json`)).events;
+  assert.equal(before.length,2,"initial repair job should create the service and battery rows");
+  const second=await sendUpdate(2,99102,{});assert.equal(second.status,200);
+  const after=JSON.parse(files.get(`data/logs/${month}.json`)).events;
+  assert.equal(after.length,2,"exact repeated repair job must not create a second set of rows");
+  assert.ok(sentMessages.some(message=>/احتمال ثبت تکراری/.test(message.text)));
+  const prompt=sentMessages.find(message=>/احتمال ثبت تکراری/.test(message.text));
+  const token=prompt.reply_markup.inline_keyboard.flat().find(button=>/:no$/.test(button.callback_data)).callback_data.match(/^dupc:([a-f0-9]{8}):no$/)[1];
+  await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST",
+   headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 99103, callback_query: { id: "dup-no", data: `dupc:${token}:no`, from: { id: 42 }, message: { message_id: prompt.message_id || 5, chat: { id: 101 } } } })
+  }), env);
+  assert.equal(JSON.parse(files.get(`data/logs/${month}.json`)).events.length,2,"declining confirmation must keep the event count unchanged");
+ }finally{globalThis.fetch=originalFetch;}
+});
+
+
+test("/duplicates presents manual merge and archive choices without changing events", async () => {
+ const same = { type: "fuel", title: "سوخت‌گیری", description: "۲۰ لیتر بنزین", actor: "من", occurredAt: "2026-10-23T08:00:00+03:30", date: "2026-10-23", liters: 20, costRial: 7000000, odometerKm: 431200, createdAt: "2026-10-23T04:30:00.000Z" };
+ const files=new Map([
+  ["data/index.json",JSON.stringify({schemaVersion:1,updatedAt:null,months:["2026-10"]})],
+  ["data/config.json",JSON.stringify({schemaVersion:1,vehicle:{label:"206 SD"},people:[],serviceIntervals:{}})],
+  ["data/logs/2026-10.json",JSON.stringify({schemaVersion:1,month:"2026-10",events:[{...same,id:"fuel-duplicate-0001"},{...same,id:"fuel-duplicate-0002",createdAt:"2026-10-23T04:40:00.000Z"}]})]
+ ]);
+ const sentMessages=[];const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{
+  const url=new URL(input);
+  if(url.hostname==="api.github.com"){
+   const path=url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");const content=files.get(path);
+   if(content===undefined)return new Response("not found",{status:404});
+   return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}});
+  }
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sentMessages.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sentMessages.length}}),{status:200,headers:{"content-type":"application/json"}})}
+  return new Response("unexpected upstream",{status:500});
+ };
+ try{
+  const response=await worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"test-secret"},body:JSON.stringify({update_id:99104,message:{message_id:4,date:Math.floor(Date.now()/1000),text:"/duplicates",from:{id:42},chat:{id:101}}})}),{TELEGRAM_WEBHOOK_SECRET:"test-secret",ALLOWED_TELEGRAM_USER_ID:"42",TELEGRAM_BOT_TOKEN:"fake-token",GITHUB_TOKEN:"fake-github-token",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
+  assert.equal(response.status,200);assert.ok(sentMessages.length>=2);
+  assert.ok(sentMessages.some(message=>/جفت احتمالی تکراری/.test(message.text)));
+  const pair=sentMessages.find(message=>/جفت احتمالی تکراری/.test(message.text));
+  assert.ok(pair.reply_markup.inline_keyboard.flat().some(button=>String(button.callback_data||"").startsWith("dupmerge:")));
+  assert.equal(JSON.parse(files.get("data/logs/2026-10.json")).events.length,2,"reviewing duplicates must not mutate history until a button is selected");
+ }finally{globalThis.fetch=originalFetch;}
+});
+
+
+test("replacement part counts as the latest maintenance event in the due report", async () => {
+ const token="d".repeat(64);
+ const files=new Map([
+  ["data/index.json",JSON.stringify({schemaVersion:1,updatedAt:null,months:["2026-10"]})],
+  ["data/config.json",JSON.stringify({schemaVersion:2,vehicle:{label:"206 SD"},people:[],serviceIntervals:{spark_plugs:{label:"شمع موتور",intervalKm:20000,intervalDays:730}},partCatalog:{categories:{engine:{label:"موتور"}},items:{spark_plugs:{label:"شمع موتور",category:"engine",mode:"periodic",intervalKm:20000,intervalDays:730}},services:{}}})],
+  ["data/logs/2026-10.json",JSON.stringify({schemaVersion:1,month:"2026-10",events:[
+   {id:"odo-current-0001",type:"odometer",title:"کیلومترشمار",description:"ثبت فعلی",occurredAt:"2026-10-24T10:00:00+03:30",date:"2026-10-24",odometerKm:451500,createdAt:"2026-10-24T06:30:00.000Z"},
+   {id:"plugs-installed-001",type:"part",title:"تعویض قطعه: شمع موتور",description:"شمع موتور",componentKey:"spark_plugs",componentReplaced:true,serviceKey:null,actor:"من",occurredAt:"2026-01-01T10:00:00+03:30",date:"2026-01-01",odometerKm:431462,createdAt:"2026-01-01T06:30:00.000Z"}
+  ]})]
+ ]);
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{
+  const url=new URL(input);
+  if(url.hostname==="api.github.com"){
+   const path=url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");const content=files.get(path);
+   if(content===undefined)return new Response("not found",{status:404});
+   return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}});
+  }
+  return new Response("unexpected upstream",{status:500});
+ };
+ try{
+  const response=await worker.fetch(new Request("https://unit.test/api/v1/due",{headers:{authorization:`Bearer ${token}`}}),{API_ACCESS_TOKEN:token,GITHUB_TOKEN:"fake-github-token",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.ok(body.dueItems.some(item=>item.key==="spark_plugs"),"installed part without serviceKey should still anchor its periodic reminder by componentKey");
+ }finally{globalThis.fetch=originalFetch;}
 });

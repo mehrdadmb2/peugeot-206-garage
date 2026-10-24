@@ -4,6 +4,7 @@ const FILE_INDEX = "data/index.json";
 const FILE_CONFIG = "data/config.json";
 const FILE_REMINDERS = "data/reminder-state.json";
 const FILE_DELETED_EVENTS = "data/deleted-events.json";
+const FILE_PENDING_DUPLICATES = "data/pending-duplicates.json";
 const DEFAULT_PURCHASE_ODOMETER_KM = 428000;
 const DEFAULT_ESTIMATED_KM_SINCE_PURCHASE = 2400;
 const QUICKCHART_URL = "https://quickchart.io/chart";
@@ -28,7 +29,7 @@ const SERVICE_ALIASES = {
 const SERVICE_START_WORDS = ["تعویض", "عوض کردم", "عوض شد", "عوضش کردم", "سرویس کردم", "سرویس شد", "بررسی کردم", "بازدید کردم", "چک کردم", "تعویض کردم"];
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) return corsResponse(new Response(null, { status: 204 }));
 
@@ -36,7 +37,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.3.0",
+        version: "3.4.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -59,7 +60,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.3.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.4.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -72,14 +73,14 @@ export default {
       let update;
       try { update = await request.json(); }
       catch { return new Response("invalid json", { status: 400 }); }
-      try {
-        await handleTelegramUpdate(update, env);
-        return new Response("ok", { status: 200 });
-      } catch (error) {
-        console.error("telegram update failed", error?.stack || error);
-        // Return 200 for an unrecoverable update so Telegram does not create a retry storm.
-        return new Response("handled", { status: 200 });
+      // Acknowledge Telegram immediately. Multi-event workshop messages may write many
+      // GitHub files; waitUntil keeps processing alive and avoids Telegram webhook retries.
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(processTelegramWebhook(update, env).catch(error => console.error("telegram background processing failed", error?.stack || error)));
+        return json({ ok: true, accepted: true, processing: "background" });
       }
+      await processTelegramWebhook(update, env);
+      return json({ ok: true, accepted: true, processing: "complete" });
     }
     if (url.pathname.startsWith("/api/v1/")) {
       if (!isApiAuthorized(request, env)) return corsResponse(json({ ok: false, error: "unauthorized", message: "Set the API_ACCESS_TOKEN Worker secret and send it as Authorization: Bearer <token>." }, 401));
@@ -211,7 +212,137 @@ function accountingDateForApi(event) {
   return String(event.type === "fine" && event.paid && event.paidAt ? event.paidAt : event.type === "issue" && event.resolvedAt && Number(event.repairCostRial) > 0 ? event.resolvedAt : event.occurredAt || event.date || "");
 }
 
-async function handleTelegramUpdate(update, env) {
+async function processTelegramWebhook(update, env) {
+  const message = update?.message;
+  let acknowledgementSent = false;
+  try {
+    // Send receipt before the first GitHub round-trip. Workshop jobs can write many files,
+    // and users should never need to resend simply because the repository API is slow.
+    if (message && typeof message.text === "string" && message.chat?.id &&
+        String(message.from?.id ?? "") === String(env.ALLOWED_TELEGRAM_USER_ID || "") &&
+        looksLikeEventCreation(message.text)) {
+      await sendText(env, message.chat.id, "📩 پیام دریافت شد. ابتدا تکراری‌بودن را بررسی می‌کنم و سپس نتیجهٔ ثبت را جداگانه می‌فرستم؛ لطفاً پیام را دوباره ارسال نکن.", false);
+      acknowledgementSent = true;
+    }
+    if (message && typeof message.text === "string" && update?.update_id != null && looksLikeStateChange(message.text)) {
+      if (!(await claimTelegramUpdate(update.update_id, env))) {
+        console.info("duplicate Telegram update ignored", String(update.update_id));
+        if (acknowledgementSent && message?.chat?.id) {
+          await sendText(env, message.chat.id, "✅ این به‌روزرسانی قبلاً دریافت و پردازش شده است؛ دوباره ثبت نشد. اگر نتیجهٔ قبلی را نمی‌بینی، /latest و سپس /duplicates را بررسی کن.", false);
+        }
+        return;
+      }
+    }
+    await handleTelegramUpdate(update, env, { acknowledgementSent });
+  } catch (error) {
+    console.error("telegram update processing failed", error?.stack || error);
+    const chatId = message?.chat?.id;
+    if (chatId && String(message?.from?.id ?? "") === String(env.ALLOWED_TELEGRAM_USER_ID || "")) {
+      try { await sendText(env, chatId, "⚠️ پیام دریافت شد، اما پردازش کامل نشد. قبل از ارسال دوباره، /duplicates را بررسی کن؛ جزئیات فنی در Cloudflare Worker Logs است.", false); }
+      catch (sendError) { console.error("telegram fallback response failed", sendError?.message || sendError); }
+    }
+  }
+}
+
+async function claimTelegramUpdate(updateId, env) {
+  const id = String(updateId);
+  const current = await readJsonFile(FILE_INDEX, env, { schemaVersion: 1, months: [] });
+  if ((current.recentTelegramUpdateIds || []).includes(id)) return false;
+  let claimed = false;
+  await mutateJsonFile(FILE_INDEX, env, () => ({ schemaVersion: 1, months: [] }), value => {
+    value.recentTelegramUpdateIds = Array.isArray(value.recentTelegramUpdateIds) ? value.recentTelegramUpdateIds : [];
+    if (value.recentTelegramUpdateIds.includes(id)) return value;
+    value.recentTelegramUpdateIds.push(id);
+    value.recentTelegramUpdateIds = value.recentTelegramUpdateIds.slice(-250);
+    value.updatedAt = nowTehran().iso;
+    claimed = true;
+    return value;
+  });
+  return claimed;
+}
+
+function looksLikeStateChange(text) {
+  const value = normalizeIntentText(text);
+  if (/^\/(?:km|odo|trip|fuel|service|part|interval|wash|fine|paid|payfine|repair|fixed|expense|note|repairjob|workshop|purchasekm|people|edit|annotate|actor|delete|restore)\b/i.test(value)) return true;
+  return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|جریمه|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+}
+
+function looksLikeEventCreation(text) {
+  const value = normalizeIntentText(text);
+  if (/^\/(?:km|odo|trip|fuel|service|part|wash|fine|repairjob|workshop|expense|note)\b/i.test(value)) return true;
+  if (/^\//.test(value)) return false;
+  return /(?:روشن نشد|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+}
+
+async function fingerprintText(value) {
+  const normalized = normalizeIntentText(value).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  if (!normalized) return "";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function findMessageDuplicate(text, env) {
+  const raw = String(text || "").trim();
+  const candidates = [raw, raw.replace(/^\/[^\s@]+(?:@[^\s]+)?\s*/, "").trim()].filter(Boolean);
+  const fingerprints = new Set(await Promise.all(candidates.map(fingerprintText)));
+  const matches = (await loadAllEvents(env)).filter(event => fingerprints.has(String(event.metadata?.messageFingerprint || "")));
+  if (!matches.length) return null;
+  matches.sort((a, b) => eventTimestampForReport(b) - eventTimestampForReport(a));
+  return { event: matches[0], count: matches.length };
+}
+
+async function savePendingDuplicate(payload, env) {
+  const token = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  const createdAt = nowTehran().iso;
+  await mutateJsonFile(FILE_PENDING_DUPLICATES, env, () => ({ schemaVersion: 1, items: {} }), current => {
+    current.items = current.items && typeof current.items === "object" ? current.items : {};
+    const now = Date.now();
+    for (const [key, item] of Object.entries(current.items)) if (!item?.createdAt || now - Date.parse(item.createdAt) > 86400000) delete current.items[key];
+    current.items[token] = { ...payload, token, createdAt, expiresAt: now + 86400000 };
+    const keys = Object.keys(current.items);
+    for (const key of keys.slice(0, Math.max(0, keys.length - 25))) delete current.items[key];
+    current.updatedAt = createdAt;
+    return current;
+  });
+  return token;
+}
+
+async function consumePendingDuplicate(token, env) {
+  let payload = null;
+  await mutateJsonFile(FILE_PENDING_DUPLICATES, env, () => ({ schemaVersion: 1, items: {} }), current => {
+    current.items = current.items && typeof current.items === "object" ? current.items : {};
+    payload = current.items[token] || null;
+    if (payload) delete current.items[token];
+    current.updatedAt = nowTehran().iso;
+    return current;
+  });
+  if (payload?.expiresAt && Number(payload.expiresAt) < Date.now()) return null;
+  return payload;
+}
+
+function duplicateConfirmationKeyboard(token) {
+  return { inline_keyboard: [[
+    { text: "✅ با وجود تکرار ثبت کن", callback_data: `dupc:${token}:yes` },
+    { text: "🚫 ثبت نکن", callback_data: `dupc:${token}:no` }
+  ]] };
+}
+
+async function sendTelegramReply(reply, chatId, env) {
+  if (reply?.document) {
+    await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
+  } else if (Array.isArray(reply?.photos)) {
+    if (reply.text) await sendText(env, chatId, reply.text, false);
+    for (const item of reply.photos) await sendPhoto(env, chatId, item.filename, item.blob, item.caption || "نمودار تحلیلی پژو ۲۰۶");
+  } else if (Array.isArray(reply?.messages)) {
+    for (const item of reply.messages) await sendText(env, chatId, item.text, item.markup || false);
+  } else if (reply?.text) {
+    const shortId = reply.eventId || eventIdFromReply(reply.text);
+    const markup = reply.markup || (shortId ? eventActionKeyboard(shortId) : null);
+    await sendText(env, chatId, reply.text, markup || reply.keyboard !== false);
+  }
+}
+
+async function handleTelegramUpdate(update, env, options = {}) {
   if (update?.callback_query) {
     await handleCallbackQuery(update.callback_query, env);
     return;
@@ -227,19 +358,19 @@ async function handleTelegramUpdate(update, env) {
   if (!chatId) return;
   const text = normalizeDigits(message.text.trim());
   try {
-    const reply = await processMessage(text, message, env);
-    if (reply?.document) {
-      await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
-    } else if (Array.isArray(reply?.photos)) {
-      if (reply.text) await sendText(env, chatId, reply.text, false);
-      for (const item of reply.photos) await sendPhoto(env, chatId, item.filename, item.blob, item.caption || "نمودار تحلیلی پژو ۲۰۶");
-    } else if (Array.isArray(reply?.messages)) {
-      for (const item of reply.messages) await sendText(env, chatId, item.text, item.markup || false);
-    } else if (reply?.text) {
-      const shortId = reply.eventId || eventIdFromReply(reply.text);
-      const markup = reply.markup || (shortId ? eventActionKeyboard(shortId) : null);
-      await sendText(env, chatId, reply.text, markup || reply.keyboard !== false);
+    if (looksLikeEventCreation(text)) {
+      if (!options.acknowledgementSent) {
+        await sendText(env, chatId, "📩 پیام دریافت شد. ابتدا تکراری‌بودن را بررسی می‌کنم و سپس نتیجهٔ ثبت را جداگانه می‌فرستم؛ لطفاً پیام را دوباره ارسال نکن.", false);
+      }
+      const duplicate = await findMessageDuplicate(text, env);
+      if (duplicate) {
+        const token = await savePendingDuplicate({ kind: "message", text: message.text, message: { date: message.date, message_id: message.message_id, text: message.text, from: { id: message.from?.id }, chat: { id: chatId } }, existingEventIds: [duplicate.event.id] }, env);
+        await sendText(env, chatId, `🟡 <b>احتمال ثبت تکراری</b>\n\nاین پیام با سابقهٔ قبلی شباهت دقیق دارد. هیچ رویداد تازه‌ای ذخیره نشده است.\n\nعنوان قبلی: ${duplicate.event.title || eventTypeLabel(duplicate.event.type)}\nشناسهٔ قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nتاریخ: ${duplicate.event.jalaliDate || duplicate.event.date || "—"}\n\nاگر واقعاً عملیات جدیدی است، ثبت را تأیید کن؛ در غیر این صورت انصراف بده.`, duplicateConfirmationKeyboard(token));
+        return;
+      }
     }
+    const reply = await processMessage(text, message, env);
+    await sendTelegramReply(reply, chatId, env);
   } catch (error) {
     console.error("message processing failed", error?.stack || error);
     await sendText(env, chatId, "⚠️ عملیات انجام نشد. وضعیت Worker و دسترسی Contents: Read and write را در Cloudflare بررسی کن. جزئیات فنی در Worker Logs ثبت شده است.");
@@ -254,7 +385,38 @@ async function handleCallbackQuery(query, env) {
     await answerCallbackQuery(env, callbackId, "این ربات خصوصی است.", true);
     return;
   }
-  const match = String(query?.data || "").match(/^evt:([a-f0-9-]{6,36}):(detail|edit|note|actor|delete|confirm|cancel)$/i);
+  const data = String(query?.data || "");
+  const pendingMatch = data.match(/^dupc:([a-f0-9]{8}):(yes|no)$/i);
+  if (pendingMatch && chatId) {
+    const [, token, decision] = pendingMatch;
+    await answerCallbackQuery(env, callbackId, decision === "yes" ? "درخواست تأیید شد." : "ثبت لغو شد.");
+    const pending = await consumePendingDuplicate(token, env);
+    if (!pending) { await sendText(env, chatId, "⏳ درخواست تکراری منقضی شده یا قبلاً پردازش شده است.", false); return; }
+    if (decision === "no") { await sendText(env, chatId, "✅ تأیید شد؛ عملیات جدیدی ثبت نشد. سوابق قبلی بدون تغییر ماندند.", false); return; }
+    if (pending.kind === "message" && pending.text && pending.message) {
+      const reply = await processMessage(pending.text, pending.message, env, { skipDuplicateChecks: true });
+      await sendTelegramReply(reply, chatId, env);
+      return;
+    }
+    await sendText(env, chatId, "درخواست تأیید قالب معتبری ندارد؛ هیچ داده‌ای اضافه نشد.", false);
+    return;
+  }
+  const mergeMatch = data.match(/^dupmerge:([a-f0-9]{8}):([a-f0-9]{8})$/i);
+  if (mergeMatch && chatId) {
+    await answerCallbackQuery(env, callbackId, "در حال ادغام سوابق…");
+    const result = await mergeDuplicateEvents(mergeMatch[1], mergeMatch[2], env, senderId);
+    await sendText(env, chatId, result, false);
+    return;
+  }
+  const deleteMatch = data.match(/^dupdelete:([a-f0-9]{8})$/i);
+  if (deleteMatch && chatId) {
+    await answerCallbackQuery(env, callbackId, "در حال بررسی…");
+    const event = await findEventByPrefix(deleteMatch[1], env);
+    if (!event) { await sendText(env, chatId, "رویداد فعال پیدا نشد.", false); return; }
+    await sendText(env, chatId, `⚠️ حذف سابقهٔ احتمالی تکراری\\n\\n${formatEventDetails(event)}\\n\\nاین رویداد پس از تأیید به بایگانی منتقل می‌شود.`, deleteConfirmationKeyboard(event.id.slice(0,8)));
+    return;
+  }
+  const match = data.match(/^evt:([a-f0-9-]{6,36}):(detail|edit|note|actor|delete|confirm|cancel)$/i);
   if (!match || !chatId) {
     await answerCallbackQuery(env, callbackId, "دکمه نامعتبر یا منقضی‌شده است.", true);
     return;
@@ -360,7 +522,7 @@ const COMMAND_ALIASES = {
   restore: "restore", بازگردانی: "restore",
   people: "people", persons: "people", اشخاص: "people", افراد: "people",
   operations: "operations", records: "operations", list: "operations", allrecords: "operations", عملیات: "operations", سوابق: "operations", فهرست: "operations",
-  undo: "undo"
+  undo: "undo", duplicates: "duplicates", duplicate: "duplicates", duplicatescan: "duplicates", تکراری: "duplicates", تکراریها: "duplicates", تکراری_ها: "duplicates"
 };
 const KNOWN_COMMANDS = new Set(Object.values(COMMAND_ALIASES));
 function canonicalizeCommand(value) {
@@ -415,7 +577,7 @@ function telegramHtml(value) {
   }).join("\n");
 }
 
-async function processMessage(text, message, env) {
+async function processMessage(text, message, env, options = {}) {
   const parsedCommand = canonicalizeCommand(text);
   text = parsedCommand.text;
   if (parsedCommand.unknown) return { text: `دستور «/${parsedCommand.command}» شناخته نشد. راهنمای کامل و نمونه‌های ثبت را پایین ببین:\n\n${helpText()}`, keyboard: true };
@@ -431,7 +593,11 @@ async function processMessage(text, message, env) {
   if (/^\/catalog\b|^\/parts\b|^\/قطعات\b|^\/کاتالوگ\b/i.test(text)) return { messages: await catalogGuideMessages(env), keyboard: false };
   if (/^\/components\b|^\/installed\b/i.test(text)) return { messages: await componentInventoryReport(env), keyboard: false };
   if (/^\/services\b|^\/servicecatalog\b|^\/فهرست_سرویس\b/i.test(text)) return { messages: await serviceCatalogMessages(env), keyboard: false };
-  if (/^\/repairjob\b|^\/workshop\b|^\/تعمیرگاه\b|^\/مراجعه\b/i.test(text)) return { text: await recordRepairJob(text.replace(/^\/\S+/, "").trim(), message, env), keyboard: false };
+  if (/^\/repairjob\b|^\/workshop\b|^\/تعمیرگاه\b|^\/مراجعه\b/i.test(text)) {
+    const result = await recordRepairJob(text.replace(/^\/\S+/, "").trim(), message, env, options);
+    return typeof result === "string" ? { text: result, keyboard: false } : result;
+  }
+  if (/^\/duplicates\b|^\/duplicate\b|^\/تکراری\b/i.test(text)) return { messages: await duplicateReviewMessages(env), keyboard: false };
   if (/^\/fineinfo\b|^\/جزئیات_جریمه\b/i.test(text)) return { text: await fineInfoCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/purchasekm\b|^\/کیلومترخرید\b/i.test(text)) return { text: await purchaseOdometerCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/analysis\b|^\/charts\b|^\/نمودار\b|^\/تحلیل\b/i.test(text)) return await createAnalysisReply(text.replace(/^\S+/, "").trim(), env);
@@ -526,7 +692,10 @@ async function processMessage(text, message, env) {
   const km = extractOdometer(text);
   const money = extractMoneyRial(text);
   const liters = parseLiters(text);
-  if (isRepairJobNarrative(lower)) return { text: await recordRepairJob(text, message, env), keyboard: false };
+  if (isRepairJobNarrative(lower)) {
+    const result = await recordRepairJob(text, message, env, options);
+    return typeof result === "string" ? { text: result, keyboard: false } : result;
+  }
   const isFuel = /بنزین|سوخت.?گیری|پمپ\s*بنزین|باک\s*(?:زدم|پر)|\bpetrol\b|\brefuel(?:led|ing)?\b|\bfuel\b|\bfilled\s*(?:up|the\s*tank)\b|\bgas(?:oline)?\b|\d+(?:\.\d+)?\s*l\b/i.test(lower) && liters > 0;
   if (isFuel) {
     return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: text, liters, costRial: money, odometerKm: km, fullTank: /\bfull\b|باک\s*را\s*پر|باک\s*کامل|پر\s*کردم/i.test(text), occurredAt, sourceText: text }, env), keyboard: true };
@@ -1070,20 +1239,119 @@ function makeRepairJobInputs(rawText, config, message) {
   return created;
 }
 
-async function recordRepairJob(rawText, message, env) {
+function repairRowSignature(row) {
+  return JSON.stringify({
+    type: row.type || "part", title: row.title || "", componentKey: row.componentKey || "",
+    serviceCatalogKey: row.serviceCatalogKey || "", serviceKey: row.serviceKey || "",
+    expenseCategory: row.expenseCategory || "", costRial: row.costRial ?? null,
+    actor: row.actor || "من", odometerKm: row.odometerKm ?? null,
+    specs: row.specs || null, componentReplaced: Boolean(row.componentReplaced)
+  });
+}
+
+async function findDuplicateRepairGroup(rows, env) {
+  if (!rows.length) return null;
+  const expected = rows.map(repairRowSignature).sort();
+  const events = await loadAllEvents(env);
+  const groups = new Map();
+  for (const event of events) {
+    if (!event.repairGroupId) continue;
+    if (!groups.has(event.repairGroupId)) groups.set(event.repairGroupId, []);
+    groups.get(event.repairGroupId).push(event);
+  }
+  for (const [id, group] of groups) {
+    if (group.length !== rows.length) continue;
+    // Do not require the calendar date to match: re-sending the same workshop message
+    // tomorrow should still be flagged when driver, odometer and every repair row match.
+    const actual = group.map(repairRowSignature).sort();
+    if (actual.every((item, index) => item === expected[index])) return { id, events: group };
+  }
+  return null;
+}
+
+function eventDuplicateSignature(event) {
+  return JSON.stringify({
+    fingerprint: event.metadata?.messageFingerprint || "",
+    type: event.type || "", title: normalizeIntentText(event.title || ""),
+    date: event.date || String(event.occurredAt || "").slice(0, 10), actor: event.actor || "من",
+    odometerKm: event.odometerKm ?? null, costRial: event.costRial ?? null,
+    liters: event.liters ?? null, distanceKm: event.distanceKm ?? null,
+    componentKey: event.componentKey || "", serviceCatalogKey: event.serviceCatalogKey || "",
+    serviceKey: event.serviceKey || "", expenseCategory: event.expenseCategory || "", specs: event.specs || null
+  });
+}
+
+async function duplicateReviewMessages(env) {
+  const events = await loadAllEvents(env);
+  const groups = new Map();
+  for (const event of events) {
+    const signature = eventDuplicateSignature(event);
+    if (!groups.has(signature)) groups.set(signature, []);
+    groups.get(signature).push(event);
+  }
+  const duplicates = [...groups.values()].filter(group => group.length > 1).sort((a, b) => eventTimestampForReport(b[b.length - 1]) - eventTimestampForReport(a[a.length - 1]));
+  if (!duplicates.length) return [{ text: "✅ رویداد تکراری قابل تشخیص پیدا نشد. هیچ داده‌ای تغییر نکرد.\n\nاین بررسی نوع، تاریخ، شخص، کیلومتر، مبلغ، مشخصات قطعه و اثرانگشت پیام را مقایسه می‌کند.", markup: false }];
+  const messages = [{ text: `🧹 بررسی رویدادهای احتمالی تکراری\n\nگروه‌های مشکوک: ${formatNum(duplicates.length)}\nهیچ موردی خودکار حذف یا ادغام نمی‌شود. برای هر جفت، جزئیات را بررسی و تصمیم بگیر.`, markup: false }];
+  for (const group of duplicates.slice(0, 15)) {
+    const keeper = group[0];
+    for (const duplicate of group.slice(1, 4)) {
+      const summary = event => `${event.title || eventTypeLabel(event.type)} · ${event.jalaliDate || event.date || "—"} · ${event.actor || "من"} · ${event.costRial != null ? formatMoneyToman(event.costRial) : "بدون مبلغ"}`;
+      messages.push({ text: `⚠️ جفت احتمالی تکراری\n\nنسخه پیشنهادی برای نگه‌داشتن:\n${summary(keeper)}\nشناسه: <code>${keeper.id.slice(0, 8)}</code>\n\nنسخه احتمالی تکراری:\n${summary(duplicate)}\nشناسه: <code>${duplicate.id.slice(0, 8)}</code>\n\nادغام، فیلدهای خالی نسخهٔ اصلی را تکمیل و نسخهٔ دوم را آرشیو می‌کند. حذف، نسخهٔ دوم را بدون ادغام آرشیو می‌کند.`, markup: { inline_keyboard: [[{ text: "🧩 ادغام در نسخه اول", callback_data: `dupmerge:${keeper.id.slice(0, 8)}:${duplicate.id.slice(0, 8)}` }, { text: "🗑 حذف نسخه دوم", callback_data: `dupdelete:${duplicate.id.slice(0, 8)}` }], [{ text: "🔎 جزئیات اول", callback_data: `evt:${keeper.id.slice(0, 8)}:detail` }, { text: "🔎 جزئیات دوم", callback_data: `evt:${duplicate.id.slice(0, 8)}:detail` }]] } });
+    }
+  }
+  if (duplicates.length > 15) messages.push({ text: "ℹ️ برای خوانایی، فقط ۱۵ گروه اول نمایش داده شد. /duplicates را دوباره اجرا کن.", markup: false });
+  return messages;
+}
+
+async function mergeDuplicateEvents(keepPrefix, removePrefix, env, editor = "telegram-duplicate-merge") {
+  const keepMatch = await getMatchingEvent(keepPrefix, env);
+  const removeMatch = await getMatchingEvent(removePrefix, env);
+  if (keepMatch.error || removeMatch.error) return `❌ ادغام انجام نشد.\n${keepMatch.error || removeMatch.error}`;
+  const keep = keepMatch.event, duplicate = removeMatch.event;
+  if (keep.id === duplicate.id || keep.type !== duplicate.type) return "❌ ادغام فقط برای دو رویداد متفاوت از یک نوع مجاز است.";
+  const patch = {};
+  const fillKeys = ["description", "note", "actor", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceLabel", "serviceCatalogKey", "componentKey", "componentName", "componentCategory", "componentMode", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "ticketDate", "deadlineDate", "ticketNumber", "fineLocation", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "repairDescription", "repairCostRial", "resolvedAt", "status"];
+  for (const key of fillKeys) {
+    const current = keep[key], incoming = duplicate[key];
+    if ((current === null || current === undefined || current === "" || (typeof current === "object" && !Array.isArray(current) && Object.keys(current).length === 0)) && incoming !== null && incoming !== undefined && incoming !== "") patch[key] = incoming;
+    else if (key === "specs" && current && incoming && typeof current === "object" && typeof incoming === "object") {
+      const merged = { ...incoming, ...current };
+      if (JSON.stringify(merged) !== JSON.stringify(current)) patch.specs = merged;
+    }
+  }
+  if (keep.type === "fine" && duplicate.paid && !keep.paid) { patch.paid = true; patch.status = "paid"; patch.paidAt = keep.paidAt || duplicate.paidAt || nowTehran().iso; }
+  if (duplicate.componentReplaced && !keep.componentReplaced) patch.componentReplaced = true;
+  if (Object.keys(patch).length) {
+    const updated = await mutateEventByPrefix(keep.id, patch, env, editor);
+    if (updated.error) return `❌ به‌روزرسانی نسخهٔ اصلی شکست خورد: ${updated.error}`;
+  }
+  const archived = await deleteEventByPrefix(duplicate.id, env, editor, "duplicate-merged");
+  if (!archived.event) return `⚠️ نسخهٔ اصلی به‌روز شد، اما آرشیو نسخهٔ دوم کامل نشد: ${archived.text}`;
+  return `✅ ادغام کامل شد.\nشناسه نسخه اصلی: <code>${keep.id.slice(0, 8)}</code>\nشناسه نسخه آرشیوشده: <code>${duplicate.id.slice(0, 8)}</code>\n\nفیلدهای خالی تکمیل شدند. نسخه دوم برای امکان بازیابی در بایگانی نگهداری می‌شود.`;
+}
+
+async function recordRepairJob(rawText, message, env, options = {}) {
   const config = await readConfig(env);
   const raw = String(rawText || "").trim();
   if (!raw) return `🧰 ثبت چندبخشی تعمیرگاه\nنمونه:\n/repairjob بابام امروز کیلومتر 431462؛ ماشین دیشب روشن نشد؛ دیاگ زده شد؛ درجه آب و دور فن تنظیم شد؛ شمع و وایر شمع عوض شدند؛ باتری 12 ولت 60 آمپر برند=نامشخص قیمت 4.5 میلیون تومان؛ ترموستات و محفظه ترموستات تعویض؛ قیمت محفظه 1.5 میلیون تومان؛ هواگیری شد؛ اجرت=... تومان`;
   const rows = makeRepairJobInputs(raw, config, message);
   if (!rows.length) return "هیچ عملیات مشخصی با اطمینان تشخیص داده نشد. نام قطعه/سرویس و فعل انجام‌شده را بنویس؛ نمونه: /repairjob بابام کیلومتر 431462 دیاگ زده شد و شمع تعویض شد.";
+  if (!options.skipDuplicateChecks) {
+    const priorGroup = await findDuplicateRepairGroup(rows, env);
+    if (priorGroup) {
+      const originalText = message?.text || `/repairjob ${raw}`;
+      const token = await savePendingDuplicate({ kind: "message", text: originalText, message: { date: message?.date || Math.floor(Date.now() / 1000), message_id: message?.message_id, text: originalText, from: { id: message?.from?.id }, chat: { id: message?.chat?.id } }, existingEventIds: priorGroup.events.map(event => event.id) }, env);
+      return { text: `🟡 <b>مراجعه تعمیرگاهی شبیه سابقه قبلی است</b>\n\nمراجعه‌ای با تاریخ، راننده، کیلومتر و ترکیب مشابه قطعات/سرویس پیدا شد. هیچ ردیف جدیدی ذخیره نشده است.\n\nشناسه گروه قبلی: <code>${String(priorGroup.id).slice(0, 8)}</code>\nتعداد ردیف‌های قبلی: ${formatNum(priorGroup.events.length)}\n\nاگر مراجعهٔ جداگانه‌ای بوده، ثبت را صریحاً تأیید کن.`, markup: duplicateConfirmationKeyboard(token) };
+    }
+  }
   const details = [];
   for (const row of rows) {
     const response = await saveEvent(row, env);
     details.push(`${row.type === "part" ? "🔩" : row.type === "service" ? "🧰" : row.type === "issue" ? "⚠️" : "💳"} ${row.title} · ${row.costRial == null ? "مبلغ ثبت نشده" : formatMoneyToman(row.costRial)} · ID ${eventIdFromReply(response) || "ثبت شد"}`);
   }
-  const group = rows[0].repairGroupId?.slice(0,8) || "—";
-  const totalKnown = rows.reduce((sum,row)=>sum+(Number(row.costRial)||0),0);
-  return `✅ مراجعه و تعمیر چندبخشی ثبت شد\n\n🧰 تعداد ردیف‌ها: ${formatNum(rows.length)}\n👤 انجام‌دهنده: ${rows[0].actor || "من"}\n⌁ کیلومتر: ${rows[0].odometerKm == null ? "ثبت نشده" : `${formatNum(rows[0].odometerKm)} km`}\n💳 مجموع هزینه‌های مشخص‌شده: ${formatMoneyToman(totalKnown)}\n🧾 شناسه گروه: <code>${group}</code>\n\n${details.join("\n")}\n\n📝 اجرت ثبت نشده مگر اینکه مبلغ آن را صریحاً نوشته باشی. هزینهٔ قطعات نامشخص خالی می‌ماند. برای ویرایش هر ردیف از /detail شناسه استفاده کن.\n\n📌 «ثبت قطعی این تاریخچه براساس متن ارسالی انجام شد؛ اطلاعات ناموجود مانند برند ناشناخته و مبلغ نامشخص حدس زده نشد.»`;
+  const group = rows[0].repairGroupId?.slice(0, 8) || "—";
+  const totalKnown = rows.reduce((sum, row) => sum + (Number(row.costRial) || 0), 0);
+  return `✅ مراجعه و تعمیر چندبخشی ثبت شد\n\n🧰 تعداد ردیف‌ها: ${formatNum(rows.length)}\n👤 انجام‌دهنده: ${rows[0].actor || "من"}\n⌁ کیلومتر: ${rows[0].odometerKm == null ? "ثبت نشده" : `${formatNum(rows[0].odometerKm)} km`}\n💳 مجموع هزینه‌های مشخص‌شده: ${formatMoneyToman(totalKnown)}\n🧾 شناسه گروه: <code>${group}</code>\n\n${details.join("\n")}\n\n📝 اجرت ثبت نشده مگر اینکه مبلغ آن را صریحاً نوشته باشی. هزینه قطعات نامشخص خالی می‌ماند. برای ویرایش هر ردیف از /detail شناسه استفاده کن.\n\n📌 اطلاعات ناموجود مانند برند ناشناخته و مبلغ نامشخص حدس زده نشد.`;
 }
 
 
@@ -1117,6 +1385,8 @@ async function saveEvent(input, env) {
   const explicitOdo = Number.isFinite(input.odometerKm) && input.odometerKm > 0 ? Math.round(input.odometerKm) : null;
   const metaSource = String(input.description || input.sourceText || "");
   const parsedMeta = extractEventMetadata(metaSource, input.actor, input.note, config.people || []);
+  const fingerprintSource = String(input.sourceText || input.description || "").trim();
+  const sourceFingerprint = fingerprintSource ? await fingerprintText(fingerprintSource) : null;
   const event = {
     id: crypto.randomUUID(),
     type: input.type || "note",
@@ -1165,7 +1435,7 @@ async function saveEvent(input, env) {
     paidAmountRial: Number.isFinite(input.paidAmountRial) ? input.paidAmountRial : null,
     paymentReference: input.paymentReference || null,
     status: input.status || (input.type === "issue" ? "open" : input.type === "fine" ? (input.paid ? "paid" : "unpaid") : undefined),
-    metadata: { source: input.source || "telegram-or-api" }
+    metadata: { source: input.source || "telegram-or-api", ...(sourceFingerprint ? { messageFingerprint: sourceFingerprint } : {}) }
   };
   if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
     event.odometerKm = latestOdo;
@@ -1502,7 +1772,7 @@ async function editEventCommand(raw, env) {
 ${formatEventDetails(result.event)}`;
 }
 
-async function deleteEventByPrefix(prefix, env, deletedBy = "telegram") {
+async function deleteEventByPrefix(prefix, env, deletedBy = "telegram", deletionReason = "user-request") {
   const match = await getMatchingEvent(prefix, env);
   if (match.error) return { text: match.error, event: null };
   const event = match.event;
@@ -1512,7 +1782,7 @@ async function deleteEventByPrefix(prefix, env, deletedBy = "telegram") {
   // Archive first so a write failure cannot destroy the only copy of a record.
   await mutateJsonFile(FILE_DELETED_EVENTS, env, () => ({ schemaVersion: 1, updatedAt: null, events: [] }), current => {
     current.events ||= [];
-    if (!current.events.some(item => item.id === event.id)) current.events.push({ ...event, deletedAt, deletedBy, deletionReason: "user-request", archiveVersion: 1 });
+    if (!current.events.some(item => item.id === event.id)) current.events.push({ ...event, deletedAt, deletedBy, deletionReason, archiveVersion: 1 });
     current.updatedAt = deletedAt;
     return current;
   });
@@ -1647,7 +1917,10 @@ function calculateDueItems(events, config, currentOdo, now) {
   const today = now.date;
   const items = [];
   for (const [key, interval] of Object.entries(config.serviceIntervals || {})) {
-    const previous = events.filter(e => (e.type === "service" || e.type === "part") && e.serviceKey === key).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)))[0];
+    const previous = events.filter(e =>
+      (e.type === "service" && e.serviceKey === key) ||
+      (e.type === "part" && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))
+    ).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)))[0];
     if (!previous) continue;
     const kmInterval = Number(interval.intervalKm) || 0;
     const dayInterval = Number(interval.intervalDays) || 0;

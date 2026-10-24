@@ -189,12 +189,15 @@
     const services = Object.entries(config.serviceIntervals || {});
     const events = state.events;
     if (!services.length) {
-      $('#serviceGrid').innerHTML = '<div class="empty-state">فهرست سرویس‌ها در data/config.json پیدا نشد.</div>';
+      const installedCards = renderInstalledMaintenanceCards(config, events, calculateOdometer(events));
+      $('#serviceGrid').innerHTML = installedCards.length
+        ? installedCards.join('')
+        : '<div class="empty-state">فهرست سرویس‌ها در data/config.json پیدا نشد؛ پس از ثبت تعویض قطعه، کارت عمر نصب نیز در اینجا ظاهر می‌شود.</div>';
       renderComponentCatalog(); renderInstalledComponents(); renderServiceCatalog(); return;
     }
     const currentOdo = calculateOdometer(events);
     const cards = services.map(([key, service]) => {
-      const latest = events.filter(e => (e.type === 'service' || e.type === 'part') && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || (e.type === 'part' && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
       if (!latest) return serviceCard({ key, service, latest: null, status: 'بدون سابقه', statusClass: '', headline: 'ثبت نشده', subline: 'اولین سرویس را در تلگرام ثبت کن', progress: 0, foot: 'تا قبل از ثبت سرویس قبلی، موعد بعدی قابل محاسبه نیست.' });
       const intervalKm = Number(service.intervalKm) || 0;
       const intervalDays = Number(service.intervalDays) || 0;
@@ -213,10 +216,56 @@
       footParts.push(`تاریخ: ${escapeHtml(latest.jalaliDate || latest.date || '—')}`);
       return serviceCard({ key, service, latest, status, statusClass, headline, subline, progress, foot: footParts.join(' · '), remainingKm, remainingDays, currentOdo });
     });
+    cards.push(...renderInstalledMaintenanceCards(config, events, currentOdo));
     $('#serviceGrid').innerHTML = cards.join('');
     renderComponentCatalog();
     renderInstalledComponents();
     renderServiceCatalog();
+  }
+
+  function renderInstalledMaintenanceCards(config, events, currentOdo) {
+    const items = config?.partCatalog?.items || {};
+    const catalogCategories = config?.partCatalog?.categories || {};
+    const scheduled = config?.serviceIntervals || {};
+    const latestByKey = new Map();
+    events.filter(event => event.componentKey && event.componentReplaced).sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event=>latestByKey.set(event.componentKey,event));
+    const cards = [];
+    for (const [key,event] of latestByKey) {
+      const item = items[key];
+      if (!item) continue;
+      // Consumables with a service-interval card already appear above; add every other
+      // installed component to the maintenance timeline so condition-based parts do not vanish.
+      if (event.serviceKey && scheduled[event.serviceKey]) continue;
+      if (key in scheduled) continue;
+      const category = catalogCategories[item.category] || { label:item.category || 'قطعه', icon:'🔩', theme:'#36c7e8' };
+      const kmSince = currentOdo != null && event.odometerKm != null ? currentOdo - Number(event.odometerKm) : null;
+      const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(new Date()))) : null;
+      const intervalKm = Number(item.intervalKm) || 0;
+      const intervalDays = Number(item.intervalDays) || 0;
+      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
+      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
+      const hasInterval = item.mode === 'periodic' && (intervalKm > 0 || intervalDays > 0);
+      const overdue = hasInterval && ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0));
+      const near = hasInterval && !overdue && ((remainingKm != null && remainingKm <= Math.max(500,intervalKm*.1)) || (remainingDays != null && remainingDays <= 14));
+      const status = hasInterval ? (overdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'در بازه مجاز') : 'پایش عمر / بازدید';
+      const statusClass = hasInterval ? (overdue ? 'danger' : near ? 'warn' : 'ok') : 'ok';
+      const headline = hasInterval
+        ? (remainingKm != null ? `${formatNumber(Math.max(0,remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0,remainingDays))} روز` : 'موعد نامشخص')
+        : (daysSince != null ? `${formatNumber(daysSince)} روز` : 'عمر ثبت نشده');
+      const subline = hasInterval
+        ? (overdue ? 'از موعد تعویض عبور کرده' : 'تا بازهٔ نگهداری بعدی')
+        : `${kmSince != null && kmSince >= 0 ? `${formatNumber(kmSince)} km از نصب` : 'کیلومتر نصب موجود نیست'}`;
+      const notes = [
+        `آخرین نصب: ${event.jalaliDate || event.date || '—'}`,
+        event.odometerKm != null ? `کیلومتر نصب: ${formatNumber(event.odometerKm)} km` : '',
+        event.brand ? `برند: ${event.brand}` : '',
+        event.model ? `مدل: ${event.model}` : ''
+      ].filter(Boolean).map(escapeHtml).join(' · ');
+      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '',intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'فاصلهٔ تعویض ثابت تنظیم نشده';
+      const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
+      cards.push(`<article class="service-card installed-lifetime-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(item.note || 'وضعیت و عمر قطعه را از روی سوابق نصب پایش کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ کاتالوگ قابل تنظیم' : 'عمر تا آخرین ثبت کیلومتر'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${notes} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div></article>`);
+    }
+    return cards;
   }
 
   function renderComponentCatalog() {
@@ -296,7 +345,7 @@
   function calculateDue(events, config, currentOdo) {
     const result = [];
     for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
-      const latest = events.filter(e => (e.type === 'service' || e.type === 'part') && e.serviceKey === key).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || (e.type === 'part' && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
       if (!latest) continue;
       const kmInterval = Number(service.intervalKm) || 0;
       const dayInterval = Number(service.intervalDays) || 0;
@@ -306,6 +355,20 @@
       const nearKm = leftKm != null && leftKm <= Math.max(500, kmInterval * .1);
       const nearDays = leftDays != null && leftDays <= 14;
       if (nearKm || nearDays) result.push({ key, label: service.label || key, overdue: (leftKm != null && leftKm <= 0) || (leftDays != null && leftDays <= 0), leftKm, leftDays, latest });
+    }
+    const catalog = config?.partCatalog || {};
+    for (const [key, item] of Object.entries(catalog.items || {})) {
+      if (item.mode !== 'periodic' || config?.serviceIntervals?.[key]) continue;
+      const latest = events.filter(e => e.componentKey === key && e.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
+      if (!latest) continue;
+      const kmInterval = Number(item.intervalKm) || 0;
+      const dayInterval = Number(item.intervalDays) || 0;
+      const leftKm = kmInterval > 0 && currentOdo != null && latest.odometerKm != null ? Number(latest.odometerKm) + kmInterval - currentOdo : null;
+      const dueDate = dayInterval > 0 ? addDays(latest.date || String(latest.occurredAt).slice(0,10), dayInterval) : null;
+      const leftDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
+      const nearKm = leftKm != null && leftKm <= Math.max(500,kmInterval*.1);
+      const nearDays = leftDays != null && leftDays <= 14;
+      if (nearKm || nearDays) result.push({ key, label:item.label || key, overdue:(leftKm != null && leftKm <= 0)||(leftDays != null && leftDays <= 0), leftKm,leftDays,latest,category:item.category,component:true });
     }
     return result;
   }

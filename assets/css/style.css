@@ -120,3 +120,7 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 @media(max-width:1000px){.component-catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.component-directory{padding:15px}.component-catalog-grid,.installed-component-grid,.service-catalog-grid{grid-template-columns:1fr}.component-note{min-height:0}.component-directory-heading{align-items:flex-start;gap:8px}.component-filter{font-size:9px;padding:7px 8px}}
 @media(prefers-reduced-motion:reduce){.component-card,.installed-component-card,.service-catalog-card,.component-filter{transition:none}}
+
+/* v3.4: installed parts that are tracked by age/condition must appear in the maintenance calendar too. */
+.installed-lifetime-card{border-color:color-mix(in srgb,var(--component-color,#40e5f4) 22%,rgba(160,190,220,.12));background:linear-gradient(145deg,rgba(19,31,48,.94),rgba(9,17,29,.90));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 12px 34px rgba(0,0,0,.18),0 0 24px color-mix(in srgb,var(--component-color,#40e5f4) 6%,transparent)}
+.installed-lifetime-card .service-name{display:flex;align-items:center;gap:7px}.installed-lifetime-card .service-progress{background:rgba(143,170,197,.09)}.installed-lifetime-card .service-progress span{background:linear-gradient(90deg,var(--component-color,#40e5f4),rgba(64,229,244,.55))}.installed-lifetime-card .service-foot{line-height:1.9;overflow-wrap:anywhere}
