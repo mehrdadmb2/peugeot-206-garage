@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-24T18:05:00+03:30",
+  "updatedAt": "2026-10-24T18:06:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -286,8 +286,8 @@
       "description": "کیلومتر 431462",
       "actor": "بابام",
       "note": "تعمیر گاه تعویض شمع و وایر شمع و باتری و ترموستات و محفظه ترموستات",
-      "updatedAt": "2026-10-24T18:05:00+03:30",
-      "revision": 3,
+      "updatedAt": "2026-10-24T18:06:00+03:30",
+      "revision": 4,
       "editHistory": [
         {
           "at": "2026-10-24T18:01:00+03:30",
@@ -308,6 +308,16 @@
           "after": {
             "description": "کیلومتر 431462"
           }
+        },
+        {
+          "at": "2026-10-24T18:06:00+03:30",
+          "by": "telegram",
+          "before": {
+            "odometerKm": 431443
+          },
+          "after": {
+            "odometerKm": 431462
+          }
         }
       ],
       "createdAt": "2026-10-24T14:31:05.006Z",
@@ -315,7 +325,7 @@
       "date": "2026-10-24",
       "time": "18:01",
       "jalaliDate": "۱۴۰۵/۰۸/۰۲",
-      "odometerKm": 431443,
+      "odometerKm": 431462,
       "distanceKm": null,
       "liters": null,
       "costRial": null,
