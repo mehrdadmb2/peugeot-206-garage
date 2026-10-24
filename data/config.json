@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "vehicle": {
     "make": "Peugeot",
     "model": "206 SD",
@@ -19,7 +19,7 @@
       "intervalDays": 180,
       "mode": "replace",
       "category": "service",
-      "note": "فاصله اولیه قابل تنظیم؛ با دفترچه و شرایط واقعی خودرو تطبیق بده."
+      "note": "فاصله اولیه محافظه‌کارانه و قابل تنظیم؛ برخی دفترچه‌ها سرویس دوره‌ای را هر ۱۰٬۰۰۰ کیلومتر ذکر می‌کنند، اما نوع روغن و شرایط سخت رانندگی ممکن است بازه کوتاه‌تر بخواهد."
     },
     "oil_filter": {
       "label": "فیلتر روغن",
@@ -35,7 +35,7 @@
       "intervalDays": 365,
       "mode": "replace",
       "category": "service",
-      "note": "بسته به گردوغبار و نوع فیلتر قابل تغییر است."
+      "note": "پیش‌فرض یادآور ۱۰٬۰۰۰ کیلومتر یا یک سال؛ در گردوغبار شدید زودتر بررسی کن و با دفترچه همان تیپ تطبیق بده."
     },
     "cabin_filter": {
       "label": "فیلتر کابین",
@@ -117,5 +117,1126 @@
     "purchaseDate": null,
     "defaultActor": "من",
     "note": "مبنای کیلومتر خرید طبق اعلام کاربر است. تاریخ دقیق خرید ثبت نشده. آخرین کیلومتر ثبت‌شده در تاریخ تهیه این بسته 431381 است و از مبنای خرید 428000 اختلاف ریاضی 3381 کیلومتر دارد. این عدد با برآورد تقریبی 2400 کیلومتر، 981 کیلومتر اختلاف دارد. این اختلاف به‌عنوان هشدار نمایش داده می‌شود؛ کیلومتر واقعی هرگز صرفاً برای هم‌خوان شدن با تخمین تغییر داده نمی‌شود."
-  }
+  },
+  "partCatalog": {
+    "categories": {
+      "engine": {
+        "label": "موتور و سوخت‌رسانی هوا",
+        "icon": "⚙️",
+        "theme": "#36c7e8"
+      },
+      "cooling": {
+        "label": "خنک‌کاری و رادیاتور",
+        "icon": "🌡️",
+        "theme": "#36cfc9"
+      },
+      "electrical": {
+        "label": "برق و روشنایی",
+        "icon": "⚡",
+        "theme": "#f6c85f"
+      },
+      "transmission": {
+        "label": "گیربکس و انتقال قدرت",
+        "icon": "🔩",
+        "theme": "#a78bfa"
+      },
+      "suspension": {
+        "label": "جلوبندی و تعلیق",
+        "icon": "🛞",
+        "theme": "#f59e67"
+      },
+      "steering": {
+        "label": "فرمان و هیدرولیک",
+        "icon": "🧭",
+        "theme": "#f472b6"
+      },
+      "brakes": {
+        "label": "ترمز و ایمنی",
+        "icon": "🛑",
+        "theme": "#fb7185"
+      },
+      "climate": {
+        "label": "تهویه و کولر",
+        "icon": "❄️",
+        "theme": "#7dd3fc"
+      },
+      "fuel": {
+        "label": "سوخت‌رسانی",
+        "icon": "⛽",
+        "theme": "#fbbf24"
+      },
+      "exhaust": {
+        "label": "اگزوز و آلایندگی",
+        "icon": "💨",
+        "theme": "#94a3b8"
+      },
+      "exterior": {
+        "label": "بدنه و قطعات بیرونی",
+        "icon": "🚘",
+        "theme": "#60a5fa"
+      },
+      "interior": {
+        "label": "اتاق و تجهیزات داخلی",
+        "icon": "🪑",
+        "theme": "#c084fc"
+      },
+      "wheels": {
+        "label": "چرخ، تایر و رینگ",
+        "icon": "🛞",
+        "theme": "#a3e635"
+      },
+      "fluids": {
+        "label": "روغن‌ها و مایعات",
+        "icon": "🧪",
+        "theme": "#38bdf8"
+      },
+      "service": {
+        "label": "سرویس‌ها و عیب‌یابی",
+        "icon": "🧰",
+        "theme": "#4ade80"
+      }
+    },
+    "items": {
+      "engine_oil": {
+        "label": "روغن موتور",
+        "category": "engine",
+        "icon": "🛢️",
+        "mode": "periodic",
+        "intervalKm": 5000,
+        "intervalDays": 180,
+        "aliases": [
+          "روغن موتور",
+          "روغن",
+          "engine oil",
+          "oil"
+        ],
+        "note": "بازه محافظه‌کارانه فعلی؛ نوع روغن، ترافیک و دفترچه موتور ملاک نهایی است.",
+        "serviceKey": "engine_oil"
+      },
+      "oil_filter": {
+        "label": "فیلتر روغن",
+        "category": "engine",
+        "icon": "🧴",
+        "mode": "periodic",
+        "intervalKm": 5000,
+        "intervalDays": 180,
+        "aliases": [
+          "فیلتر روغن",
+          "oil filter"
+        ],
+        "note": "معمولاً همراه روغن موتور تعویض می‌شود.",
+        "serviceKey": "oil_filter"
+      },
+      "air_filter": {
+        "label": "فیلتر هوای موتور",
+        "category": "engine",
+        "icon": "🌬️",
+        "mode": "periodic",
+        "intervalKm": 10000,
+        "intervalDays": 365,
+        "aliases": [
+          "فیلتر هوا",
+          "فیلتر هوای موتور",
+          "air filter"
+        ],
+        "note": "در محیط پرگردوغبار زودتر بازدید شود؛ دفترچه همان تیپ مقدم است.",
+        "serviceKey": "air_filter"
+      },
+      "spark_plugs": {
+        "label": "شمع موتور",
+        "category": "engine",
+        "icon": "⚡",
+        "mode": "periodic",
+        "intervalKm": 20000,
+        "intervalDays": 730,
+        "aliases": [
+          "شمع موتور",
+          "شمع‌ها",
+          "شمع ها",
+          "شمع",
+          "spark plugs",
+          "spark plug"
+        ],
+        "note": "فاصله به نوع شمع و موتور وابسته است؛ بعد از نصب، مارک و کد شمع ثبت شود.",
+        "serviceKey": "spark_plugs"
+      },
+      "timing_belt": {
+        "label": "تسمه تایم",
+        "category": "engine",
+        "icon": "⛓️",
+        "mode": "periodic",
+        "intervalKm": 50000,
+        "intervalDays": 1095,
+        "aliases": [
+          "تسمه تایم",
+          "تسمه‌تایم",
+          "timing belt"
+        ],
+        "note": "مورد ایمنی بحرانی؛ بازه پیش‌فرض محافظه‌کارانه است و باید با موتور/دفترچه تأیید شود.",
+        "serviceKey": "timing_belt"
+      },
+      "alternator_belt": {
+        "label": "تسمه دینام / آلترناتور",
+        "category": "engine",
+        "icon": "➰",
+        "mode": "periodic",
+        "intervalKm": 40000,
+        "intervalDays": 1095,
+        "aliases": [
+          "تسمه دینام",
+          "تسمه آلترناتور",
+          "تسمه کولر",
+          "alternator belt"
+        ],
+        "note": "بازدید ترک، صدا و کشش؛ فاصله با نسخه موتور تطبیق داده شود.",
+        "serviceKey": null
+      },
+      "spark_plug_wires": {
+        "label": "وایر شمع",
+        "category": "engine",
+        "icon": "〰️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "وایر شمع",
+          "وایرها",
+          "وایر موتور",
+          "spark plug wires",
+          "plug wires"
+        ],
+        "note": "عمر دوره‌ای ثابت فرض نشده؛ وضعیت عایق، جرقه‌زنی و بدکارکردن بررسی شود.",
+        "serviceKey": null
+      },
+      "ignition_coil": {
+        "label": "کوئل / کوئل دوبل",
+        "category": "engine",
+        "icon": "🔌",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "کوئل دوبل",
+          "کوئل",
+          "ignition coil"
+        ],
+        "note": "قطعه شرط‌محور؛ در صورت خطای احتراق/دیاگ بررسی شود.",
+        "serviceKey": null
+      },
+      "engine_mount": {
+        "label": "دسته موتور",
+        "category": "engine",
+        "icon": "🧱",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "دسته موتور",
+          "دسته‌موتور",
+          "engine mount"
+        ],
+        "note": "با لرزش، ضربه یا جابه‌جایی موتور بازدید شود.",
+        "serviceKey": null
+      },
+      "throttle_body": {
+        "label": "دریچه گاز",
+        "category": "engine",
+        "icon": "🌀",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "دریچه گاز",
+          "دریچه گاز موتور",
+          "throttle body"
+        ],
+        "note": "تمیزکاری فقط در صورت نیاز و با روش مناسب انجام شود.",
+        "serviceKey": null
+      },
+      "thermostat": {
+        "label": "ترموستات",
+        "category": "cooling",
+        "icon": "🌡️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "ترموستات",
+          "thermostat"
+        ],
+        "note": "قطعه عمرثابت تضمین‌شده ندارد؛ دمای کارکرد و بازشدن ترموستات بررسی شود.",
+        "serviceKey": null
+      },
+      "thermostat_housing": {
+        "label": "محفظه ترموستات",
+        "category": "cooling",
+        "icon": "🧩",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "محفظه ترموستات",
+          "هوزینگ ترموستات",
+          "thermostat housing"
+        ],
+        "note": "نشتی، ترک و سلامت آب‌بندی بررسی شود.",
+        "serviceKey": null
+      },
+      "coolant": {
+        "label": "مایع خنک‌کننده / ضدیخ",
+        "category": "cooling",
+        "icon": "💧",
+        "mode": "periodic",
+        "intervalKm": 40000,
+        "intervalDays": 730,
+        "aliases": [
+          "مایع خنک کننده",
+          "مایع خنک‌کننده",
+          "ضدیخ",
+          "ضد یخ",
+          "آب رادیاتور",
+          "coolant"
+        ],
+        "note": "بازه زمانی اولیه دو سال است؛ نوع سیال و توصیه سازنده را تطبیق بده.",
+        "serviceKey": "coolant"
+      },
+      "radiator": {
+        "label": "رادیاتور",
+        "category": "cooling",
+        "icon": "▥",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "رادیاتور",
+          "radiator"
+        ],
+        "note": "ثبت نصب و عمر قطعه؛ وضعیت خوردگی، گرفتگی و نشتی جداگانه بازدید شود.",
+        "serviceKey": null
+      },
+      "radiator_fan": {
+        "label": "فن رادیاتور",
+        "category": "cooling",
+        "icon": "🌀",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "فن رادیاتور",
+          "دور فن",
+          "فن خنک کننده",
+          "cooling fan"
+        ],
+        "note": "عملکرد دورها، رله، سوکت و دمای روشن‌شدن بررسی شود.",
+        "serviceKey": null
+      },
+      "coolant_temp_sensor": {
+        "label": "فشنگی / سنسور دمای آب",
+        "category": "cooling",
+        "icon": "🌡️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "فشنگی آب",
+          "سنسور دمای آب",
+          "درجه آب",
+          "coolant temperature sensor"
+        ],
+        "note": "با دیاگ و مقایسه دمای واقعی/نمایشگر بررسی شود.",
+        "serviceKey": null
+      },
+      "water_pump": {
+        "label": "واترپمپ",
+        "category": "cooling",
+        "icon": "💦",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "واترپمپ",
+          "واتر پمپ",
+          "water pump"
+        ],
+        "note": "همراه سابقه تسمه تایم و نشتی بررسی شود.",
+        "serviceKey": null
+      },
+      "radiator_cap": {
+        "label": "درب رادیاتور / منبع انبساط",
+        "category": "cooling",
+        "icon": "🧢",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "درب رادیاتور",
+          "درب منبع انبساط",
+          "درپوش رادیاتور",
+          "radiator cap"
+        ],
+        "note": "فشار نامی و آب‌بندی مطابق قطعه صحیح باشد.",
+        "serviceKey": null
+      },
+      "coolant_hose": {
+        "label": "شلنگ‌های آب",
+        "category": "cooling",
+        "icon": "〰️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "شلنگ آب",
+          "شلنگ‌های آب",
+          "شلنگ رادیاتور",
+          "coolant hose"
+        ],
+        "note": "ترک، نرم‌شدگی و نشتی بررسی شود.",
+        "serviceKey": null
+      },
+      "battery": {
+        "label": "باتری",
+        "category": "electrical",
+        "icon": "🔋",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "باتری",
+          "باطری",
+          "باتری خودرو",
+          "battery"
+        ],
+        "note": "عمر از تاریخ نصب پیگیری می‌شود؛ تست ولتاژ/CCA و تاریخ گارانتی هم در مشخصات ثبت شود.",
+        "serviceKey": null
+      },
+      "alternator": {
+        "label": "دینام",
+        "category": "electrical",
+        "icon": "⚡",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "دینام",
+          "alternator"
+        ],
+        "note": "ولتاژ شارژ و سلامت تسمه/اتصالات بررسی شود.",
+        "serviceKey": null
+      },
+      "starter_motor": {
+        "label": "استارت",
+        "category": "electrical",
+        "icon": "🔧",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "استارت",
+          "موتور استارت",
+          "starter motor"
+        ],
+        "note": "اگر خودرو استارت نمی‌خورد، باتری و اتصالات هم بررسی شوند.",
+        "serviceKey": null
+      },
+      "front_left_indicator": {
+        "label": "چراغ راهنمای جلو چپ",
+        "category": "exterior",
+        "icon": "🟠",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "چراغ راهنمای سمت چپ جلو",
+          "راهنمای جلو چپ",
+          "چراغ راهنمای چپ جلو",
+          "front left indicator"
+        ],
+        "note": "بدون بازه تعویض ثابت؛ عمر از نصب و وضعیت روشنایی ثبت می‌شود.",
+        "serviceKey": null
+      },
+      "front_right_indicator": {
+        "label": "چراغ راهنمای جلو راست",
+        "category": "exterior",
+        "icon": "🟠",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "چراغ راهنمای سمت راست جلو",
+          "راهنمای جلو راست",
+          "چراغ راهنمای راست جلو",
+          "front right indicator"
+        ],
+        "note": "بدون بازه تعویض ثابت؛ عمر از نصب و وضعیت روشنایی ثبت می‌شود.",
+        "serviceKey": null
+      },
+      "headlamp_left": {
+        "label": "چراغ جلو چپ",
+        "category": "exterior",
+        "icon": "💡",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "چراغ جلو چپ",
+          "لامپ جلو چپ",
+          "headlamp left"
+        ],
+        "note": "بازه ثابت ندارد؛ نوع لامپ/توان ثبت شود.",
+        "serviceKey": null
+      },
+      "headlamp_right": {
+        "label": "چراغ جلو راست",
+        "category": "exterior",
+        "icon": "💡",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "چراغ جلو راست",
+          "لامپ جلو راست",
+          "headlamp right"
+        ],
+        "note": "بازه ثابت ندارد؛ نوع لامپ/توان ثبت شود.",
+        "serviceKey": null
+      },
+      "starter_battery_terminals": {
+        "label": "سر باتری و اتصالات",
+        "category": "electrical",
+        "icon": "🔩",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "سر باتری",
+          "بست باتری",
+          "اتصالات باتری",
+          "battery terminals"
+        ],
+        "note": "تمیزی، سولفاته‌شدن و سفتی اتصال بررسی شود.",
+        "serviceKey": null
+      },
+      "fuse_relay": {
+        "label": "فیوز و رله",
+        "category": "electrical",
+        "icon": "🧷",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "فیوز",
+          "رله",
+          "fuse",
+          "relay"
+        ],
+        "note": "فقط با آمپراژ صحیح جایگزین شود؛ فیوز تکراراً سوخته علت‌یابی می‌خواهد.",
+        "serviceKey": null
+      },
+      "gearbox_oil": {
+        "label": "روغن گیربکس",
+        "category": "transmission",
+        "icon": "⚙️",
+        "mode": "periodic",
+        "intervalKm": 40000,
+        "intervalDays": 1460,
+        "aliases": [
+          "روغن گیربکس",
+          "gearbox oil",
+          "transmission oil"
+        ],
+        "note": "بازه اولیه برای پیگیری؛ نوع گیربکس/روغن و توصیه سازنده تعیین‌کننده است.",
+        "serviceKey": null
+      },
+      "clutch_kit": {
+        "label": "دیسک و صفحه کلاچ",
+        "category": "transmission",
+        "icon": "⭕",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "دیسک و صفحه",
+          "کیت کلاچ",
+          "clutch kit"
+        ],
+        "note": "بسته به نحوه استفاده و علائم؛ عمر ثابت تضمین نمی‌شود.",
+        "serviceKey": null
+      },
+      "clutch_cable": {
+        "label": "سیم کلاچ",
+        "category": "transmission",
+        "icon": "〰️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "سیم کلاچ",
+          "کابل کلاچ",
+          "clutch cable"
+        ],
+        "note": "لقی، سفتی و رشته‌های آسیب‌دیده بررسی شود.",
+        "serviceKey": null
+      },
+      "cv_joint": {
+        "label": "سرپلوس / مفصل پلوس",
+        "category": "transmission",
+        "icon": "🔩",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "سرپلوس",
+          "پلوس",
+          "گردگیر پلوس",
+          "cv joint"
+        ],
+        "note": "صدای تق‌تق در پیچ و وضعیت گردگیر بازدید شود.",
+        "serviceKey": null
+      },
+      "front_shock": {
+        "label": "کمک‌فنر جلو",
+        "category": "suspension",
+        "icon": "🛞",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "کمک فنر جلو",
+          "کمک‌فنر جلو",
+          "کمک جلو",
+          "front shock"
+        ],
+        "note": "در صورت نشتی، کوبش یا کاهش کنترل بررسی شود.",
+        "serviceKey": null
+      },
+      "rear_shock": {
+        "label": "کمک‌فنر عقب",
+        "category": "suspension",
+        "icon": "🛞",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "کمک فنر عقب",
+          "کمک‌فنر عقب",
+          "کمک عقب",
+          "rear shock"
+        ],
+        "note": "عمر ثابت ندارد؛ نشتی و عملکرد بررسی شود.",
+        "serviceKey": null
+      },
+      "control_arm_bushing": {
+        "label": "بوش طبق",
+        "category": "suspension",
+        "icon": "🔘",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "بوش طبق",
+          "طبق جلو",
+          "control arm bushing"
+        ],
+        "note": "صدا، ترک و لقی بررسی شود.",
+        "serviceKey": null
+      },
+      "ball_joint": {
+        "label": "سیبک",
+        "category": "suspension",
+        "icon": "⚙️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "سیبک",
+          "سیبک فرمان",
+          "سیبک طبق",
+          "ball joint"
+        ],
+        "note": "قطعه ایمنی؛ در صورت لقی یا پارگی گردگیر سریع بررسی شود.",
+        "serviceKey": null
+      },
+      "stabilizer_link": {
+        "label": "میل موج‌گیر و رابط",
+        "category": "suspension",
+        "icon": "〰️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "میل موجگیر",
+          "میل موج‌گیر",
+          "رابط موجگیر",
+          "stabilizer link"
+        ],
+        "note": "صدای تقه و لقی بررسی شود.",
+        "serviceKey": null
+      },
+      "tie_rod": {
+        "label": "قرقری و سیبک فرمان",
+        "category": "steering",
+        "icon": "🧭",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "قرقری فرمان",
+          "سیبک فرمان",
+          "tie rod"
+        ],
+        "note": "لقی فرمان و لاستیک‌سایی می‌تواند علامت مشکل باشد.",
+        "serviceKey": null
+      },
+      "power_steering_fluid": {
+        "label": "روغن هیدرولیک فرمان",
+        "category": "steering",
+        "icon": "💧",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "روغن هیدرولیک",
+          "روغن فرمان",
+          "power steering fluid"
+        ],
+        "note": "سطح، نوع سیال و نشتی بررسی شود؛ نوع سیستم فرمان را با خودرو تطبیق بده.",
+        "serviceKey": null
+      },
+      "front_brake_pads": {
+        "label": "لنت ترمز جلو",
+        "category": "brakes",
+        "icon": "🛑",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "لنت جلو",
+          "لنت ترمز جلو",
+          "front brake pads"
+        ],
+        "note": "عمر به سبک رانندگی وابسته است؛ ضخامت و دیسک بازدید شود.",
+        "serviceKey": null
+      },
+      "rear_brake_pads": {
+        "label": "لنت / کفشک عقب",
+        "category": "brakes",
+        "icon": "🛑",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "لنت عقب",
+          "کفشک عقب",
+          "لنت ترمز عقب",
+          "rear brake shoes"
+        ],
+        "note": "نوع سامانه عقب و قطعه مناسب با خودرو تطبیق داده شود.",
+        "serviceKey": null
+      },
+      "brake_discs": {
+        "label": "دیسک ترمز جلو",
+        "category": "brakes",
+        "icon": "💿",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "دیسک ترمز",
+          "دیسک جلو",
+          "brake discs"
+        ],
+        "note": "ضخامت حداقل و تاب طبق مشخصات قطعه بررسی شود.",
+        "serviceKey": null
+      },
+      "brake_fluid": {
+        "label": "روغن ترمز",
+        "category": "brakes",
+        "icon": "🧪",
+        "mode": "periodic",
+        "intervalKm": 40000,
+        "intervalDays": 730,
+        "aliases": [
+          "روغن ترمز",
+          "brake fluid"
+        ],
+        "note": "برنامه اولیه ۲ سال؛ نوع مایع و شرایط واقعی/دفترچه بررسی شود.",
+        "serviceKey": "brake_fluid"
+      },
+      "cabin_filter": {
+        "label": "فیلتر کابین / اتاق",
+        "category": "climate",
+        "icon": "❄️",
+        "mode": "periodic",
+        "intervalKm": 10000,
+        "intervalDays": 365,
+        "aliases": [
+          "فیلتر کابین",
+          "فیلتر اتاق",
+          "فیلتر کولر",
+          "cabin filter"
+        ],
+        "note": "در صورت وجود این تجهیز؛ محیط پرگردوغبار می‌تواند نیاز به تعویض زودتر ایجاد کند.",
+        "serviceKey": "cabin_filter"
+      },
+      "ac_refrigerant": {
+        "label": "گاز کولر",
+        "category": "climate",
+        "icon": "❄️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "گاز کولر",
+          "شارژ کولر",
+          "گاز کولر خودرو",
+          "ac refrigerant"
+        ],
+        "note": "برای کمبود مکرر، ابتدا نشتی‌یابی شود؛ شارژ صرف، تعمیر نشتی نیست.",
+        "serviceKey": null
+      },
+      "ac_compressor": {
+        "label": "کمپرسور کولر",
+        "category": "climate",
+        "icon": "🌀",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "کمپرسور کولر",
+          "کمپرسور",
+          "ac compressor"
+        ],
+        "note": "وضعیت فشار، صدا، برق و نشتی باید بررسی شود.",
+        "serviceKey": null
+      },
+      "cabin_blower": {
+        "label": "فن بخاری / تهویه اتاق",
+        "category": "climate",
+        "icon": "🌬️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "فن بخاری",
+          "فن کابین",
+          "بلوور",
+          "cabin blower"
+        ],
+        "note": "دورهای فن، مقاومت، فیوز و سوکت بررسی شود.",
+        "serviceKey": null
+      },
+      "fuel_filter": {
+        "label": "فیلتر بنزین",
+        "category": "fuel",
+        "icon": "⛽",
+        "mode": "periodic",
+        "intervalKm": 20000,
+        "intervalDays": 730,
+        "aliases": [
+          "فیلتر بنزین",
+          "فیلتر سوخت",
+          "fuel filter"
+        ],
+        "note": "بازه پیشنهادی اولیه است؛ محل نصب و توصیه سازنده/مکانیک بررسی شود.",
+        "serviceKey": "fuel_filter"
+      },
+      "fuel_pump": {
+        "label": "پمپ بنزین",
+        "category": "fuel",
+        "icon": "⛽",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "پمپ بنزین",
+          "پمپ سوخت",
+          "fuel pump"
+        ],
+        "note": "فشار سوخت، صدا و برق‌رسانی تست شود.",
+        "serviceKey": null
+      },
+      "fuel_injectors": {
+        "label": "انژکتورها",
+        "category": "fuel",
+        "icon": "💉",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "انژکتور",
+          "انژکتورها",
+          "fuel injector"
+        ],
+        "note": "شست‌وشو تنها بر اساس علائم/آزمایش و روش مناسب.",
+        "serviceKey": null
+      },
+      "oxygen_sensor": {
+        "label": "سنسور اکسیژن",
+        "category": "exhaust",
+        "icon": "🌫️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "سنسور اکسیژن",
+          "oxygen sensor"
+        ],
+        "note": "بر اساس کد خطا و داده زنده دیاگ تشخیص داده شود.",
+        "serviceKey": null
+      },
+      "catalytic_converter": {
+        "label": "کاتالیزور",
+        "category": "exhaust",
+        "icon": "♨️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "کاتالیزور",
+          "catalytic converter"
+        ],
+        "note": "طبق علائم و آزمون آلایندگی؛ حذف قطعه توصیه نمی‌شود.",
+        "serviceKey": null
+      },
+      "wiper_blades": {
+        "label": "تیغه برف‌پاک‌کن",
+        "category": "exterior",
+        "icon": "🌧️",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "تیغه برف پاک کن",
+          "برف پاک‌کن",
+          "برف پاک کن",
+          "wiper blades"
+        ],
+        "note": "در صورت خط انداختن یا افت دید تعویض شود؛ زمان ثابت قطعی نیست.",
+        "serviceKey": null
+      },
+      "side_mirror_left": {
+        "label": "آینه بغل چپ",
+        "category": "exterior",
+        "icon": "🪞",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "آینه بغل چپ",
+          "آینه سمت چپ",
+          "left side mirror"
+        ],
+        "note": "مدل/رنگ و برقی یا دستی بودن ثبت شود.",
+        "serviceKey": null
+      },
+      "side_mirror_right": {
+        "label": "آینه بغل راست",
+        "category": "exterior",
+        "icon": "🪞",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "آینه بغل راست",
+          "آینه سمت راست",
+          "right side mirror"
+        ],
+        "note": "مدل/رنگ و برقی یا دستی بودن ثبت شود.",
+        "serviceKey": null
+      },
+      "tyres": {
+        "label": "لاستیک‌ها",
+        "category": "wheels",
+        "icon": "🛞",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "لاستیک",
+          "لاستیک‌ها",
+          "تایر",
+          "تایرها",
+          "tyre",
+          "tire"
+        ],
+        "note": "عمر و وضعیت طبق تاریخ DOT، آج، ترک، فشار و شرایط استفاده بررسی شود.",
+        "serviceKey": null
+      },
+      "wheel_bearing": {
+        "label": "بلبرینگ چرخ",
+        "category": "wheels",
+        "icon": "⭕",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "بلبرینگ چرخ",
+          "بلبرینگ",
+          "wheel bearing"
+        ],
+        "note": "صدای زوزه و لقی بررسی شود.",
+        "serviceKey": null
+      },
+      "exhaust_muffler": {
+        "label": "منبع و لوله اگزوز",
+        "category": "exhaust",
+        "icon": "💨",
+        "mode": "condition",
+        "intervalKm": 0,
+        "intervalDays": 0,
+        "aliases": [
+          "منبع اگزوز",
+          "لوله اگزوز",
+          "exhaust muffler"
+        ],
+        "note": "نشتی، خوردگی، اتصال و صدای غیرعادی بررسی شود.",
+        "serviceKey": null
+      }
+    },
+    "services": {
+      "engine_diagnostics": {
+        "label": "دیاگ و عیب‌یابی موتور",
+        "category": "service",
+        "icon": "🖥️",
+        "aliases": [
+          "دیاگ",
+          "دیاگ زدن",
+          "اسکن خطا",
+          "عیب‌یابی با دیاگ"
+        ],
+        "note": "کد خطا، Freeze Frame و کارهای انجام‌شده را در توضیح ثبت کن."
+      },
+      "cooling_fan_adjustment": {
+        "label": "بررسی دمای آب و دور فن",
+        "category": "cooling",
+        "icon": "🌡️",
+        "aliases": [
+          "درجه آب و دور فن",
+          "تنظیم دور فن",
+          "تنظیم درجه آب"
+        ],
+        "note": "دمای واقعی، زمان روشن شدن فن و کد خطا در صورت امکان ثبت شود."
+      },
+      "cooling_bleed": {
+        "label": "هواگیری مدار خنک‌کاری",
+        "category": "cooling",
+        "icon": "💧",
+        "aliases": [
+          "هواگیری",
+          "هواگیری سیستم خنک‌کننده"
+        ],
+        "note": "پس از کار روی مدار آب، سطح مایع و نشتی مجدداً بررسی شود."
+      },
+      "engine_service": {
+        "label": "سرویس عمومی موتور",
+        "category": "engine",
+        "icon": "⚙️",
+        "aliases": [
+          "سرویس موتور",
+          "سرویس کلی موتور"
+        ],
+        "note": "مقادیر و اقلام انجام‌شده به‌صورت جداگانه ثبت شوند."
+      },
+      "ac_service": {
+        "label": "سرویس کولر و تهویه",
+        "category": "climate",
+        "icon": "❄️",
+        "aliases": [
+          "سرویس کولر",
+          "سرویس تهویه"
+        ],
+        "note": "بررسی نشتی، فشار و عملکرد؛ شارژ گاز در صورت نیاز."
+      },
+      "ac_recharge": {
+        "label": "شارژ گاز کولر",
+        "category": "climate",
+        "icon": "❄️",
+        "aliases": [
+          "شارژ گاز کولر",
+          "گاز کولر شارژ شد"
+        ],
+        "note": "مقدار گاز و آزمون نشتی را در توضیحات بنویس."
+      },
+      "wheel_alignment": {
+        "label": "میزان فرمان و بالانس",
+        "category": "wheels",
+        "icon": "🛞",
+        "aliases": [
+          "میزان فرمان",
+          "بالانس چرخ",
+          "بالانس لاستیک"
+        ],
+        "note": "پس از تعمیر جلوبندی یا مشاهده لاستیک‌سایی بررسی شود."
+      },
+      "brake_service": {
+        "label": "بازدید و سرویس ترمز",
+        "category": "brakes",
+        "icon": "🛑",
+        "aliases": [
+          "سرویس ترمز",
+          "بازدید ترمز"
+        ],
+        "note": "ضخامت لنت و دیسک و نشتی سیستم ثبت شود."
+      },
+      "suspension_inspection": {
+        "label": "بازدید جلوبندی",
+        "category": "suspension",
+        "icon": "🔩",
+        "aliases": [
+          "بازدید جلوبندی",
+          "سرویس جلوبندی",
+          "جلوبندی بررسی شد"
+        ],
+        "note": "موارد معیوب هرکدام به‌عنوان قطعه جداگانه ثبت شوند."
+      },
+      "cooling_service": {
+        "label": "سرویس سیستم خنک‌کاری",
+        "category": "cooling",
+        "icon": "🌡️",
+        "aliases": [
+          "سرویس سیستم خنک‌کاری",
+          "سرویس رادیاتور"
+        ],
+        "note": "نشتی، ترموستات، فن و مایع خنک‌کننده بررسی شود."
+      },
+      "throttle_cleaning": {
+        "label": "تمیزکاری دریچه گاز",
+        "category": "engine",
+        "icon": "🌀",
+        "aliases": [
+          "شستشوی دریچه گاز",
+          "تمیزکاری دریچه گاز"
+        ],
+        "note": "پس از پاک‌سازی در صورت نیاز پارامترهای دریچه بررسی شود."
+      },
+      "injector_service": {
+        "label": "سرویس انژکتور",
+        "category": "fuel",
+        "icon": "💉",
+        "aliases": [
+          "سرویس انژکتور",
+          "شستشوی انژکتور",
+          "شست‌وشوی انژکتور"
+        ],
+        "note": "روش و مواد استفاده‌شده و نتیجه را ثبت کن."
+      },
+      "ecu_repair": {
+        "label": "بررسی یا تعمیر ECU",
+        "category": "electrical",
+        "icon": "🧠",
+        "aliases": [
+          "تعمیر ecu",
+          "تعمیر ای سی یو",
+          "بررسی ecu"
+        ],
+        "note": "کدها، عیب و قطعه/مدار تعمیرشده ثبت شود."
+      }
+    },
+    "guidance": {
+      "source": "Peugeot 206 TU maintenance manual and conservative planning defaults",
+      "notice": "بازه‌ها برای یادآوری اولیه‌اند و جای دفترچه دقیق همان موتور/تیپ یا نظر تعمیرکار را نمی‌گیرند. در شرایط گردوغبار/ترافیک/گرمای زیاد، بازه‌های توصیه‌شده ممکن است کوتاه‌تر باشند. برای قطعات condition-based، سیستم فقط مدت/مسافت از ثبت نصب را محاسبه می‌کند و ادعای سلامت فیزیکی ندارد.",
+      "serviceIntervalNote": "دفترچهٔ در دسترس برای 206 TU چند سرویس را هر 10,000 km یا یک سال و بعضی اقلام مثل تسمه تایم را با فاصله/زمان متفاوت ذکر می‌کند؛ تنظیمات موجود می‌تواند محافظه‌کارانه‌تر و قابل ویرایش باشد."
+    }
+  },
+  "updatedAt": "2026-10-24T19:42:00+03:30"
 }
