@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-24T18:02:00+03:30",
+  "updatedAt": "2026-10-24T18:07:00+03:30",
   "events": [
     {
       "id": "0db7f014-6663-4843-81fd-faafa5b26b49",
@@ -29,6 +29,37 @@
         "source": "telegram-or-api"
       },
       "deletedAt": "2026-10-24T18:02:00+03:30",
+      "deletedBy": "381200758",
+      "deletionReason": "user-request",
+      "archiveVersion": 1
+    },
+    {
+      "id": "bd0a9e70-ca21-4512-8d23-e9a3c3bb4a1b",
+      "type": "service",
+      "title": "ثبت سرویس: شمع موتور",
+      "description": "431462",
+      "actor": "بابام",
+      "note": "تعمیرگاه تعویض باتری ترموستات محفظه ترموستات شمع و وایر شمع",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T14:29:36.870Z",
+      "occurredAt": "2026-10-24T17:59:00+03:30",
+      "date": "2026-10-24",
+      "time": "17:59",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431440,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": "spark_plugs",
+      "serviceLabel": "شمع موتور",
+      "fullTank": false,
+      "paidAt": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      },
+      "deletedAt": "2026-10-24T18:07:00+03:30",
       "deletedBy": "381200758",
       "deletionReason": "user-request",
       "archiveVersion": 1
