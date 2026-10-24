@@ -685,6 +685,52 @@
       "metadata": {
         "source": "telegram-or-api"
       }
+    },
+    {
+      "id": "9454150b-c410-40c7-858d-d6769f96261f",
+      "type": "service",
+      "title": "سرویس: دیاگ و عیب‌یابی موتور",
+      "description": "دیاگ و عیب‌یابی موتور · کد خطا در صورت وجود در شرح کامل پیام نگهداری شود.",
+      "actor": "بابام",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T16:56:10.935Z",
+      "occurredAt": "2026-10-24T20:26:00+03:30",
+      "date": "2026-10-24",
+      "time": "20:26",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431462,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": "دیاگ و عیب‌یابی موتور",
+      "serviceCatalogKey": "engine_diagnostics",
+      "componentKey": null,
+      "componentName": "دیاگ و عیب‌یابی موتور",
+      "componentCategory": "سرویس‌ها و عیب‌یابی",
+      "componentMode": "service",
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": "11704dc8-df10-4e8e-8f56-7f8753847a15",
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
     }
   ]
 }
