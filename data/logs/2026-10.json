@@ -451,6 +451,52 @@
       "metadata": {
         "source": "telegram-or-api"
       }
+    },
+    {
+      "id": "ee79e6be-5ff6-4e74-a08b-8e090a91e182",
+      "type": "service",
+      "title": "سرویس: هواگیری مدار خنک‌کاری",
+      "description": "هواگیری مدار خنک‌کاری پس از سرویس ترموستات/محفظه ترموستات.",
+      "actor": "بابام",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-24T16:55:05.384Z",
+      "occurredAt": "2026-10-24T20:24:00+03:30",
+      "date": "2026-10-24",
+      "time": "20:24",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
+      "odometerKm": 431462,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": "هواگیری مدار خنک‌کاری",
+      "serviceCatalogKey": "cooling_bleed",
+      "componentKey": null,
+      "componentName": "هواگیری مدار خنک‌کاری",
+      "componentCategory": "خنک‌کاری و رادیاتور",
+      "componentMode": "service",
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": "f130b094-fc54-466a-962c-7263511af835",
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "metadata": {
+        "source": "telegram-or-api"
+      }
     }
   ]
 }
