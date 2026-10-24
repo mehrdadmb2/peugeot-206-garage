@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-24T18:01:00+03:30",
+  "updatedAt": "2026-10-24T18:02:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -251,33 +251,6 @@
       "previousOdometerKm": 431389,
       "distanceActor": "من",
       "deltaSincePreviousKm": 51
-    },
-    {
-      "id": "0db7f014-6663-4843-81fd-faafa5b26b49",
-      "type": "service",
-      "title": "ثبت سرویس: بررسی باتری",
-      "description": "431462",
-      "actor": "بابام",
-      "note": "تعمیرگاه تعویض باتری ترموستات محفظه ترموستات شمع و وایر شمع",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
-      "createdAt": "2026-10-24T14:29:33.976Z",
-      "occurredAt": "2026-10-24T17:59:00+03:30",
-      "date": "2026-10-24",
-      "time": "17:59",
-      "jalaliDate": "۱۴۰۵/۰۸/۰۲",
-      "odometerKm": 431440,
-      "distanceKm": null,
-      "liters": null,
-      "costRial": null,
-      "serviceKey": "battery_check",
-      "serviceLabel": "بررسی باتری",
-      "fullTank": false,
-      "paidAt": null,
-      "metadata": {
-        "source": "telegram-or-api"
-      }
     },
     {
       "id": "bd0a9e70-ca21-4512-8d23-e9a3c3bb4a1b",
