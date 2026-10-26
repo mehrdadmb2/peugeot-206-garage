@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-25T16:42:00+03:30",
+  "updatedAt": "2026-10-26T22:07:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -787,6 +787,55 @@
       "previousOdometerKm": 431473,
       "distanceActor": "من",
       "deltaSincePreviousKm": 23
+    },
+    {
+      "id": "77668168-5c49-4d89-abae-df841b3d4f32",
+      "type": "issue",
+      "title": "ثبت خرابی/ایراد",
+      "description": "ماشین خراب شد و روشن نمی‌شود /fuelstats /analysis week",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-26T18:37:42.873Z",
+      "occurredAt": "2026-10-26T22:07:00+03:30",
+      "date": "2026-10-26",
+      "time": "22:07",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۴",
+      "odometerKm": 431496,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "status": "open",
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "a80091c307c520d8afe30d07565f2337613b227d4c073f490527afa702bed072"
+      },
+      "odometerAutoAssigned": true
     }
   ]
 }
