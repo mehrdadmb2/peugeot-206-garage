@@ -37,7 +37,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.4.0",
+        version: "3.5.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -60,7 +60,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.4.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.5.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -264,14 +264,14 @@ async function claimTelegramUpdate(updateId, env) {
 function looksLikeStateChange(text) {
   const value = normalizeIntentText(text);
   if (/^\/(?:km|odo|trip|fuel|service|part|interval|wash|fine|paid|payfine|repair|fixed|expense|note|repairjob|workshop|purchasekm|people|edit|annotate|actor|delete|restore)\b/i.test(value)) return true;
-  return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|جریمه|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+  return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|خراب|روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|جریمه|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
 function looksLikeEventCreation(text) {
   const value = normalizeIntentText(text);
   if (/^\/(?:km|odo|trip|fuel|service|part|wash|fine|repairjob|workshop|expense|note)\b/i.test(value)) return true;
   if (/^\//.test(value)) return false;
-  return /(?:روشن نشد|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+  return /(?:روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|خراب|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
 async function fingerprintText(value) {
@@ -709,7 +709,7 @@ async function processMessage(text, message, env, options = {}) {
   if (SERVICE_START_WORDS.some(w => lower.includes(normalizeIntentText(w))) || /روغن موتور.*(عوض|تعویض)|فیلتر.*(عوض|تعویض)|تسمه تایم.*(عوض|تعویض)|\b(?:changed|replaced|renewed|serviced|service done|oil change|maintenance done)\b/i.test(lower)) {
     return { text: await recordServiceOrPart(text, "service", occurredAt, env), keyboard: true };
   }
-  if (/خراب|صدای|نشتی|لرزش|چکه|چراغ چک|عیب|مشکل|روشن نمی.?شود|داغ کرد|جوش آورد|\bbroken\b|\bnoise\b|\bleak(?:ing)?\b|\bvibration\b|\bcheck engine\b|\bissue\b|\bproblem\b|\boverheat(?:ed|ing)?\b/i.test(lower) && !/درست شد|تعمیر شد|رفع شد|\bfixed\b|\brepaired\b|\bresolved\b/i.test(lower)) {
+  if (/خراب|خرابی|از کار افتاد|صدای|نشتی|لرزش|چکه|چراغ چک|عیب|مشکل|روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|شه؟|زند)|نشد|نمی.?خورد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|داغ کرد|جوش آورد|\bbroken\b|\bno.?start\b|\bwon.t start\b|\bdoesn.t start\b|\bnoise\b|\bleak(?:ing)?\b|\bvibration\b|\bcheck engine\b|\bissue\b|\bproblem\b|\boverheat(?:ed|ing)?\b/i.test(lower) && !/درست شد|تعمیر شد|رفع شد|\bfixed\b|\brepaired\b|\bresolved\b/i.test(lower)) {
     return { text: await saveEvent({ type: "issue", title: "ثبت خرابی/ایراد", description: text, odometerKm: km, costRial: money, status: "open", occurredAt, sourceText: text }, env), keyboard: true };
   }
   if (/درست شد|تعمیر شد|رفع شد|تعمیر کردم|مشکل حل شد|\bfixed\b|\brepaired\b|\bresolved\b|\bissue\s*fixed\b/i.test(lower)) return { text: await recordRepair(text, occurredAt, env), keyboard: true };
@@ -755,7 +755,7 @@ function helpText() {
 🧰 فهرست خدمات: /services
 🛠 ثبت یک مراجعه با چند قطعه/سرویس: /repairjob
 🚦 جزئیات جریمه: /fineinfo شناسه
-📈 گزارش تصویری با نمودار: /analysis month
+📈 گزارش تصویری با چهار نمودار: /analysis month (هزینه، سوخت، مسافت و سهم راننده)
 گزینه‌های تحلیل: hour · day · week · month
 
 🧭 کیلومتر خرید و برآورد پیمایش
@@ -977,6 +977,11 @@ async function createAnalysisReply(rawPeriod, env) {
   const costValues = buckets.map(bucket => expenseEvents.filter(e => { const t=Date.parse(expenseTimestamp(e)||""); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.costRial)||0),0)/10_000_000); // million toman
   const fuelValues = buckets.map(bucket => fuelEvents.filter(e => { const t=eventTimestamp(e); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.liters)||0),0));
   const distanceValues = buckets.map(bucket => distances.filter(e => { const t=Date.parse(e.occurredAt||""); return t>=bucket.start&&t<bucket.end; }).reduce((sum,e)=>sum+(Number(e.distanceKm)||0),0));
+  const driverTotals = new Map();
+  distances.forEach(entry => { const actor = String(entry.actor || "من").trim() || "من"; driverTotals.set(actor, (driverTotals.get(actor) || 0) + (Number(entry.distanceKm) || 0)); });
+  const driverRows = [...driverTotals.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const driverLabels = driverRows.length ? driverRows.map(row=>row[0]) : ["داده‌ای ثبت نشده"];
+  const driverValues = driverRows.length ? driverRows.map(row=>Math.round(row[1]*10)/10) : [0];
   const fines = rangedEvents.filter(e => e.type === "fine");
   const fineTotal = fines.reduce((n,e)=>n+(Number(e.costRial)||0),0);
   const finePaid = fines.filter(e=>e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
@@ -1007,17 +1012,18 @@ async function createAnalysisReply(rawPeriod, env) {
 برآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km
 اختلاف دو محاسبه: ${discrepancy === null ? "—" : `${discrepancy > 0 ? "+" : ""}${formatNum(discrepancy)} km`}${discrepancy !== null && Math.abs(discrepancy)>150 ? "\n⚠️ کیلومترهای موجود با برآورد تقریبی تطابق کامل ندارند؛ کیلومتر واقعی را تأیید کن." : ""}
 
-📈 سه نمودار تصویری در پیام‌های بعدی ارسال می‌شوند.`;
+📈 چهار نمودار تصویری در پیام‌های بعدی ارسال می‌شوند: هزینه، سوخت، مسافت و سهم راننده.`;
   try {
     const labels = buckets.map(b=>b.label);
     const chartSpecs = [
       { filename: "206-garage-costs.png", title: `روند هزینه · ${analysisPeriodLabel(period)}`, seriesLabel: "میلیون تومان", values: costValues, type: "bar", color: "rgba(73,222,236,0.78)", caption: "💳 نمودار هزینه‌های پرداخت‌شده · مقیاس: میلیون تومان" },
       { filename: "206-garage-fuel.png", title: `سوخت‌گیری · ${analysisPeriodLabel(period)}`, seriesLabel: "لیتر", values: fuelValues, type: "line", color: "rgba(255,181,107,0.95)", caption: "⛽ نمودار حجم سوخت‌گیری · واحد: لیتر" },
-      { filename: "206-garage-distance.png", title: `مسافت · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: distanceValues, type: "line", color: "rgba(173,148,255,0.95)", caption: "🚗 نمودار مسافت ثبت‌شده · کیلومترهای تاریخی با تاریخ خرید نامشخص در بازه‌های زمانی توزیع نمی‌شوند." }
+      { filename: "206-garage-distance.png", title: `مسافت · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: distanceValues, type: "line", color: "rgba(173,148,255,0.95)", caption: "🚗 نمودار مسافت ثبت‌شده · کیلومترهای تاریخی با تاریخ خرید نامشخص در بازه‌های زمانی توزیع نمی‌شوند." },
+      { filename: "206-garage-drivers.png", title: `پیمایش به تفکیک راننده · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: driverValues, labels: driverLabels, type: "bar", color: "rgba(66,232,188,0.85)", caption: "👤 نمودار پیمایش به تفکیک راننده · انتساب هر فاصله به شخص ثبت‌کننده قرائت دوم" }
     ];
     const photos = await Promise.all(chartSpecs.map(async spec => ({
       filename: spec.filename,
-      blob: await createChartPng({ labels, values: spec.values, title: spec.title, seriesLabel: spec.seriesLabel, color: spec.color, type: spec.type }),
+      blob: await createChartPng({ labels: spec.labels || labels, values: spec.values, title: spec.title, seriesLabel: spec.seriesLabel, color: spec.color, type: spec.type }),
       caption: `${spec.caption} · ${analysisPeriodLabel(period)}`
     })));
     return { text: report, photos, keyboard: false };
@@ -1437,8 +1443,9 @@ async function saveEvent(input, env) {
     status: input.status || (input.type === "issue" ? "open" : input.type === "fine" ? (input.paid ? "paid" : "unpaid") : undefined),
     metadata: { source: input.source || "telegram-or-api", ...(sourceFingerprint ? { messageFingerprint: sourceFingerprint } : {}) }
   };
-  if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
+  if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "repair" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
     event.odometerKm = latestOdo;
+    event.odometerAutoAssigned = true;
   }
   if (event.type === "trip") {
     event.odometerBeforeKm = latestOdo;
@@ -1471,7 +1478,8 @@ async function saveEvent(input, env) {
   });
   const id = event.id.slice(0, 8);
   const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `دسته: ${eventTypeLabel(event.type)} · تاریخ: ${event.jalaliDate}، ساعت ${event.time}`, `انجام‌دهنده: ${event.actor || "من"}`];
-  if (event.odometerKm !== null) lines.push(`کیلومتر ثبت‌شده: ${formatNum(event.odometerKm)} km`);
+  if (event.odometerKm !== null) lines.push(`کیلومتر ثبت‌شده: ${formatNum(event.odometerKm)} km${event.odometerAutoAssigned ? " · خودکار از آخرین کیلومتر معتبر" : ""}`);
+  else if (event.type === "issue" || event.type === "repair") lines.push("⚠️ کیلومتر قبلی معتبری پیدا نشد؛ بعد از بررسی صفحه کیلومتر، با /km عدد فعلی را ثبت کن.");
   if (event.deltaSincePreviousKm != null) lines.push(`مسافت از آخرین کیلومتر ثبت‌شده: ${formatNum(event.deltaSincePreviousKm)} km · راننده: ${event.distanceActor || event.actor || "من"}`);
   if (event.distanceKm !== null) lines.push(`مسافت: ${formatNum(event.distanceKm)} km${event.odometerAfterKm !== null ? ` · کارکرد تخمینی جدید: ${formatNum(event.odometerAfterKm)} km` : " · برای تخمین کارکرد، ابتدا /km ثبت کن"}`);
   if (event.liters !== null) lines.push(`سوخت: ${formatNum(event.liters)} لیتر`);
@@ -2154,23 +2162,66 @@ async function recordRepair(raw, occurredAt, env) {
   return await saveEvent({ type: "repair", title: "ثبت تعمیر", description: raw || "تعمیر انجام شد", costRial: cost, occurredAt, sourceText: raw }, env);
 }
 
+function calculateFuelConsumptionHistory(fuelEvents) {
+  const fuel = [...(fuelEvents || [])].filter(e => e && e.type === "fuel").sort((a,b) => eventTimestampForReport(a) - eventTimestampForReport(b));
+  const full = fuel.filter(e => e.fullTank && e.odometerKm !== null && e.odometerKm !== undefined && e.odometerKm !== "" && Number.isFinite(Number(e.odometerKm)));
+  const results = [];
+  for (let i = 1; i < full.length; i++) {
+    const from = full[i - 1], to = full[i];
+    const km = Number(to.odometerKm) - Number(from.odometerKm);
+    const fromTime = eventTimestampForReport(from), toTime = eventTimestampForReport(to);
+    if (!(km > 0) || km > 5000 || !(toTime > fromTime)) continue;
+    // Fuel bought after the first full tank through the next full tank measures the interval.
+    const intervalFuel = fuel.filter(e => {
+      const time = eventTimestampForReport(e);
+      return time > fromTime && time <= toTime;
+    });
+    const liters = intervalFuel.reduce((n,e) => n + Math.max(0, Number(e.liters) || 0), 0);
+    if (!(liters > 0)) continue;
+    const costRial = intervalFuel.reduce((n,e) => n + Math.max(0, Number(e.costRial) || 0), 0);
+    results.push({ from, to, km, liters, costRial, consumption: liters / km * 100,
+      costPerKmToman: costRial > 0 ? costRial / 10 / km : null,
+      fromOdometerKm: Number(from.odometerKm), toOdometerKm: Number(to.odometerKm),
+      fromDate: from.jalaliDate || from.date || String(from.occurredAt || "").slice(0,10),
+      toDate: to.jalaliDate || to.date || String(to.occurredAt || "").slice(0,10) });
+  }
+  return results;
+}
+
 async function fuelReport(env) {
   const events = await loadAllEvents(env);
   const now = nowTehran();
-  const thisMonth = events.filter(e => e.type === "fuel" && String(e.date).slice(0, 7) === now.date.slice(0, 7));
+  const thisMonth = events.filter(e => e.type === "fuel" && String(e.date || e.occurredAt || "").slice(0, 7) === now.date.slice(0, 7));
   const allFuel = events.filter(e => e.type === "fuel");
   const totalLiters = rows => rows.reduce((s, e) => s + (Number(e.liters) || 0), 0);
   const totalCost = rows => rows.reduce((s, e) => s + (Number(e.costRial) || 0), 0);
-  const full = allFuel.filter(e => e.fullTank && Number.isFinite(e.odometerKm)).sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)));
-  let measuredConsumption = "برای محاسبه مصرف دقیق، هنگام پرکردن کامل باک از گزینه full استفاده کن و کیلومتر هر سوخت‌گیری را ثبت کن.";
-  if (full.length >= 2) {
-    const a = full[full.length - 2], b = full[full.length - 1];
-    const km = Number(b.odometerKm) - Number(a.odometerKm);
-    const liters = allFuel.filter(e => Date.parse(e.occurredAt) > Date.parse(a.occurredAt) && Date.parse(e.occurredAt) <= Date.parse(b.occurredAt)).reduce((s, e) => s + (Number(e.liters) || 0), 0);
-    if (km > 0 && liters > 0) measuredConsumption = `برآورد بین دو سوخت‌گیری با باک کامل: ${Math.round(liters / km * 1000) / 10} لیتر در ۱۰۰ کیلومتر (${Math.round(km)} km / ${Math.round(liters * 10) / 10} لیتر).`;
-  }
+  const history = calculateFuelConsumptionHistory(allFuel);
+  const measuredKm = history.reduce((n,x)=>n+x.km,0);
+  const measuredLiters = history.reduce((n,x)=>n+x.liters,0);
+  const weightedConsumption = measuredKm > 0 ? measuredLiters / measuredKm * 100 : null;
   const pricedFuel = allFuel.filter(e => Number(e.costRial) > 0 && Number(e.liters) > 0);
-  return `⛽ گزارش سوخت\nماه جاری: ${formatNum(totalLiters(thisMonth))} لیتر · ${formatMoneyToman(totalCost(thisMonth))}\nاز ابتدا: ${formatNum(totalLiters(allFuel))} لیتر · ${formatMoneyToman(totalCost(allFuel))}\nتعداد سوخت‌گیری: ${formatNum(allFuel.length)}\nمیانگین قیمت هر لیتر (فقط رکوردهای دارای مبلغ): ${totalLiters(pricedFuel) ? formatMoneyToman(totalCost(pricedFuel) / totalLiters(pricedFuel)) : "—"}\n\n${measuredConsumption}`;
+  const averagePrice = totalLiters(pricedFuel) > 0 ? totalCost(pricedFuel) / totalLiters(pricedFuel) : null;
+  const latest = history.at(-1);
+  const segments = history.slice(-6).reverse().map((item,i) => `${i + 1}. ${item.fromDate} ← ${item.toDate}
+${formatNum(item.fromOdometerKm)} → ${formatNum(item.toOdometerKm)} km · پیمایش ${formatNum(item.km)} km
+سوخت در بازه: ${formatNum(item.liters)} لیتر · مصرف ${formatNum(item.consumption)} لیتر/۱۰۰ km${item.costPerKmToman != null ? ` · هزینه سوخت هر کیلومتر ${formatNum(item.costPerKmToman)} تومان` : ""}`).join("\n\n");
+  return `⛽ گزارش کامل سوخت پژو ۲۰۶
+
+📦 ماه جاری: ${formatNum(totalLiters(thisMonth))} لیتر · ${formatMoneyToman(totalCost(thisMonth))}
+📊 کل سوخت ثبت‌شده: ${formatNum(totalLiters(allFuel))} لیتر · ${formatMoneyToman(totalCost(allFuel))}
+🧾 سوخت‌گیری: ${formatNum(allFuel.length)} بار · باک کامل: ${formatNum(allFuel.filter(e=>e.fullTank).length)} بار
+💰 میانگین قیمت هر لیترِ دارای مبلغ: ${averagePrice == null ? "—" : formatMoneyToman(averagePrice)}
+
+📈 مصرف واقعی بر پایهٔ باک کامل
+${latest ? `آخرین بازه: ${formatNum(latest.consumption)} لیتر در ۱۰۰ کیلومتر
+${formatNum(latest.fromOdometerKm)} → ${formatNum(latest.toOdometerKm)} km · ${formatNum(latest.km)} km پیمایش · ${formatNum(latest.liters)} لیتر سوخت` : "برای شروع اندازه‌گیری، دو سوخت‌گیری با باک کامل و کیلومتر معتبر ثبت کن."}
+${weightedConsumption == null ? "میانگین وزنی کل: هنوز بازهٔ معتبر کافی نیست." : `میانگین وزنی کل بازه‌های معتبر: ${formatNum(weightedConsumption)} لیتر/۱۰۰ km
+مبنای محاسبه: ${formatNum(measuredKm)} km و ${formatNum(measuredLiters)} لیتر سوخت در بازه‌های کامل.`}
+
+${segments ? `🗓️ جزئیات بازه‌های اخیر
+${segments}` : "هنوز بازهٔ مصرف باک‌کامل قابل محاسبه‌ای وجود ندارد."}
+
+ℹ️ فرمول: مجموع لیترهای پس از یک باک کامل تا باک کامل بعدی ÷ اختلاف کیلومترشمار × ۱۰۰. سوخت‌گیری‌های نیمه بین این دو نقطه هم در مجموع لیترها منظور می‌شوند. برای نتیجهٔ دقیق، در هر دو نقطه باک را کامل کن و کیلومتر را ثبت کن.`;
 }
 
 function detectServiceKeys(text, config) {

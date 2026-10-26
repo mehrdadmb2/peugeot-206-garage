@@ -431,6 +431,7 @@
     put('#analyticsChartCaption', `${periodLabels[period]} · ${formatNumber(sum(datasets,d=>d.eventCount))} رویداد · ${formatNumber(totalDistance)} کیلومتر · ${moneyText(totalCost)} تومان هزینهٔ پرداخت‌شده`);
     renderActorInsights(rangeExpenses);
     renderDriverInsights(rangeDistance);
+    renderDriverTimeline(buckets, rangeDistance);
     renderCostPerKm(rangeExpenses, rangeDistance);
     renderAnalyticsCategories(rangeEvents);
     renderInsights(datasets, period);
@@ -476,6 +477,40 @@
     if (!rows.length) { root.innerHTML = '<div class="empty-state">در بازهٔ انتخابی رویدادی ثبت نشده است.</div>'; return; }
     const max = Math.max(1,...rows.map(row=>row[1]));
     root.innerHTML = rows.map(([type,count],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${typeIcons[type]||'◈'}</i>${escapeHtml(typeLabels[type]||type)}</span><strong>${formatNumber(count)} <small>رویداد</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,count/max*100)}%"></span></div></div>`).join('');
+  }
+
+  function renderDriverTimeline(buckets, distanceEntries) {
+    const root=$('#driverTimelineChart'), legend=$('#driverTimelineLegend');
+    if (!root || !legend) return;
+    const palette=['#42e8bc','#ffad66','#59c8ff','#b6a1ff','#f58fc5','#d2ee77','#ff7b68'];
+    const actors=[...new Set(distanceEntries.map(entry=>String(entry.actor||'من').trim()||'من'))]
+      .map(actor=>({actor,total:sum(distanceEntries.filter(entry=>(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm)}))
+      .sort((a,b)=>b.total-a.total).slice(0,6).map(row=>row.actor);
+    if (!actors.length || !distanceEntries.some(entry=>Number(entry.distanceKm)>0)) {
+      root.innerHTML='<div class="empty-state">برای نمودار پیمایش به حداقل دو ثبت معتبر کیلومترشمار یا یک ثبت مسافت نیاز است. نام شخصی که کیلومتر دوم را می‌فرستد به آن فاصله نسبت داده می‌شود.</div>';
+      legend.innerHTML=''; return;
+    }
+    const values=buckets.map(bucket=>{
+      const row={bucket};
+      actors.forEach(actor=>{row[actor]=sum(distanceEntries.filter(entry=>eventEpoch(entry)>=bucket.start&&eventEpoch(entry)<bucket.end&&(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm)});
+      return row;
+    });
+    const max=niceMax(Math.max(1,...values.map(row=>actors.reduce((total,actor)=>total+(row[actor]||0),0))));
+    const width=760,height=300,left=42,right=12,top=20,bottom=42,plotW=width-left-right,plotH=height-top-bottom,slot=plotW/values.length,barW=Math.min(34,slot*.64);
+    const grid=[0,.25,.5,.75,1].map(t=>{const y=top+plotH*(1-t);return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${left-8}" y="${y+3}" text-anchor="end">${axisShort(max*t)}</text>`}).join('');
+    let bars='';
+    values.forEach((row,i)=>{
+      const x=left+i*slot+(slot-barW)/2; let stackY=top+plotH; let total=0;
+      actors.forEach((actor,index)=>{
+        const value=row[actor]||0; total+=value; if(!(value>0))return;
+        const bh=value/max*plotH; stackY-=bh;
+        bars+=`<rect x="${x}" y="${stackY}" width="${barW}" height="${Math.max(1,bh)}" rx="3" fill="${palette[index%palette.length]}" opacity=".88"><title>${escapeHtml(actor)} · ${escapeHtml(row.bucket.label)} · ${formatNumber(value)} km</title></rect>`;
+      });
+      if(total>0) bars+=`<text class="axis-text" x="${x+barW/2}" y="${height-13}" text-anchor="middle">${escapeHtml(i%(values.length>16?3:values.length>12?2:1)===0||i===values.length-1?row.bucket.label:'')}</text>`;
+      else if(i%(values.length>16?3:values.length>12?2:1)===0||i===values.length-1) bars+=`<text class="axis-text" x="${x+barW/2}" y="${height-13}" text-anchor="middle">${escapeHtml(row.bucket.label)}</text>`;
+    });
+    root.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار میله‌ای انباشته پیمایش خودرو بر اساس راننده در هر بازه">${grid}${bars}</svg>`;
+    legend.innerHTML=actors.map((actor,index)=>`<span class="driver-legend-item"><i style="--driver-color:${palette[index%palette.length]}"></i>${escapeHtml(actor)} <b>${formatNumber(sum(distanceEntries.filter(entry=>(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm))} km</b></span>`).join('');
   }
 
   function renderActorInsights(expenseEvents = state.events.filter(isActualExpense)) {
@@ -592,15 +627,47 @@
     $('#overviewAlerts').innerHTML = alerts.length ? alerts.slice(0,5).map(a=>`<div class="alert-row ${a.kind}"><span class="alert-mark">${a.kind==='danger'?'!':'◷'}</span><div><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.detail)}</small></div></div>`).join('') : '<div class="empty-state">در داده‌های ثبت‌شده هشدار فوری پیدا نشد. این بررسی فقط به رویدادهایی وابسته است که ثبت کرده‌ای.</div>';
   }
 
+  function getFuelConsumptionHistory() {
+    const fuel = state.events.filter(e => e.type === 'fuel').sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+    const full = fuel.filter(e => e.fullTank && e.odometerKm !== null && e.odometerKm !== undefined && Number.isFinite(Number(e.odometerKm)));
+    const result = [];
+    for (let i=1;i<full.length;i++) {
+      const from=full[i-1], to=full[i];
+      const km=Number(to.odometerKm)-Number(from.odometerKm);
+      const fromTime=eventEpoch(from), toTime=eventEpoch(to);
+      if (!(km>0) || km>5000 || !(toTime>fromTime)) continue;
+      const rows=fuel.filter(e=>eventEpoch(e)>fromTime && eventEpoch(e)<=toTime);
+      const liters=sum(rows,e=>e.liters);
+      if (!(liters>0)) continue;
+      const costRial=sum(rows,e=>e.costRial);
+      result.push({from,to,km,liters,costRial,value:liters/km*100,costPerKm:costRial>0?costRial/10/km:null,fromOdo:Number(from.odometerKm),toOdo:Number(to.odometerKm)});
+    }
+    return result;
+  }
+
   function getFuelConsumption() {
-    const fuel = state.events.filter(e => e.type === 'fuel');
-    const full = fuel.filter(e => e.fullTank && Number.isFinite(Number(e.odometerKm)) && e.odometerKm !== null).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
-    if (full.length < 2) return null;
-    const a = full[full.length-2], b = full[full.length-1];
-    const km = Number(b.odometerKm) - Number(a.odometerKm);
-    const liters = fuel.filter(e=>eventEpoch(e)>eventEpoch(a)&&eventEpoch(e)<=eventEpoch(b)).reduce((n,e)=>n+(Number(e.liters)||0),0);
-    if (!(km > 0) || !(liters > 0) || km > 5000) return null;
-    return { value: liters / km * 100, km, liters, from: a, to: b };
+    const history=getFuelConsumptionHistory();
+    return history.length ? history[history.length-1] : null;
+  }
+
+  function renderFuelConsumptionChart(history) {
+    const root=$('#fuelConsumptionChart');
+    if (!root) return;
+    if (!history.length) { root.innerHTML='<div class="empty-state">هنوز دو سوخت‌گیری متوالی باک کامل و کیلومتر معتبر برای محاسبه وجود ندارد.</div>'; $('#fuelWeightedAverage').textContent='—'; return; }
+    const width=620,height=250,left=44,right=14,top=22,bottom=45,plotW=width-left-right,plotH=height-top-bottom;
+    const max=niceMax(Math.max(1,...history.map(x=>x.value))*1.12), slot=plotW/history.length, barW=Math.min(42,slot*.58);
+    const grid=[0,.25,.5,.75,1].map(t=>{const y=top+plotH*(1-t);return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${left-8}" y="${y+3}" text-anchor="end">${formatNumber(max*t,1)}</text>`}).join('');
+    const bars=history.slice(-18).map((d,i,arr)=>{const x=left+i*(plotW/arr.length)+(plotW/arr.length-barW)/2;const bh=d.value/max*plotH;const y=top+plotH-bh;const label=d.to?.jalaliDate||d.to?.date||'';return `<g><title>${escapeHtml(label)} · ${formatNumber(d.value,2)} L/100 km · ${formatNumber(d.km)} km · ${formatNumber(d.liters,1)} L</title><rect class="fuel-efficiency-bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(1,bh)}" rx="6"/><text class="axis-text" x="${x+barW/2}" y="${height-14}" text-anchor="middle">${escapeHtml(label.slice(-5))}</text></g>`}).join('');
+    root.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="روند اندازه‌گیری مصرف سوخت در لیتر بر صد کیلومتر"><defs><linearGradient id="fuelEfficiencyGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffbd72"/><stop offset="1" stop-color="#ff7c48" stop-opacity=".42"/></linearGradient></defs>${grid}${bars}</svg>`;
+    const km=sum(history,e=>e.km),liters=sum(history,e=>e.liters);
+    $('#fuelWeightedAverage').textContent=km>0?`${formatNumber(liters/km*100,2)} L/100 km`:'—';
+  }
+
+  function renderFuelConsumptionHistory(history) {
+    const root=$('#fuelConsumptionHistory');
+    if (!root) return;
+    if (!history.length) { root.innerHTML='<div class="empty-state">پس از ثبت دو باک کامل با کیلومتر معتبر، جزئیات هر بازه اینجا ظاهر می‌شود.</div>'; return; }
+    root.innerHTML=history.slice(-10).reverse().map((d,index)=>`<article class="fuel-measurement-row"><div class="fuel-measurement-index">${formatNumber(history.length-index)}</div><div class="fuel-measurement-main"><b>${escapeHtml(d.from?.jalaliDate||d.from?.date||'—')} ← ${escapeHtml(d.to?.jalaliDate||d.to?.date||'—')}</b><small>${formatNumber(d.fromOdo)} → ${formatNumber(d.toOdo)} km · پیمایش ${formatNumber(d.km)} km</small><small>مجموع سوخت بین دو باک کامل: ${formatNumber(d.liters,1)} لیتر${d.costRial>0?` · ${moneyText(d.costRial/10)} تومان`:''}</small></div><strong>${formatNumber(d.value,2)}<small> L/100 km</small></strong></article>`).join('');
   }
 
   function renderFuelPage() {
@@ -615,12 +682,17 @@
     $('#fuelPageCostFoot').textContent = `${formatNumber(fuel.length)} ثبت سوخت‌گیری`;
     $('#fuelPageStops').textContent = formatNumber(fuel.length);
     $('#fuelPageStopsFoot').textContent = `${formatNumber(fuel.filter(e=>e.fullTank).length)} بار باک کامل علامت خورده`;
-    const consumption = getFuelConsumption();
-    $('#fuelPageEfficiency').textContent = consumption ? formatNumber(consumption.value,1) : '—';
-    $('#fuelPageEfficiencyFoot').textContent = consumption ? `بر پایه ${formatNumber(consumption.km)} کیلومتر بین دو باک کامل` : 'به دو سوخت‌گیری کامل با کیلومتر نیاز است';
+    const history=getFuelConsumptionHistory();
+    const consumption=history.length?history[history.length-1]:null;
+    const measuredKm=sum(history,e=>e.km), measuredLiters=sum(history,e=>e.liters);
+    const weighted=measuredKm>0?measuredLiters/measuredKm*100:null;
+    $('#fuelPageEfficiency').textContent = consumption ? formatNumber(consumption.value,2) : '—';
+    $('#fuelPageEfficiencyFoot').textContent = consumption ? `آخرین بازه ${formatNumber(consumption.km)} km · میانگین کل ${formatNumber(weighted,2)} L/100 km` : 'برای اندازه‌گیری، دو سوخت‌گیری باک کامل با کیلومتر معتبر لازم است';
     const months = getMonthKeys(nowMonth,Math.max(6,state.range)).map(month=>({month,label:monthShort(month),liters:sum(fuel.filter(e=>String(e.date||e.occurredAt||'').slice(0,7)===month),e=>e.liters)}));
     $('#fuelOnlyChart').innerHTML = barChart(months,'liters',{unit:'لیتر',empty:'در این بازه هنوز سوخت‌گیری ثبت نشده است.'});
     $('#fuelEventList').innerHTML = fuel.length ? fuel.slice(0,8).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.jalaliDate||e.date||'—')} · ${formatNumber(e.liters,1)} لیتر</div><div class="mini-row-desc">${escapeHtml((e.description||'سوخت‌گیری').slice(0,95))}</div><div class="mini-row-meta">${e.odometerKm!=null?`${formatNumber(e.odometerKm)} km`:'بدون کیلومتر'}${e.fullTank?' · باک کامل':''}</div></div><div class="mini-row-value">${Number(e.costRial)>0?`${moneyText(Number(e.costRial)/10)} ت`:'—'}</div></div>`).join('') : '<div class="empty-state">سوخت‌گیری ثبت نشده است. نمونه: <code>20l fuel cost=700000 toman km=156200 full</code></div>';
+    renderFuelConsumptionChart(history);
+    renderFuelConsumptionHistory(history);
   }
 
   function expenseCategoryName(event) {

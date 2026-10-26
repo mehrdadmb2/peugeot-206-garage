@@ -10,7 +10,7 @@
     <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/Version-3.4.0-8b5cf6?style=flat-square" alt="Version 3.4.0">
+    <img src="https://img.shields.io/badge/Version-3.5.0-8b5cf6?style=flat-square" alt="Version 3.5.0">
     <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
     <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
@@ -21,9 +21,9 @@
   <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
 </p>
 
-> **نسخهٔ پروژه:** Garage OS 3.4.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+> **نسخهٔ پروژه:** Garage OS 3.5.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
 >
-> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است و نسخهٔ 3.5.0 بر ثبت خرابی بدون کیلومتر، مصرف سوخت باک‌به‌باک و تحلیل پیمایش به تفکیک شخص تمرکز دارد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
 
 ---
 
@@ -60,7 +60,7 @@
 - 🧰 **نگهداری خودرو:** بازهٔ زمانی و کیلومتری برای سرویس‌ها و محاسبهٔ موعد تقریبی.
 - 🚦 **دفتر جریمه:** نمایش مجموع جریمه‌ها، پرداخت‌شده‌ها و پرداخت‌نشده‌ها به‌صورت مجزا.
 - 📊 **داشبورد تحلیلی:** بازه‌های ساعتی، روزانه، هفتگی و ماهانه، هزینه‌ها، سوخت، مسافت، سهم اشخاص و هزینهٔ هر کیلومتر.
-- 🖼️ **تحلیل تصویری تلگرام:** `/analysis hour|day|week|month` گزارش متنی و نمودارهای PNG هزینه، سوخت و مسافت را ارسال می‌کند.
+- 🖼️ **تحلیل تصویری تلگرام:** `/analysis hour|day|week|month` گزارش متنی و چهار نمودار PNG هزینه، سوخت، مسافت و سهم پیمایش هر شخص را ارسال می‌کند.
 - 📦 **خروجی و پشتیبان:** CSV همهٔ رویدادها یا یک ماه و فایل JSON برای پشتیبان‌گیری.
 - 🔐 **حفاظت از API:** توکن API فقط در Cloudflare Worker Secret می‌ماند؛ در HTML یا داشبورد عمومی قرار نمی‌گیرد.
 - ⚡ **بدون Cron برای ثبت عادی:** ثبت، ویرایش، گزارش و خروجی هنگام دریافت درخواست انجام می‌شوند؛ ارسال خودکار دوره‌ای به یک زمان‌بند جداگانه نیاز دارد.
@@ -437,6 +437,52 @@ npm run check
 ### نصب نسخهٔ 3.4
 بستهٔ امن را روی پوشهٔ ریشه استخراج کن، سپس در پوشهٔ `worker`، دستورهای `npm install`, `npm test`, `npm run check` و `npx wrangler deploy` را اجرا کن. فایل‌های `data/config.json`, `data/index.json` و `data/logs/` را از بستهٔ امن جایگزین نکن. پس از بررسی موفق، فایل‌های کد و سایت را در GitHub commit/push کن. برای دکمه‌های inline وب‌هوک باید `callback_query` را در `allowed_updates` بپذیرد.
 
+
+
+## 🚗 سناریوهای مهم نسخهٔ 3.5.0
+
+### ثبت خرابی بدون نوشتن کیلومتر
+
+برای نمونه، وقتی خودرو روشن نمی‌شود، کافی است پیام طبیعی بفرستی:
+
+```text
+ماشین دیشب خراب شد و روشن نمی‌شود
+بابام بردش تعمیرگاه
+```
+
+در صورتی که آخرین قرائت معتبر کیلومترشمار وجود داشته باشد، Worker همان عدد را به رویداد خرابی پیوند می‌دهد و در پیام تأیید مشخص می‌کند که کیلومتر از سابقه به‌صورت خودکار گرفته شده است. این **تخمین کیلومتر خرابی نیست**؛ فقط آخرین قرائت شناخته‌شده است. اگر خرابی در کیلومتر دیگری رخ داده، جزئیات را ویرایش یا کیلومتر واقعی را ثبت کن. اگر هیچ قرائت معتبری وجود نداشته باشد، ربات نباید عدد ساختگی ایجاد کند.
+
+### ثبت چندبخشی تعمیرگاه
+
+از `/repairjob` برای یک مراجعهٔ تعمیرگاهی با چند عملیات، قطعه، هزینه و اجرت استفاده کن. هر قطعه/عملیات به‌صورت جداگانه قابل جست‌وجو است و به همان مراجعه مرتبط می‌ماند. هزینه‌ای که نمی‌دانی خالی بگذار؛ برای قطعات و اجرت نامشخص مبلغ فرضی ثبت نکن.
+
+### مصرف سوخت واقعی در ۱۰۰ کیلومتر
+
+برای محاسبهٔ مصرف باک‌به‌باک، حداقل دو سوخت‌گیری با باک کامل و کیلومتر معتبر لازم است. ثبت‌های جزئی سوخت‌گیری بین این دو نقطه در مجموع لیترهای مصرف‌شده لحاظ می‌شوند. فرمول کلی:
+
+\[
+\text{L/100 km}=\frac{\text{لیتر سوخت ثبت‌شده بین دو باک کامل}}{\text{اختلاف کیلومترشمار}}\times100
+\]
+
+مثال: اگر بین دو نقطهٔ باک کامل ۴۰۰ کیلومتر طی و در مجموع ۴۰ لیتر سوخت ثبت شده باشد، میانگین برآوردی برابر ۱۰ لیتر در ۱۰۰ کیلومتر است. در صورت کمبود داده، داشبورد مقدار دقیق را جعل نمی‌کند و به‌جای آن راهنمای تکمیل سوابق را نشان می‌دهد. `/fuelstats` گزارش متنی و تاریخچهٔ اندازه‌گیری‌ها را می‌دهد.
+
+### پیمایش و سهم رانندگان
+
+نمودار پیمایش بر اساس اختلاف دو قرائت معتبر کیلومترشمار و شخص ثبت‌کنندهٔ قرائت دوم گروه‌بندی می‌شود. این یک **انتساب برآوردی بین دو ثبت** است و GPS یا ثبت لحظه‌به‌لحظهٔ مسیر نیست. اگر چند نفر در فاصلهٔ بین دو قرائت رانندگی کرده‌اند، برای سهم دقیق‌تر باید مسافت آن‌ها را جداگانه با `/trip` و نام شخص ثبت کرد.
+
+### راهنمای سریع
+
+| هدف | دستور/نمونه |
+|---|---|
+| ثبت خرابی بدون کیلومتر | `ماشین روشن نمی‌شود` |
+| ثبت کیلومتر با نام راننده | `بابام کیلومتر 431462` |
+| ثبت مسافت صریح | `بابام 35 کیلومتر رانندگی کرد` |
+| سوخت‌گیری با باک کامل | `/fuel 35l cost=... km=431500 full` |
+| مصرف و تاریخچهٔ سوخت | `/fuelstats` |
+| گزارش تصویری هفتگی | `/analysis week` |
+| ثبت چندعملیاتی تعمیرگاه | `/repairjob ...` |
+| تمام دستورها و مثال‌ها | `/guide` |
+
 ## 📎 لینک‌های رسمی پروژه
 
 - 🌐 [داشبورد خودرو](https://mehrdadmb2.github.io/peugeot-206-garage/)
@@ -449,7 +495,7 @@ npm run check
 
 ## 🧾 نسخه و مجوز
 
-- نسخهٔ مستندات: **3.4.0**
+- نسخهٔ مستندات: **3.5.0**
 - مجوز: [MIT](LICENSE)
 - هر گونه فاصلهٔ سرویس، سابقهٔ مالی یا کیلومتر باید مطابق اطلاعات واقعی خودرو اصلاح شود؛ این نرم‌افزار جایگزین بررسی فنی یا دفترچهٔ سازنده نیست.
 
@@ -459,3 +505,11 @@ npm run check
   <a href="https://mehrdadmb2.github.io/peugeot-206-garage/">🌐 باز کردن داشبورد</a> ·
   <a href="https://t.me/Peugeot206GarageBot">✈️ باز کردن ربات</a>
 </div>
+
+
+## 🚀 نسخهٔ 3.5.0 · Fuel Intelligence & Breakdown Logging
+
+- Record a breakdown without an odometer, e.g. `ماشین خراب شد و روشن نمی‌شود`. When a previous odometer exists, the Worker attaches the latest known reading and labels it as automatically inherited in the confirmation. Correct it if the actual failure mileage differs.
+- Measure real fuel economy with two consecutive full-tank records and odometer readings. The dashboard charts every valid full-to-full segment and shows the weighted L/100 km average. Intermediate partial refuels are included in the liters total between full-tank anchors.
+- The analytics page contains a stacked timeline chart of mileage by driver for the selected time buckets. Historical mileage without a reliable timestamp is not fabricated into a specific hour/day.
+- Run `/fuelstats` for the detailed fuel report.

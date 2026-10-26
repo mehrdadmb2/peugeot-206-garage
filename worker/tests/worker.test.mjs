@@ -9,7 +9,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /no scheduled handler/);
- assert.equal(body.version, "3.4.0");
+ assert.equal(body.version, "3.5.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -38,7 +38,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.4.0");
+ assert.equal(body.version, "3.5.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -199,7 +199,7 @@ test("Telegram operations list formats IDs and quotes and uses named clickable n
  }
 });
 
-test("/analysis week sends one textual summary and three PNG charts", async () => {
+test("/analysis week sends one textual summary and four PNG charts", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: "2026-10-23T09:00:00+03:30", months: ["2026-10"] })],
   ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400, defaultActor: "من" }, people: [], serviceIntervals: {} })],
@@ -240,7 +240,7 @@ test("/analysis week sends one textual summary and three PNG charts", async () =
   assert.equal(sentMessages.length, 1, "summary should be sent separately so image captions stay short");
   assert.match(sentMessages[0].text, /گزارش تحلیلی پژو/);
   assert.match(sentMessages[0].text, /اختلاف دو محاسبه/);
-  assert.equal(sentPhotos.length, 3);
+  assert.equal(sentPhotos.length, 4);
  } finally {
   globalThis.fetch = originalFetch;
  }
@@ -545,4 +545,86 @@ test("replacement part counts as the latest maintenance event in the due report"
   const body=await response.json();
   assert.ok(body.dueItems.some(item=>item.key==="spark_plugs"),"installed part without serviceKey should still anchor its periodic reminder by componentKey");
  }finally{globalThis.fetch=originalFetch;}
+});
+
+function mockContentsApi(files, timeline = [], telegramMessages = []) {
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.github.com" && url.pathname.includes("/contents/")) {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   timeline.push(`github:${(init.method || "GET").toUpperCase()}:${path}`);
+   if ((init.method || "GET").toUpperCase() === "GET") {
+    const content = files.get(path);
+    if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (init.method === "PUT") {
+    const body = JSON.parse(init.body);
+    files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+   return new Response("unexpected method", { status: 405 });
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   const body = JSON.parse(init.body);
+   telegramMessages.push(body);
+   timeline.push("telegram:sendMessage");
+   return new Response(JSON.stringify({ ok: true, result: { message_id: telegramMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ return () => { globalThis.fetch = originalFetch; };
+}
+
+test("natural no-start report without odometer inherits the latest valid odometer and gets a Telegram acknowledgement", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 } })],
+  ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [{ id: "latest-odo-001", type: "odometer", title: "کیلومترشمار", description: "آخرین کیلومتر معتبر", actor: "من", occurredAt: "2026-10-25T10:00:00+03:30", date: "2026-10-25", time: "10:00", odometerKm: 431462, createdAt: "2026-10-25T06:30:00.000Z" }] })]
+ ]);
+ const timeline = [], telegramMessages = [], restoreFetch = mockContentsApi(files, timeline, telegramMessages);
+ const env = { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ const pending = [];
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 775501, message: { message_id: 801, date: Math.floor(Date.now()/1000), text: "ماشین روشن نمیشه", from: { id: 42 }, chat: { id: 101 } } })
+  }), env, { waitUntil(promise) { pending.push(promise); } });
+  assert.equal(response.status, 200);
+  await Promise.all(pending);
+  assert.ok(telegramMessages.some(item => /پیام دریافت شد/.test(item.text)), "the user should get an acknowledgement before the GitHub writes");
+  assert.equal(timeline[0], "telegram:sendMessage", "the first upstream side effect should acknowledge the user, not contact GitHub");
+  const index = JSON.parse(files.get("data/index.json"));
+  const updatedMonths = await Promise.all(index.months.map(month => JSON.parse(files.get(`data/logs/${month}.json`) || "{\"events\":[]}")));
+  const created = updatedMonths.flatMap(month => month.events || []).find(event => event.type === "issue" && event.description.includes("روشن"));
+  assert.ok(created, "no-start natural language should create an issue event");
+  assert.equal(created.odometerKm, 431462);
+  assert.equal(created.odometerAutoAssigned, true);
+  assert.ok(telegramMessages.some(item => /خودکار از آخرین کیلومتر معتبر/.test(item.text)), "confirmation should explain that odometer was inherited");
+ } finally { restoreFetch(); }
+});
+
+test("fuel report calculates full-to-full consumption from partial fills between checkpoints", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 } })],
+  ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [
+   { id: "full-a-00001", type: "fuel", title: "باک کامل اول", occurredAt: "2026-10-01T10:00:00+03:30", date: "2026-10-01", time: "10:00", odometerKm: 100000, liters: 0, fullTank: true, costRial: null },
+   { id: "partial-00001", type: "fuel", title: "سوخت‌گیری نیمه", occurredAt: "2026-10-05T10:00:00+03:30", date: "2026-10-05", time: "10:00", odometerKm: 100180, liters: 10, fullTank: false, costRial: 2000000 },
+   { id: "full-b-00001", type: "fuel", title: "باک کامل دوم", occurredAt: "2026-10-10T10:00:00+03:30", date: "2026-10-10", time: "10:00", odometerKm: 100400, liters: 30, fullTank: true, costRial: 6000000 }
+  ] })]
+ ]);
+ const timeline = [], restoreFetch = mockContentsApi(files, timeline, []);
+ const token = "f".repeat(64);
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/api/v1/record", {
+   method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/fuelstats" })
+  }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.match(body.reply, /۱۰ لیتر در ۱۰۰ کیلومتر/);
+  assert.match(body.reply, /۴۰۰ km/);
+  assert.match(body.reply, /۴۰ لیتر/);
+ } finally { restoreFetch(); }
 });
