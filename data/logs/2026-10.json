@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-27T19:06:00+03:30",
+  "updatedAt": "2026-10-27T19:07:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -842,11 +842,22 @@
       "type": "odometer",
       "title": "ثبت کیلومترشمار",
       "description": "/km 431503 تعمیر ماشین بابام",
-      "actor": "من",
+      "actor": "بابام",
       "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "updatedAt": "2026-10-27T19:07:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-10-27T19:07:00+03:30",
+          "by": "telegram",
+          "before": {
+            "actor": "من"
+          },
+          "after": {
+            "actor": "بابام"
+          }
+        }
+      ],
       "createdAt": "2026-10-27T15:36:23.117Z",
       "occurredAt": "2026-10-27T19:06:00+03:30",
       "date": "2026-10-27",
