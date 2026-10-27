@@ -10,7 +10,7 @@
     <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/Version-3.5.0-8b5cf6?style=flat-square" alt="Version 3.5.0">
+    <img src="https://img.shields.io/badge/Version-3.6.0-8b5cf6?style=flat-square" alt="Version 3.6.0">
     <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
     <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
@@ -21,9 +21,9 @@
   <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
 </p>
 
-> **نسخهٔ پروژه:** Garage OS 3.5.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+> **نسخهٔ پروژه:** Garage OS 3.6.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
 >
-> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است و نسخهٔ 3.5.0 بر ثبت خرابی بدون کیلومتر، مصرف سوخت باک‌به‌باک و تحلیل پیمایش به تفکیک شخص تمرکز دارد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است و نسخهٔ 3.6.0 بر ثبت خرابی بدون کیلومتر، مصرف سوخت باک‌به‌باک و تحلیل پیمایش به تفکیک شخص تمرکز دارد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
 
 ---
 
@@ -439,7 +439,7 @@ npm run check
 
 
 
-## 🚗 سناریوهای مهم نسخهٔ 3.5.0
+## 🚗 سناریوهای مهم نسخهٔ 3.6.0
 
 ### ثبت خرابی بدون نوشتن کیلومتر
 
@@ -495,7 +495,7 @@ npm run check
 
 ## 🧾 نسخه و مجوز
 
-- نسخهٔ مستندات: **3.5.0**
+- نسخهٔ مستندات: **3.6.0**
 - مجوز: [MIT](LICENSE)
 - هر گونه فاصلهٔ سرویس، سابقهٔ مالی یا کیلومتر باید مطابق اطلاعات واقعی خودرو اصلاح شود؛ این نرم‌افزار جایگزین بررسی فنی یا دفترچهٔ سازنده نیست.
 
@@ -507,9 +507,37 @@ npm run check
 </div>
 
 
-## 🚀 نسخهٔ 3.5.0 · Fuel Intelligence & Breakdown Logging
+## 🚀 نسخهٔ 3.6.0 · Fuel Intelligence & Breakdown Logging
 
 - Record a breakdown without an odometer, e.g. `ماشین خراب شد و روشن نمی‌شود`. When a previous odometer exists, the Worker attaches the latest known reading and labels it as automatically inherited in the confirmation. Correct it if the actual failure mileage differs.
 - Measure real fuel economy with two consecutive full-tank records and odometer readings. The dashboard charts every valid full-to-full segment and shows the weighted L/100 km average. Intermediate partial refuels are included in the liters total between full-tank anchors.
 - The analytics page contains a stacked timeline chart of mileage by driver for the selected time buckets. Historical mileage without a reliable timestamp is not fabricated into a specific hour/day.
 - Run `/fuelstats` for the detailed fuel report.
+
+
+## 🧠 نسخهٔ 3.6.0 · فهم بهتر پیام و دیکشنری تعمیرگاه
+
+گزارش جزئی باگ‌ها و آزمون‌ها: [`FIXES-v3.6.md`](FIXES-v3.6.md).
+
+
+این نسخه به درک متن‌های ترکیبی و ثبت درست تعمیرگاه تمرکز دارد:
+
+- **کیلومتر همراه توضیح و شخص:** `/km 431503 تعمیر ماشین بابام` کیلومتر ۴۳۱۵۰۳ را با انجام‌دهندهٔ «بابام» و شرح «تعمیر ماشین» ثبت می‌کند؛ دیگر فقط عدد کیلومتر ثبت نمی‌شود.
+- **کیلومتر خودکار برای خرابی/شست‌وشو:** اگر در پیام خرابی، سرویس یا کارواش کیلومتر ننویسی، آخرین قرائت معتبر به رویداد وصل می‌شود. گزارش مشخص می‌کند این مقدار خودکار بوده و حدسِ کیلومتر لحظهٔ خرابی نیست.
+- **دیکشنری روغن و تسمه:** روغن موتور، روغن گیربکس/واسکازین، روغن هیدرولیک فرمان، روغن ترمز و مایع خنک‌کننده؛ تسمه تایم، تسمه دینام، سنسور دور موتور، سیم/کابل سنسور و قطعات مرتبط با aliasهای فارسی/انگلیسی.
+- **هزینهٔ قطعه و اجرت جدا:** مبلغی که صریحاً برای یک قطعه ذکر شده به همان قطعه نسبت داده می‌شود؛ اجرت تعمیرگاه به ردیف هزینهٔ مستقل می‌رود. مقدار نامشخص حدس زده نمی‌شود.
+- **وضعیت نشتی:** نشتی هیدرولیکِ رفع‌شده به‌صورت خرابی بسته و نشتی گیربکس/واسکازینِ رفع‌نشده به‌صورت خرابی باز می‌ماند؛ نشتی دیگر به اشتباه «قطعهٔ تعویض‌شده» ثبت نمی‌شود.
+
+### نمونهٔ ثبت تعمیرگاه
+
+```text
+/repairjob بابام کیلومتر 431503 امروز ماشین دیشب روشن نشد و به تعمیرگاه بردیم؛ علت روشن نشدن سنسور دور موتور بود؛ سنسور دور موتور تعویض شد، قیمت سنسور دور موتور 1.25 میلیون تومان؛ سیم سنسور دور موتور تعویض شد، قیمت کابل سنسور دور موتور 250 هزار تومان؛ نشتی روغن هیدرولیک برطرف شد؛ روغن هیدرولیک تعویض شد؛ نشتی روغن واسکازین هنوز برطرف نشده؛ اجرت رفع نشتی روغن هیدرولیک 1.5 میلیون تومان
+```
+
+شست‌وشو عملیات جداگانه‌ای است و بهتر است جدا ثبت شود:
+
+```text
+ماشین را خودم شستم
+```
+
+برای اطلاعات این نسخه، از **`scripts/merge-config-v3.6.mjs`** استفاده کن. این اسکریپت ابتدا نسخهٔ پشتیبان تنظیمات را ایجاد می‌کند، قطعات/aliasهای جدید را با کاتالوگ فعلی ادغام می‌کند و فاصله‌های سرویس، اشخاص و تنظیمات سفارشی را حفظ می‌کند. کلید قدیمی `gearbox_oil_leak` از بخش قطعات حذف می‌شود، چون نشتی یک وضعیت خرابی است نه قطعه‌ای که نصب شده باشد.

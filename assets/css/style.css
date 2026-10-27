@@ -126,7 +126,7 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 .installed-lifetime-card .service-name{display:flex;align-items:center;gap:7px}.installed-lifetime-card .service-progress{background:rgba(143,170,197,.09)}.installed-lifetime-card .service-progress span{background:linear-gradient(90deg,var(--component-color,#40e5f4),rgba(64,229,244,.55))}.installed-lifetime-card .service-foot{line-height:1.9;overflow-wrap:anywhere}
 
 
-/* v3.5 FUEL INTELLIGENCE + DRIVER TIMELINE: luminous semantic accents */
+/* v3.6 PERSIAN REPAIR INTELLIGENCE + DRIVER TIMELINE: luminous semantic accents */
 :root{--mint:#42e8bc;--neon-amber:#ffad66;--neon-cyan:#59c8ff;--neon-violet:#b6a1ff;--neon-pink:#f58fc5}
 .fuel-consumption-intelligence .chart-card,.driver-distance-timeline-card{position:relative;overflow:hidden;border-color:rgba(89,200,255,.17);box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 22px 60px rgba(0,0,0,.25),0 0 42px rgba(66,232,188,.035)}
 .fuel-consumption-intelligence .chart-card:before,.driver-distance-timeline-card:before{content:"";position:absolute;inset:-1px;background:radial-gradient(ellipse at 95% 0%,rgba(89,200,255,.10),transparent 35%),radial-gradient(ellipse at 4% 100%,rgba(255,173,102,.07),transparent 34%);pointer-events:none}

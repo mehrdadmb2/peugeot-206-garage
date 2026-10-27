@@ -12,13 +12,19 @@ const SITE_URL = "https://mehrdadmb2.github.io/peugeot-206-garage/";
 const BOT_URL = "https://t.me/Peugeot206GarageBot";
 
 const SERVICE_ALIASES = {
-  engine_oil: ["engine_oil", "oil", "روغن موتور", "روغن", "موتور", "engine oil"],
+  engine_oil: ["engine_oil", "oil", "روغن موتور", "روغن موتور ماشین", "روغن", "موتور", "engine oil", "motor oil"],
   oil_filter: ["oil_filter", "فیلتر روغن", "فیلترروغن", "oil filter"],
   air_filter: ["air_filter", "فیلتر هوا", "فیلترهوا", "air filter"],
   cabin_filter: ["cabin_filter", "فیلتر کابین", "فیلتر اتاق", "cabin filter"],
   fuel_filter: ["fuel_filter", "فیلتر بنزین", "فیلتر سوخت", "fuel filter"],
   spark_plugs: ["spark_plugs", "شمع", "شمع موتور", "spark plug", "spark plugs"],
-  timing_belt: ["timing_belt", "تسمه تایم", "تسمه‌تایم", "timing belt"],
+  timing_belt: ["timing_belt", "تسمه تایم", "تسمه‌تایم", "تسمه تایمینگ", "تسمه تایم موتور", "timing belt"],
+  alternator_belt: ["alternator_belt", "تسمه دینام", "تسمه آلترناتور", "تسمه تجهیزات جانبی", "alternator belt", "accessory belt"],
+  gearbox_oil: ["gearbox_oil", "روغن گیربکس", "روغن واسکازین", "واسکازین", "روغن جعبه دنده", "gearbox oil", "transmission oil"],
+  power_steering_fluid: ["power_steering_fluid", "روغن هیدرولیک", "روغن هیدرولیک فرمان", "روغن فرمان", "power steering fluid"],
+  coolant_temp_sensor: ["coolant_temp_sensor", "فشنگی آب", "سنسور دمای آب", "فشنگی دمای آب"],
+  crankshaft_position_sensor: ["crankshaft_position_sensor", "سنسور دور موتور", "سنسور موقعیت میل لنگ", "سنسور میل لنگ", "crankshaft sensor"],
+  crankshaft_sensor_wiring: ["crankshaft_sensor_wiring", "سیم سنسور دور موتور", "کابل سنسور دور موتور", "سوکت سنسور دور موتور"],
   coolant: ["coolant", "ضدیخ", "ضد یخ", "مایع خنک کننده", "آب رادیاتور", "coolant"],
   brake_fluid: ["brake_fluid", "روغن ترمز", "brake fluid"],
   brake_inspection: ["brake_inspection", "بازدید ترمز", "لنت", "ترمز", "brake inspection"],
@@ -37,7 +43,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.5.0",
+        version: "3.6.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -60,7 +66,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.5.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.6.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -539,7 +545,7 @@ function normalizeIntentText(value) {
   return normalizeDigits(String(value || "").normalize("NFKC"))
     .replace(/[يى]/g, "ی").replace(/ك/g, "ک").replace(/[ۀة]/g, "ه")
     .replace(/[\u064B-\u065F\u0670]/g, "").replace(/[\u200c\u200d]/g, " ")
-    .replace(/[ـ]/g, "").replace(/[؛;]/g, " ").replace(/[،]/g, ",")
+    .replace(/[ـ]/g, "").replace(/[؛;]/g, ";").replace(/[،]/g, ",")
     .replace(/\s+/g, " ").trim().toLowerCase();
 }
 function telegramHtml(value) {
@@ -641,9 +647,22 @@ async function processMessage(text, message, env, options = {}) {
     return { filename: `206-garage-backup-${label}.json`, document: new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json;charset=utf-8" }), caption: `🛡️ نسخه پشتیبان JSON · ${label === "all" ? "همه سوابق" : label} · ${events.length} رویداد` };
   }
   if (/^\/km\b|^\/odo\b|^\/کارکرد\b/i.test(text)) {
-    const value = parseFirstNumber(text.replace(/^\/\S+/, ""));
-    if (!(value > 0)) return { text: "کارکرد را این‌طور بفرست: /km 156000 یا /km ۱۵۶۰۰۰", keyboard: false };
-    return { text: await saveEvent({ type: "odometer", title: "ثبت کیلومترشمار", description: text, odometerKm: Math.round(value), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
+    const rawBody = text.replace(/^\/\S+/, "").trim();
+    const value = parseFirstNumber(rawBody);
+    if (!(value > 0)) return { text: "کارکرد را این‌طور بفرست: /km 431503 یا /km ۴۳۱۵۰۳ بابام", keyboard: false };
+    const remainder = rawBody.replace(/^\s*[\d][\d,._]*/, "").trim();
+    const config = await readConfig(env);
+    const metadata = extractEventMetadata(remainder, null, null, config.people || []);
+    const rest = normalizeIntentText(remainder);
+    const hasRepairDetails = /روشن.{0,12}(?:نشد|نمی.?شود|نمی.?شه)|استارت.{0,12}(?:نخورد|نمی.?خورد)|نشتی|دیاگ|هواگیری|تعویض|عوض\s*(?:شد|شده|کردم|شدند)|سنسور|باتری|باطری|شمع|وایر|ترموستات|روغن|تسمه|برطرف\s*شد|رفع\s*شد|تعمیر\s*شد/.test(rest) && (detectServiceKeys(remainder, config).length > 0 || /روشن|استارت|نشتی|دیاگ|هواگیری|تعویض|عوض\s*(?:شد|شده|کردم|شدند)|تعمیر\s*شد|برطرف\s*شد|رفع\s*شد/.test(rest));
+    if (hasRepairDetails) {
+      const actorPrefix = metadata.actor && metadata.actor !== "من" ? `${metadata.actor} ` : "";
+      const repairText = `${actorPrefix}کیلومتر ${Math.round(value)} ${metadata.description || remainder}`.trim();
+      const result = await recordRepairJob(repairText, message, env, options);
+      return typeof result === "string" ? { text: result, keyboard: false } : result;
+    }
+    const description = metadata.description && metadata.description !== remainder ? metadata.description : (metadata.description || "");
+    return { text: await saveEvent({ type: "odometer", title: description ? `ثبت کیلومترشمار · ${description.slice(0, 70)}` : "ثبت کیلومترشمار", description: description || "ثبت کیلومترشمار", actor: metadata.actor || "من", note: metadata.note || "", odometerKm: Math.round(value), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
   }
   if (/^\/trip\b|^\/مسافت\b/i.test(text)) {
     const value = parseFirstNumber(text.replace(/^\/\S+/, ""));
@@ -1170,10 +1189,18 @@ async function componentInventoryReport(env) {
 }
 
 function isRepairJobNarrative(lower) {
-  const hasWorkshop = /تعمیر\s*گاه|مکانیک|برق.?کار|دیاگ/.test(lower);
-  const hasSymptom = /روشن نشد|استارت نخورد|روشن نمیشد|روشن نمی.?شد|خراب/.test(lower);
-  const markers = [/دیاگ/, /شمع/, /وایر/, /باتری|باطری/, /ترموستات/, /محفظه/, /هواگیری/, /دور فن|درجه آب/].filter(pattern=>pattern.test(lower)).length;
-  return hasWorkshop && (markers >= 2 || hasSymptom && markers >= 1);
+  const text = normalizeIntentText(lower);
+  const hasWorkshop = /تعمیر\s*گاه|مکانیک|برق.?کار|دیاگ|تعمیرکار|تعمیرگاه برد|بردیم تعمیر/.test(text);
+  const hasSymptom = /روشن.{0,12}(?:نشد|نمی.?شد|نمی.?شود|نمی.?شه)|استارت.{0,12}(?:نخورد|نمی.?خورد)|خراب|نشتی|چکه|روغن.{0,10}(?:نشت|کم می.?کند)/.test(text);
+  const markers = [
+    /دیاگ|اسکن خطا|عیب.?یابی/, /شمع/, /وایر/, /باتری|باطری/, /ترموستات|محفظه/, /هواگیری/, /دور فن|درجه آب/,
+    /سنسور دور موتور|سنسور میل.?لنگ/, /روغن هیدرولیک|نشتی هیدرولیک/, /واسکازین|روغن گیربکس|نشتی گیربکس/,
+    /تسمه تایم|تسمه دینام/, /روغن ترمز|روغن موتور|روغن گیربکس/, /اجرت|دستمزد/, /کارواش|شستم/ 
+  ].filter(pattern=>pattern.test(text)).length;
+  const actionCount = (text.match(/تعویض|عوض شد|تعمیر شد|برطرف شد|رفع شد|تنظیم شد|هواگیری|دیاگ|نشتی|شکست|روشن نشد/g) || []).length;
+  const multiAction = markers >= 2 && (actionCount >= 2 || hasSymptom);
+  const resolvedNoStartWithParts = hasSymptom && /(?:سنسور|باتری|باطری|استارت|کوئل|پمپ بنزین|وایر|شمع)/.test(text) && /تعویض|عوض|تعمیر|برطرف|رفع|تنظیم/.test(text);
+  return (hasWorkshop && (markers >= 2 || hasSymptom && markers >= 1 || actionCount >= 3 && markers >= 2)) || multiAction || resolvedNoStartWithParts;
 }
 
 function findCatalogCost(raw, targetPattern, stopPattern = null, useLastMatch = true) {
@@ -1201,50 +1228,254 @@ function makeRepairJobInputs(rawText, config, message) {
   const repairGroupId = crypto.randomUUID();
   const items = config.partCatalog?.items || {};
   const services = config.partCatalog?.services || {};
+  const categories = config.partCatalog?.categories || {};
   const created = [];
-  const isReplacement = /تعویض|عوض|جایگزین|نصب شد|نصب کردم|عوض شدن|عوض شدن|عوض شدند|تعویض شدند|replace/i.test(lower);
+  const addedParts = new Set();
+  const addedServices = new Set();
+  const addedIssues = new Set();
+  const replacementPattern = /تعویض|عوض\s*(?:شد|شده|شدند|کردم|کرده|کردن|شدن)?|جایگزین|نصب\s*(?:شد|کردم|شده)?|replac(?:e|ed|ement)|changed|renewed/i;
+  const resolutionPattern = /(?:برطرف|رفع|درست|تعمیر|حل)\s*(?:شد|شده|کردم|کرده)|مشکل\s+(?:حل|برطرف)\s+شد|روشن\s+شد|به\s+کار\s+افتاد/i;
+  const money = (pat, stop, last=true) => findCatalogCost(rawText, pat, stop, last);
   const addService = (key, description, costRial = null) => {
-    const service=services[key]; if (!service) return;
-    created.push({ type: "service", title: `سرویس: ${service.label}`, description, occurredAt, actor, odometerKm, costRial, sourceText: rawText, serviceCatalogKey:key, serviceLabel:service.label, componentCategory:config.partCatalog?.categories?.[service.category]?.label || service.category, componentName:service.label, componentMode:"service", repairGroupId });
+    if (addedServices.has(key)) return;
+    const service = services[key];
+    if (!service) return;
+    addedServices.add(key);
+    created.push({ type: "service", title: `سرویس: ${service.label}`, description, occurredAt, actor, odometerKm, costRial, sourceText: rawText, serviceCatalogKey: key, serviceLabel: service.label, componentCategory: categories[service.category]?.label || service.category, componentName: service.label, componentMode: "service", repairGroupId });
   };
-  const addPart = (key, costRial = null, specs = null, brand = null) => {
-    const item=items[key]; if (!item) return;
-    created.push({ type: "part", title: `${isReplacement ? "تعویض قطعه" : "ثبت قطعه"}: ${item.label}`, description: item.label, occurredAt, actor, odometerKm, costRial, sourceText: rawText, serviceKey:item.serviceKey || null, serviceLabel:item.label, componentKey:key, componentName:item.label, componentCategory:config.partCatalog?.categories?.[item.category]?.label || item.category, componentMode:item.mode || "condition", componentReplaced:isReplacement, brand, specs, repairGroupId, quantity:1 });
+  const addPart = (key, costRial = null, specs = null, brand = null, model = null, partNumber = null) => {
+    if (addedParts.has(key)) return;
+    const item = items[key];
+    if (!item) return;
+    addedParts.add(key);
+    created.push({ type: "part", title: `تعویض قطعه: ${item.label}`, description: item.label, occurredAt, actor, odometerKm, costRial: costRial ?? null, sourceText: rawText, serviceKey: item.serviceKey || (config.serviceIntervals?.[key] ? key : null), serviceLabel: item.label, componentKey: key, componentName: item.label, componentCategory: categories[item.category]?.label || item.category, componentMode: item.mode || "condition", componentReplaced: true, brand, model, partNumber, specs, repairGroupId, quantity: 1 });
   };
-  const money = (pat, stop, last=true) => findCatalogCost(rawText,pat,stop,last);
+  const addIssue = (key, title, description, status, symptom, repairDescription = null) => {
+    if (addedIssues.has(key)) return;
+    addedIssues.add(key);
+    created.push({ type: "issue", title, description, occurredAt, actor, odometerKm, costRial: null, sourceText: rawText, status, symptom, repairDescription: repairDescription || null, resolvedAt: status === "fixed" ? occurredAt.iso : null, repairGroupId });
+  };
 
-  if (/روشن نشد|استارت نخورد|روشن نمیشد|روشن نمی.?شد|استارت/.test(lower)) {
-    created.push({ type:"issue", title:"خرابی: خودرو روشن نشد", description:"خودرو شب قبل روشن نشد؛ برای عیب‌یابی به تعمیرگاه مراجعه شد.", occurredAt, actor, odometerKm, costRial:null, sourceText:rawText, status:"fixed", repairDescription:"طبق گزارش، دیاگ/تنظیم سیستم خنک‌کاری و تعویض قطعات انجام شد.", repairGroupId, symptom:"روشن نشدن خودرو" });
+  // A mileage explicitly included in a workshop message must update the odometer timeline,
+  // not merely be copied into each repair line.
+  if (odometerKm != null) created.push({ type: "odometer", title: "کیلومترشمار هنگام مراجعه", description: "قرائت کیلومترشمار هنگام مراجعه/تعمیر", occurredAt, actor, odometerKm, sourceText: rawText, repairGroupId });
+
+  // The no-start issue is fixed only when the text describes a plausible resolution,
+  // such as replacing the crank sensor/starting component or explicitly saying the car works again.
+  const noStart = /روشن.{0,14}(?:نشد|نمی.?شد|نمی.?شود|نمی.?شه)|استارت.{0,14}(?:نخورد|نمی.?خورد|نمی.?زند)|روشن\s*نمی.?شد/i.test(lower);
+  const noStartFixed = /(?:سنسور دور موتور|سنسور میل.?لنگ|باتری|باطری|استارت|کوئل|پمپ بنزین).{0,90}(?:تعویض|عوض|تعمیر|برطرف|رفع)|(?:تعویض|عوض|تعمیر).{0,90}(?:سنسور دور موتور|سنسور میل.?لنگ|باتری|باطری|استارت|کوئل|پمپ بنزین)|مشکل روشن شدن برطرف شد|ماشین روشن شد/i.test(lower);
+  if (noStart) addIssue("no-start", "خرابی: خودرو روشن نشد", "خودرو روشن نشد/استارت نخورد؛ شرح کامل عیب‌یابی در مراجعه تعمیرگاه نگهداری شده است.", noStartFixed ? "fixed" : "open", "روشن نشدن خودرو", noStartFixed ? "طبق شرح پیام، قطعه/سیستم مرتبط عیب‌یابی یا تعمیر شده است؛ برای جزئیات به ردیف‌های همین مراجعه مراجعه کن." : null);
+
+  const hydraulicLeak = /(?:نشتی|نشت|چکه).{0,25}(?:روغن\s*)?(?:هیدرولیک|فرمان)|(?:روغن\s*)?(?:هیدرولیک|فرمان).{0,25}(?:نشتی|نشت|چکه)/i.test(lower);
+  const leakResolved = /(?:نشتی|نشت|چکه)[^,;|]{0,60}(?:برطرف\s*شد|رفع\s*شد|تعمیر\s*شد|درست\s*شد)|(?:برطرف\s*شد|رفع\s*شد|تعمیر\s*شد)[^,;|]{0,60}(?:نشتی|نشت|چکه)/i.test(lower);
+  if (hydraulicLeak) addIssue("power-steering-leak", "نشتی روغن هیدرولیک فرمان", "نشتی روغن هیدرولیک فرمان گزارش شد.", leakResolved ? "fixed" : "open", "نشتی روغن هیدرولیک", leakResolved ? "طبق پیام، نشتی روغن هیدرولیک برطرف شده است." : null);
+
+  const gearboxLeak = /(?:نشتی|نشت|چکه).{0,30}(?:واسکازین|روغن\s*گیربکس|گیربکس)|(?:واسکازین|روغن\s*گیربکس|گیربکس).{0,30}(?:نشتی|نشت|چکه)/i.test(lower);
+  const gearboxLeakUnresolved = /(?:هنوز\s*(?:برطرف|رفع|تعمیر|درست)\s*نشده|برطرف\s*نشده|رفع\s*نشده|همچنان\s*(?:نشتی|نشت)|نشتی\s*دارد|نشت\s*می.?کند|نشتی\s*می.?کند)/i.test(lower);
+  if (gearboxLeak) {
+    const resolved = resolutionPattern.test(lower) && !gearboxLeakUnresolved;
+    addIssue("gearbox-oil-leak", "نشتی روغن گیربکس / واسکازین", "نشتی روغن گیربکس/واسکازین گزارش شد.", resolved ? "fixed" : "open", "نشتی روغن گیربکس / واسکازین", resolved ? "طبق پیام، نشتی برطرف شده است." : null);
   }
-  if (/دیاگ|اسکن خطا|عیب.?یابی/.test(lower)) addService("engine_diagnostics", "دیاگ و عیب‌یابی موتور؛ کد خطا در صورت وجود در شرح کامل پیام نگهداری شود.");
+
+  // Repair-shop services explicitly recognized in Persian free text.
+  if (/دیاگ|اسکن خطا|عیب.?یابی/.test(lower)) addService("engine_diagnostics", "دیاگ و عیب‌یابی موتور؛ کد خطا در صورت وجود در شرح اصلی حفظ شود.");
   if (/درجه آب|دور فن|تنظیم.*فن|فن.*تنظیم/.test(lower)) addService("cooling_fan_adjustment", "بررسی/تنظیم درجه آب و دور فن طبق گزارش تعمیرگاه.");
-  if (/هواگیری/.test(lower)) addService("cooling_bleed", "هواگیری مدار خنک‌کاری پس از سرویس ترموستات/محفظه ترموستات.");
-  if (/شمع/.test(lower) && isReplacement) addPart("spark_plugs", money(/شمع(?:‌ها| ها| موتور)?/i, /وایر|باتری|باطری|ترموستات|محفظه|هواگیری/i, false));
-  if (/وایر/.test(lower) && isReplacement) addPart("spark_plug_wires", money(/وایر(?:\s*شمع)?/i, /باتری|باطری|ترموستات|محفظه|هواگیری/i, false));
-  if (/باتری|باطری/.test(lower) && isReplacement) {
+  if (/هواگیری/.test(lower)) addService("cooling_bleed", "هواگیری مدار خنک‌کاری.");
+  if (/سنسور دور موتور|سنسور میل.?لنگ/.test(lower) && /دیاگ|عیب.?یابی|مشکل.*از|علت.*از|تست/.test(lower)) addService("crankshaft_sensor_diagnosis", "عیب‌یابی سنسور دور موتور/موقعیت میل‌لنگ طبق شرح پیام.");
+  if (hydraulicLeak && leakResolved) addService("power_steering_leak_repair", "رفع نشتی روغن هیدرولیک فرمان طبق گزارش.");
+  if (gearboxLeak) addService("gearbox_leak_inspection", "بررسی/تشخیص نشتی روغن گیربکس؛ وضعیت خرابی جداگانه ثبت شده است.");
+
+  // Keep richer, historically supported parsing for battery and thermostat specifications/costs.
+  const hasReplacement = pattern => {
+    const aliases = Array.isArray(pattern) ? pattern : [String(pattern)];
+    return aliases.some(alias => repairAliasHasAction(lower, alias, replacementPattern));
+  };
+  if (/شمع/.test(lower) && hasReplacement(["شمع موتور", "شمع ها", "شمع‌ها", "شمع"])) {
+    addPart("spark_plugs", money(/شمع(?:‌ها| ها| موتور)?/i, /وایر|باتری|باطری|ترموستات|محفظه|هواگیری/i, false));
+  }
+  if (/وایر/.test(lower) && hasReplacement(["وایر شمع", "وایر"])) {
+    addPart("spark_plug_wires", money(/وایر(?:\s*شمع)?/i, /باتری|باطری|ترموستات|محفظه|هواگیری/i, true));
+  }
+  if (/باتری|باطری/.test(lower) && hasReplacement(["باتری", "باطری"])) {
     const voltage = rawText.match(/(\d+(?:[.,]\d+)?)\s*ولت/i);
     const capacity = rawText.match(/(\d+(?:[.,]\d+)?)\s*(?:[اآ]?مپر\s*ساعت|[اآ]?مپر\s*ساعتی|[اآ]?مپر|ah)/i);
-    const volts = voltage ? Number(voltage[1].replace(",",".")) : null;
-    const ah = capacity ? Number(capacity[1].replace(",",".")) : null;
     const specs = {};
-    if (volts != null) specs.voltageV=volts;
-    if (ah != null) specs.capacityAh=ah;
+    if (voltage) specs.voltageV = Number(voltage[1].replace(",", "."));
+    if (capacity) specs.capacityAh = Number(capacity[1].replace(",", "."));
     const unknownBrand = /برند\s*(?:باتری|باطری)?\s*(?:را|رو)?\s*(?:نمی.?دانم|نمی.?دونم|نمیدانم|نمیدونم|نامشخص|معلوم نیست|unknown)/i.test(rawText);
     const brand = unknownBrand ? "نامشخص" : rawText.match(/برند\s*(?:باتری|باطری)?\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:مدل|شماره|قیمت|هزینه|با قیمت|مشخصات)|[,;؛|]|$)/i)?.[1]?.trim() || null;
-    addPart("battery", money(/(?:باتری|باطری)/i, /ترموستات|محفظه|هواگیری/i, true), Object.keys(specs).length?specs:null, brand);
+    addPart("battery", money(/(?:باتری|باطری)/i, /ترموستات|محفظه|هواگیری/i, true), Object.keys(specs).length ? specs : null, brand);
   }
-  if (/ترموستات/.test(lower) && isReplacement) {
+  if (/ترموستات/.test(lower) && hasReplacement(["ترموستات", "محفظه ترموستات"])) {
     addPart("thermostat", money(/ترموستات(?!\s*(?:و\s*)?محفظه)/i, /محفظه\s*ترموستات/i, false));
     if (/محفظه\s*ترموستات/.test(lower)) addPart("thermostat_housing", money(/محفظه\s*ترموستات/i, /هواگیری|با اجرت|اجرت|دستمزد/i, true));
   }
+
+  // Generic dictionary-driven component parser. New parts added to config become usable
+  // without another hard-coded if-block; only mentions with a nearby replacement action count.
+  const componentMatches = collectCatalogMentions(lower, items, "part");
+  const namedCosts = extractNamedCatalogCosts(rawText, items);
+  for (let i = 0; i < componentMatches.length; i++) {
+    const match = componentMatches[i];
+    const context = repairMentionContext(lower, match, componentMatches);
+    // A leak is a condition/issue, not a physical part that was replaced.
+    if (match.key.endsWith("_leak") || match.item?.kind === "issue" || match.item?.mode === "issue") continue;
+    if (!replacementPattern.test(context)) continue;
+    if (addedParts.has(match.key)) continue;
+    const item = items[match.key];
+    const costRial = namedCosts.get(match.key) ?? repairCostForMention(rawText, match, componentMatches, items);
+    let specs = null;
+    let brand = null;
+    const voltage = context.match(/(\d+(?:[.,]\d+)?)\s*ولت/i);
+    const capacity = context.match(/(\d+(?:[.,]\d+)?)\s*(?:آ?مپر\s*ساعت|آ?مپر|ah)/i);
+    if (voltage || capacity) {
+      specs = {};
+      if (voltage) specs.voltageV = Number(voltage[1].replace(",", "."));
+      if (capacity) specs.capacityAh = Number(capacity[1].replace(",", "."));
+    }
+    if (/برند\s*[:=：]?\s*(?:نامشخص|نمی.?دانم|نمیدانم|unknown)/i.test(context)) brand = "نامشخص";
+    addPart(match.key, costRial, specs, brand);
+  }
+
+  // Dynamic service dictionary: record maintenance actions that were added to the catalog later.
+  const serviceMatches = collectCatalogMentions(lower, services, "service");
+  for (const match of serviceMatches) {
+    const context = repairMentionContext(lower, match, serviceMatches);
+    if (!/(دیاگ|تنظیم|هواگیری|سرویس|بازدید|بررسی|تعمیر|شارژ|بالانس|میزان فرمان|رفع|برطرف|تعویض|عوض\s*شد)/i.test(context)) continue;
+    if (addedServices.has(match.key)) continue;
+    const service = services[match.key];
+    addService(match.key, `${service.label} طبق گزارش پیام: ${rawText.slice(0, 300)}`, null);
+  }
+
   if (/اجرت|دستمزد/.test(lower)) {
     const labor = money(/(?:اجرت|دستمزد)/i, null, true);
-    if (labor != null) created.push({ type:"expense", title:"اجرت تعمیرگاه", description:"اجرت/دستمزد ثبت‌شده برای مراجعه تعمیرگاه", expenseCategory:"labor", occurredAt, actor, odometerKm, costRial:labor, sourceText:rawText, repairGroupId });
+    if (labor != null) created.push({ type: "expense", title: "اجرت تعمیرگاه", description: "اجرت/دستمزد ثبت‌شده برای مراجعه تعمیرگاه", expenseCategory: "labor", occurredAt, actor, odometerKm, costRial: labor, sourceText: rawText, repairGroupId });
   }
-  if (!created.length) return [];
+  if (/شستم|شست(?:م|یم|ه)?|کارواش|شست.?وشو/.test(lower)) {
+    if (!created.some(event => event.type === "wash")) created.push({ type: "wash", title: "شست‌وشوی خودرو", description: "شست‌وشوی خودرو طبق پیام", occurredAt, actor, odometerKm, costRial: extractMoneyRial(rawText), sourceText: rawText, repairGroupId });
+  }
   return created;
 }
 
+function repairAliasHasAction(lower, alias, actionPattern) {
+  const needle = normalizeIntentText(alias);
+  if (!needle) return false;
+  let index = lower.indexOf(needle);
+  while (index >= 0) {
+    const separators = [",", ";", "|", "\n"];
+    let prevBoundary = -1;
+    let nextBoundary = lower.length;
+    for (const sep of separators) {
+      prevBoundary = Math.max(prevBoundary, lower.lastIndexOf(sep, index));
+      const found = lower.indexOf(sep, index + needle.length);
+      if (found >= 0) nextBoundary = Math.min(nextBoundary, found);
+    }
+    const context = lower.slice(Math.max(prevBoundary + 1, index - 20), Math.min(nextBoundary, index + needle.length + 70));
+    if (actionPattern.test(context)) return true;
+    index = lower.indexOf(needle, index + needle.length);
+  }
+  return false;
+}
+
+function collectCatalogMentions(lower, entries, kind) {
+  const candidates = [];
+  for (const [key, item] of Object.entries(entries || {})) {
+    const aliases = [...new Set([key.replace(/_/g, " "), item.label, ...(item.aliases || [])].map(normalizeIntentText).filter(alias => alias.length >= 3))];
+    for (const alias of aliases) {
+      let from = 0;
+      while ((from = lower.indexOf(alias, from)) >= 0) {
+        candidates.push({ key, kind, alias, start: from, end: from + alias.length, length: alias.length, item });
+        from += Math.max(1, alias.length);
+      }
+    }
+  }
+  candidates.sort((a, b) => a.start - b.start || b.length - a.length || a.key.localeCompare(b.key));
+  const accepted = [];
+  for (const candidate of candidates) {
+    if (accepted.some(existing => candidate.start < existing.end && candidate.end > existing.start)) continue;
+    accepted.push(candidate);
+  }
+  return accepted;
+}
+
+function repairMentionContext(lower, match, matches) {
+  const separators = [",", ";", "|", "\n"];
+  let start = 0, end = lower.length;
+  for (const sep of separators) {
+    start = Math.max(start, lower.lastIndexOf(sep, match.start) + 1);
+    const found = lower.indexOf(sep, match.end);
+    if (found >= 0) end = Math.min(end, found);
+  }
+  const previousSame = matches.filter(item => item.key === match.key && item.end <= match.start).at(-1);
+  const nextSame = matches.find(item => item.key === match.key && item.start >= match.end);
+  if (previousSame) start = Math.max(start, previousSame.end);
+  if (nextSame) end = Math.min(end, nextSame.start);
+  return lower.slice(Math.max(start, match.start - 28), Math.min(end, match.end + 70));
+}
+
+function extractNamedCatalogCosts(rawText, items) {
+  const result = new Map();
+  const moneyPattern = /(\d[\d,._]*)\s*(هزار|میلیون|ملیون|میليون|k|m)?\s*(تومان|تومن|ریال|rial|toman|tomans)/ig;
+  const raw = String(rawText || "");
+  const matches = [...raw.matchAll(moneyPattern)];
+  for (const moneyMatch of matches) {
+    const amount = extractMoneyRial(moneyMatch[0]);
+    if (amount == null) continue;
+    const before = raw.slice(Math.max(0, (moneyMatch.index || 0) - 150), moneyMatch.index || 0);
+    const labels = ["قیمت", "هزینه", "مبلغ", "اجرت", "دستمزد", "به مبلغ", "با قیمت"];
+    const normalizedBefore = normalizeIntentText(before);
+    let latest = null;
+    for (const label of labels) {
+      const normalizedLabel = normalizeIntentText(label);
+      const at = normalizedBefore.lastIndexOf(normalizedLabel);
+      if (at >= 0 && (!latest || at > latest.at)) latest = { label, at, normalizedLabel };
+    }
+    // Labor is a separate cost line; never attach it to a part mentioned in the description.
+    if (latest && /^(?:اجرت|دستمزد)$/.test(normalizeIntentText(latest.label))) continue;
+    let descriptor = latest ? normalizedBefore.slice(latest.at + latest.normalizedLabel.length) : normalizedBefore.slice(-85);
+    descriptor = descriptor.split(";").at(-1).split("|").at(-1).split(",").at(-1);
+    const candidates = collectCatalogMentions(descriptor, items, "part");
+    if (!candidates.length) continue;
+    const last = candidates[candidates.length - 1];
+    result.set(last.key, amount);
+  }
+  return result;
+}
+
+function repairCostForMention(rawText, match, matches, items) {
+  // Find a raw-text start close to the normalized alias index (normalization may remove ZWNJ).
+  let rawStart = 0;
+  let low = 0, high = rawText.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (normalizeIntentText(rawText.slice(0, mid)).length < match.start) low = mid + 1;
+    else high = mid;
+  }
+  rawStart = Math.max(0, low);
+  const nextMatch = matches.filter(item => item.start >= match.end && item.start > match.start).sort((a,b)=>a.start-b.start)[0];
+  let rawEnd = Math.min(rawText.length, rawStart + 200);
+  // Do not inherit a price from a later, separately described repair operation.
+  for (const sep of [";", "؛", "|", "\n"]) {
+    const found = rawText.indexOf(sep, rawStart);
+    if (found >= 0) rawEnd = Math.min(rawEnd, found);
+  }
+  if (nextMatch) {
+    let lowEnd = rawStart, highEnd = rawText.length;
+    while (lowEnd < highEnd) {
+      const mid = Math.floor((lowEnd + highEnd) / 2);
+      if (normalizeIntentText(rawText.slice(0, mid)).length < nextMatch.start) lowEnd = mid + 1;
+      else highEnd = mid;
+    }
+    rawEnd = Math.min(rawEnd, Math.max(rawStart, lowEnd));
+  }
+  const segment = rawText.slice(rawStart, rawEnd);
+  const amount = extractMoneyRial(segment);
+  if (amount != null) return amount;
+  // Some users write "1.25 million for the sensor" instead of putting the price after the name.
+  const prefix = rawText.slice(Math.max(0, rawStart - 50), rawStart);
+  if (/(?:قیمت|هزینه|مبلغ|به مبلغ|با قیمت)/i.test(prefix)) return extractMoneyRial(prefix + " " + segment);
+  return null;
+}
 function repairRowSignature(row) {
   return JSON.stringify({
     type: row.type || "part", title: row.title || "", componentKey: row.componentKey || "",
@@ -1441,6 +1672,8 @@ async function saveEvent(input, env) {
     paidAmountRial: Number.isFinite(input.paidAmountRial) ? input.paidAmountRial : null,
     paymentReference: input.paymentReference || null,
     status: input.status || (input.type === "issue" ? "open" : input.type === "fine" ? (input.paid ? "paid" : "unpaid") : undefined),
+    repairDescription: input.repairDescription || null,
+    resolvedAt: input.resolvedAt || null,
     metadata: { source: input.source || "telegram-or-api", ...(sourceFingerprint ? { messageFingerprint: sourceFingerprint } : {}) }
   };
   if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "repair" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
@@ -1609,8 +1842,23 @@ function extractEventMetadata(source, explicitActor, explicitNote, people = []) 
     if (family) { actor = family[1]; description = description.slice(family[0].length); }
   }
   if (!actor) {
-    const actorAnywhere = description.match(/(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)(?=[^\n]{0,55}(?:برد|بردش|انجام داد|رانندگی|تعویض|عوض|تنظیم|تعمیر|دیاگ|استارت|زد|گرفت|پر کرد|نصب))/i);
-    if (actorAnywhere) actor = actorAnywhere[1].trim();
+    const actionPattern = /برد|بردش|انجام داد|رانندگی|تعویض|عوض|تنظیم|تعمیر|خراب|روشن نشد|نشتی|دیاگ|استارت|زد|گرفت|پر کرد|نصب|شست|کارواش|ثبت کرد|تعویض کرد/i;
+    const anywhere = description.match(/(بابام|بابا|پدرم|پدر|مامانم|مامان|مادرم|مادر|داداشم|داداش|برادرم|برادر|آبجیم|خواهرم|خواهر|همسرم|همسر|زنم|شوهرم|پسرم|دخترم|دوستم|راننده|my dad|my father|my mom|my mother|my brother|my sister)(?=[^\n]{0,65}(?:برد|بردش|انجام داد|رانندگی|تعویض|عوض|تنظیم|تعمیر|دیاگ|استارت|زد|گرفت|پر کرد|نصب|شست|کارواش|ثبت کرد))/i);
+    if (anywhere) actor = anywhere[1].trim();
+    // Handle messages where the actor is written after the action, e.g. "تعمیر ماشین بابام".
+    if (!actor) {
+      const tokens = [...(Array.isArray(people) ? people : []), "بابام","بابا","پدرم","پدر","مامانم","مامان","مادرم","مادر","داداشم","داداش","برادرم","برادر","آبجیم","خواهرم","خواهر","همسرم","همسر","زنم","شوهرم","پسرم","دخترم","دوستم","راننده","خودم","من"]
+        .map(String).filter(Boolean).sort((a,b)=>b.length-a.length);
+      for (const person of tokens) {
+        const suffix = new RegExp(`(?:^|\\s)(${escapeRegExp(person)})\\s*$`, "i").exec(description);
+        if (suffix && actionPattern.test(description.slice(0, suffix.index)) ) {
+          actor = /^خودم$|^من$/i.test(person) ? "من" : person;
+          description = description.slice(0, suffix.index).trim();
+          break;
+        }
+      }
+    }
+    if (!actor && /(?:خودم|من)\s+.{0,30}(?:شستم|کارواش|رانندگی کردم|تعمیر کردم)/i.test(description)) actor = "من";
   }
   const actorMatch = description.match(/(?:توسط|از طرف|به\s*نام|انجام(?:\s*دهنده)?|شخص|شخصیت|actor|person|by)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:توضیح|یادداشت|note|comment)\s*[:=：]|[,;؛|]|$)/i);
   if (!actor && actorMatch) actor = actorMatch[1].trim();

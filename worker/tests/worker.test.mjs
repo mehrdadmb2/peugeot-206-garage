@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 
 test("GET /health is request-driven and does not require scheduled triggers", async () => {
@@ -9,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /no scheduled handler/);
- assert.equal(body.version, "3.5.0");
+ assert.equal(body.version, "3.6.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -38,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.5.0");
+ assert.equal(body.version, "3.6.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -473,10 +474,10 @@ test("repeated multi-part repairjob prompts before writing a second workshop vis
   const indexAfterFirst=JSON.parse(files.get("data/index.json"));
   const month=indexAfterFirst.months[0];
   const before=JSON.parse(files.get(`data/logs/${month}.json`)).events;
-  assert.equal(before.length,2,"initial repair job should create the service and battery rows");
+  assert.equal(before.length,3,"initial repair job should create an odometer row, service and battery rows");
   const second=await sendUpdate(2,99102,{});assert.equal(second.status,200);
   const after=JSON.parse(files.get(`data/logs/${month}.json`)).events;
-  assert.equal(after.length,2,"exact repeated repair job must not create a second set of rows");
+  assert.equal(after.length,3,"exact repeated repair job must not create a second set of rows");
   assert.ok(sentMessages.some(message=>/احتمال ثبت تکراری/.test(message.text)));
   const prompt=sentMessages.find(message=>/احتمال ثبت تکراری/.test(message.text));
   const token=prompt.reply_markup.inline_keyboard.flat().find(button=>/:no$/.test(button.callback_data)).callback_data.match(/^dupc:([a-f0-9]{8}):no$/)[1];
@@ -485,7 +486,7 @@ test("repeated multi-part repairjob prompts before writing a second workshop vis
    headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
    body: JSON.stringify({ update_id: 99103, callback_query: { id: "dup-no", data: `dupc:${token}:no`, from: { id: 42 }, message: { message_id: prompt.message_id || 5, chat: { id: 101 } } } })
   }), env);
-  assert.equal(JSON.parse(files.get(`data/logs/${month}.json`)).events.length,2,"declining confirmation must keep the event count unchanged");
+  assert.equal(JSON.parse(files.get(`data/logs/${month}.json`)).events.length,3,"declining confirmation must keep the event count unchanged");
  }finally{globalThis.fetch=originalFetch;}
 });
 
@@ -627,4 +628,126 @@ test("fuel report calculates full-to-full consumption from partial fills between
   assert.match(body.reply, /۴۰۰ km/);
   assert.match(body.reply, /۴۰ لیتر/);
  } finally { restoreFetch(); }
+});
+
+
+test("/km 431503 تعمیر ماشین بابام preserves the driver and note instead of recording only the mileage", async () => {
+ const token = "k".repeat(64);
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+ const previousDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
+  ["data/config.json", JSON.stringify(config)],
+  [`data/logs/${month}.json`, JSON.stringify({ schemaVersion: 1, month, events: [{ id: "prev-mileage-driver-001", type: "odometer", title: "آخرین کیلومتر", description: "قرائت قبلی", actor: "من", occurredAt: `${previousDate}T10:00:00+03:30`, date: previousDate, time: "10:00", odometerKm: 431400, createdAt: `${previousDate}T06:30:00.000Z` }] })]
+ ]);
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") {
+   const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (init.method === "PUT") {
+   const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+   return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected method", { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/api/v1/record", {
+   method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+   body: JSON.stringify({ text: "/km 431503 تعمیر ماشین بابام" })
+  }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.persisted, true, body.reply);
+  assert.match(body.reply, /انجام‌دهنده: بابام/);
+  assert.match(body.reply, /تعمیر ماشین/);
+  const log = JSON.parse(files.get(`data/logs/${month}.json`));
+  const event = log.events.find(item => item.type === "odometer" && item.odometerKm === 431503);
+  assert.ok(event);
+  assert.equal(event.actor, "بابام");
+  assert.match(event.description, /تعمیر ماشین/);
+  assert.equal(event.deltaSincePreviousKm, 103);
+  assert.equal(event.distanceActor, "بابام");
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test("repairjob understands oils, crankshaft sensor and cable prices, labor, and an unresolved gearbox leak without false replacement cost", async () => {
+ const token = "j".repeat(64);
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+ const priorDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
+  ["data/config.json", JSON.stringify(config)],
+  [`data/logs/${month}.json`, JSON.stringify({ schemaVersion: 1, month, events: [{ id: "prior-odo-repair-v36", type: "odometer", title: "آخرین کیلومتر", description: "قرائت قبلی", actor: "من", occurredAt: `${priorDate}T09:00:00+03:30`, date: priorDate, time: "09:00", odometerKm: 431400, createdAt: `${priorDate}T05:30:00.000Z` }] })]
+ ]);
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") {
+   const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (init.method === "PUT") {
+   const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+   return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected method", { status: 500 });
+ };
+ try {
+  const prompt = "/repairjob بابام کیلومتر 431503 امروز ماشین دیشب روشن نشد و به تعمیرگاه بردیم؛ علت روشن نشدن سنسور دور موتور بود؛ سنسور دور موتور تعویض شد، قیمت سنسور دور موتور 1.25 ملیون تومان؛ سیم سنسور دور موتور تعویض شد، قیمت کابل سنسور دور موتور 250 هزار تومان؛ نشتی روغن هیدرولیک برطرف شد؛ روغن هیدرولیک تعویض شد؛ نشتی روغن واسکازین داریم که هنوز برطرف نشده؛ اجرت رفع نشتی روغن هیدرولیک 1.5 ملیون تومان";
+  const response = await worker.fetch(new Request("https://unit.test/api/v1/record", {
+   method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+   body: JSON.stringify({ text: prompt })
+  }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.persisted, true, body.reply);
+  const log = JSON.parse(files.get(`data/logs/${month}.json`));
+  const group = log.events.filter(event => event.repairGroupId);
+  assert.ok(group.length >= 10, `expected all repair rows, got ${group.length}`);
+  assert.ok(group.every(event => event.actor === "بابام"), "all repair rows inherit the named person");
+  assert.ok(group.every(event => event.odometerKm === 431503));
+  assert.equal(group.find(event => event.componentKey === "crankshaft_position_sensor")?.costRial, 12500000);
+  assert.equal(group.find(event => event.componentKey === "crankshaft_sensor_wiring")?.costRial, 2500000);
+  assert.equal(group.find(event => event.componentKey === "power_steering_fluid")?.costRial, null, "labor must not be attached to the hydraulic fluid replacement");
+  assert.ok(!group.some(event => event.componentKey === "gearbox_oil_leak"), "an unresolved leak is an issue, not a replaced component");
+  assert.equal(group.find(event => event.title === "اجرت تعمیرگاه")?.costRial, 15000000);
+  assert.equal(group.find(event => event.type === "issue" && event.symptom === "نشتی روغن هیدرولیک")?.status, "fixed");
+  assert.equal(group.find(event => event.type === "issue" && event.symptom === "نشتی روغن گیربکس / واسکازین")?.status, "open");
+  assert.equal(group.find(event => event.type === "issue" && event.symptom === "روشن نشدن خودرو")?.status, "fixed");
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test("natural self car wash is recorded as a wash and keeps the default actor", async () => {
+ const token = "w".repeat(64);
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
+  ["data/config.json", JSON.stringify(config)],
+  [`data/logs/${month}.json`, JSON.stringify({ schemaVersion: 1, month, events: [{ id: "wash-prior-odo-0001", type: "odometer", title: "کیلومتری قبل", description: "قرائت معتبر", actor: "من", occurredAt: new Date(Date.now()-86400000).toISOString(), date: month+"-01", odometerKm: 431503, createdAt: new Date(Date.now()-86400000).toISOString() }] })]
+ ]);
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") { const value=files.get(path); if(value===undefined)return new Response("not found",{status:404}); return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(value,"utf8").toString("base64")}),{status:200}); }
+  if (init.method === "PUT") { const body=JSON.parse(init.body); files.set(path,Buffer.from(body.content,"base64").toString("utf8")); return new Response(JSON.stringify({content:{path}}),{status:201}); }
+  return new Response("method",{status:500});
+ };
+ try {
+  const response=await worker.fetch(new Request("https://unit.test/api/v1/record",{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({text:"ماشین را خودم شستم"})}),{API_ACCESS_TOKEN:token,GITHUB_TOKEN:"fake",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
+  assert.equal(response.status,200); const body=await response.json(); assert.equal(body.persisted,true,body.reply);
+  const log=JSON.parse(files.get(`data/logs/${month}.json`)); const wash=log.events.find(event=>event.type==="wash");
+  assert.ok(wash); assert.equal(wash.actor,"من"); assert.equal(wash.odometerKm,431503); assert.equal(wash.odometerAutoAssigned,true);
+ } finally {globalThis.fetch=originalFetch;}
 });
