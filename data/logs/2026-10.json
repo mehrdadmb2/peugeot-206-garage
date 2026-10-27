@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-26T22:07:00+03:30",
+  "updatedAt": "2026-10-27T19:06:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -836,6 +836,56 @@
         "messageFingerprint": "a80091c307c520d8afe30d07565f2337613b227d4c073f490527afa702bed072"
       },
       "odometerAutoAssigned": true
+    },
+    {
+      "id": "0e19d018-12d1-4e84-b2fa-ac45ee4415f7",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "/km 431503 تعمیر ماشین بابام",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-27T15:36:23.117Z",
+      "occurredAt": "2026-10-27T19:06:00+03:30",
+      "date": "2026-10-27",
+      "time": "19:06",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۵",
+      "odometerKm": 431503,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "abaa0709fac7418d76c5c791a86b22f7c89066654f620fe544aadc389ad68ede"
+      },
+      "previousOdometerKm": 431496,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 7
     }
   ]
 }
