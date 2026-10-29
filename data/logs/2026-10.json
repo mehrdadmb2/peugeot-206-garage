@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-29T15:20:00+03:30",
+  "updatedAt": "2026-10-29T21:36:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -1309,6 +1309,55 @@
       "previousOdometerKm": 431506,
       "distanceActor": "من",
       "deltaSincePreviousKm": 15
+    },
+    {
+      "id": "ae438cf4-6bbc-4df0-9982-f261a8bf507a",
+      "type": "fuel",
+      "title": "سوخت‌گیری",
+      "description": "35 لیتر بنزین · هزینه 52500 هزار تومان کیلومتر 431581",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-29T18:06:01.771Z",
+      "occurredAt": "2026-10-29T21:35:00+03:30",
+      "date": "2026-10-29",
+      "time": "21:35",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۷",
+      "odometerKm": 431581,
+      "distanceKm": null,
+      "liters": 35,
+      "costRial": 525000000,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "c1ab1961bff266970a7c9a22472a3ccc978da85bcdbc9a78937b4d480211e3dc"
+      }
     }
   ]
 }
