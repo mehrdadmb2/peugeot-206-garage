@@ -1,15 +1,15 @@
 # Peugeot 206 Garage — v3.2.0
 
 ## Ownership / odometer
-- Added purchase odometer baseline at 428,000 km and an approximate 2,400 km ownership-distance estimate.
+- Added a purchase-odometer baseline; ownership distance is now calculated only from actual odometer subtraction, with no guessed distance estimate.
 - The baseline is attributed to the default actor “من” unless explicit older records name another driver.
-- The current known log reading is 431,381 km, so current odometer arithmetic yields 3,381 km since purchase, 981 km above the estimate. This is surfaced as a reconciliation warning rather than falsifying a reading.
+- Ownership distance is calculated by subtracting the purchase odometer from the latest valid reading. No separate estimated-distance field is used.
 - A later lower odometer value is treated as a correction checkpoint for distance-attribution totals; confirm the dashboard's real reading before recording a correction.
 - Historical baseline distance with unknown purchase date is included in lifetime ownership totals but excluded from hourly/daily/weekly/monthly time buckets.
 
 ## Dashboard
 - Ownership baseline KPIs and per-driver distance breakdown.
-- Reconciliation warning for estimated vs odometer-derived distance.
+- Removed the obsolete estimated-distance comparison; only actual odometer subtraction is used.
 - Fine total/paid/unpaid rollup on Traffic page.
 - Searchable command encyclopedia in the settings page.
 - Version footer updated to v3.2.0.

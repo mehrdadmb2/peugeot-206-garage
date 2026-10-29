@@ -5,8 +5,9 @@ const FILE_CONFIG = "data/config.json";
 const FILE_REMINDERS = "data/reminder-state.json";
 const FILE_DELETED_EVENTS = "data/deleted-events.json";
 const FILE_PENDING_DUPLICATES = "data/pending-duplicates.json";
+const FILE_PENDING_REVIEWS = "data/pending-reviews.json";
+const FILE_PENDING_ANOMALIES = "data/pending-anomaly-reviews.json";
 const DEFAULT_PURCHASE_ODOMETER_KM = 428000;
-const DEFAULT_ESTIMATED_KM_SINCE_PURCHASE = 2400;
 const QUICKCHART_URL = "https://quickchart.io/chart";
 const SITE_URL = "https://mehrdadmb2.github.io/peugeot-206-garage/";
 const BOT_URL = "https://t.me/Peugeot206GarageBot";
@@ -43,12 +44,12 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.7.0",
+        version: "3.9.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
         telegram: BOT_URL,
-        writes: "GitHub Contents API commits are awaited before a successful response; no Cron/periodic trigger is required.",
+        writes: "GitHub Contents API commits are awaited before a successful response; scheduled reminders are triggered by GitHub Actions.",
         endpoints: {
           health: "GET /health",
           telegramWebhook: "POST /telegram",
@@ -58,7 +59,8 @@ export default {
           due: "GET /api/v1/due (authorized)",
           config: "GET /api/v1/config (authorized)",
           export: "GET /api/v1/export?month=YYYY-MM or month=all (authorized CSV)",
-          purchaseOdometer: "POST /api/v1/record with text /purchasekm 428000 estimate=2400 (authorized)",
+          purchaseOdometer: "POST /api/v1/record with text /purchasekm 428000 (authorized)",
+          scheduledReminders: "POST /scheduled/reminders (X-Schedule-Secret; called by GitHub Actions once daily)",
           analysis: "Telegram /analysis hour|day|week|month sends PNG charts and a detailed report",
           updateEvent: "POST /api/v1/event/update (authorized JSON {id, patch})",
           deleteEvent: "DELETE /api/v1/event?id=<event-id> (authorized; archived before removal)"
@@ -66,11 +68,23 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.7.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.9.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
-      }, scheduler: "not required; no scheduled handler" });
+      }, scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required", scheduledReminders: Boolean(env.SCHEDULE_TRIGGER_SECRET) });
+    }
+    if (url.pathname === "/scheduled/reminders" && request.method === "POST") {
+      const expected = String(env.SCHEDULE_TRIGGER_SECRET || "");
+      const supplied = String(request.headers.get("X-Schedule-Secret") || "");
+      if (expected.length < 32 || !constantTimeEqual(supplied, expected)) return json({ ok: false, error: "forbidden" }, 403);
+      try {
+        const result = await runDueReminders(env);
+        return json({ ok: true, trigger: "github-actions", time: nowTehran().iso, ...result });
+      } catch (error) {
+        console.error("scheduled reminders failed", error?.stack || error);
+        return json({ ok: false, error: "reminders_failed", message: safePublicError(error) }, 500);
+      }
     }
     if (url.pathname === "/telegram" && request.method === "POST") {
       if (!env.TELEGRAM_WEBHOOK_SECRET || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) {
@@ -113,6 +127,15 @@ function isApiAuthorized(request, env) {
   return difference === 0;
 }
 
+function constantTimeEqual(left, right) {
+  const a = String(left || "");
+  const b = String(right || "");
+  if (!a || a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index++) difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return difference === 0;
+}
+
 function corsResponse(response) {
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", "*");
@@ -145,7 +168,7 @@ async function handleExternalApi(request, url, env) {
     const ownership = getOwnershipSettings(config);
     const ownershipDrivenKm = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
     const paidFineRial = fines.filter(e => e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
-    return json({ ok: true, vehicle: config.vehicle || {}, ownership, ownershipDrivenKm, ownershipEstimateDifferenceKm: ownershipDrivenKm === null ? null : ownershipDrivenKm - ownership.estimatedKmSincePurchaseKm, timezone: TZ, updatedAt: index.updatedAt || null, eventCount: events.length, currentOdometerKm: currentOdo, currentMonth, currentMonthEventCount: monthEvents.length, totalCostRial: actualCosts.reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthCostRial: actualCosts.filter(e => accountingDateForApi(e).slice(0,7) === currentMonth).reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthFuelLiters: monthEvents.filter(e=>e.type === "fuel").reduce((n,e)=>n+(Number(e.liters)||0),0), totalFineCount: fines.length, totalFineRial: fines.reduce((n,e)=>n+(Number(e.costRial)||0),0), paidFineRial, unpaidFineCount: unpaidFines.length, unpaidFineRial: unpaidFines.reduce((n,e)=>n+(Number(e.costRial)||0),0), openIssueCount: openIssues.length, dueItems: due, months: index.months || [] });
+    return json({ ok: true, vehicle: config.vehicle || {}, ownership, ownershipDrivenKm, timezone: TZ, updatedAt: index.updatedAt || null, eventCount: events.length, currentOdometerKm: currentOdo, currentMonth, currentMonthEventCount: monthEvents.length, totalCostRial: actualCosts.reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthCostRial: actualCosts.filter(e => accountingDateForApi(e).slice(0,7) === currentMonth).reduce((n,e)=>n+(Number(e.costRial)||0),0), currentMonthFuelLiters: monthEvents.filter(e=>e.type === "fuel").reduce((n,e)=>n+(Number(e.liters)||0),0), totalFineCount: fines.length, totalFineRial: fines.reduce((n,e)=>n+(Number(e.costRial)||0),0), paidFineRial, unpaidFineCount: unpaidFines.length, unpaidFineRial: unpaidFines.reduce((n,e)=>n+(Number(e.costRial)||0),0), openIssueCount: openIssues.length, dueItems: due, months: index.months || [] });
   }
   if (request.method === "GET" && path === "/api/v1/events") {
     const month = url.searchParams.get("month");
@@ -269,7 +292,7 @@ async function claimTelegramUpdate(updateId, env) {
 
 function looksLikeStateChange(text) {
   const value = normalizeIntentText(text);
-  if (/^\/(?:km|odo|trip|fuel|service|part|interval|wash|fine|paid|payfine|repair|fixed|expense|note|repairjob|workshop|purchasekm|people|edit|annotate|actor|delete|restore)\b/i.test(value)) return true;
+  if (/^\/(?:km|odo|trip|fuel|service|part|interval|wash|fine|paid|payfine|repair|fixed|expense|note|repairjob|workshop|purchasekm|people|edit|annotate|actor|delete|restore|revise)\b/i.test(value)) return true;
   return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|خراب|روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|جریمه|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
@@ -277,7 +300,7 @@ function looksLikeEventCreation(text) {
   const value = normalizeIntentText(text);
   if (/^\/(?:km|odo|trip|fuel|service|part|wash|fine|repairjob|workshop|expense|note)\b/i.test(value)) return true;
   if (/^\//.test(value)) return false;
-  return /(?:روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|خراب|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+  return /(?:روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|خراب|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|شستم|شست.?وشو|نشتی|روغن|واکس|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
 async function fingerprintText(value) {
@@ -374,6 +397,12 @@ async function handleTelegramUpdate(update, env, options = {}) {
         await sendText(env, chatId, `🟡 <b>احتمال ثبت تکراری</b>\n\nاین پیام با سابقهٔ قبلی شباهت دقیق دارد. هیچ رویداد تازه‌ای ذخیره نشده است.\n\nعنوان قبلی: ${duplicate.event.title || eventTypeLabel(duplicate.event.type)}\nشناسهٔ قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nتاریخ: ${duplicate.event.jalaliDate || duplicate.event.date || "—"}\n\nاگر واقعاً عملیات جدیدی است، ثبت را تأیید کن؛ در غیر این صورت انصراف بده.`, duplicateConfirmationKeyboard(token));
         return;
       }
+      const anomalies = await detectMessageAnomalies(text, env);
+      if (anomalies.length) {
+        const reviewToken = await savePendingAnomaly({ text: message.text, message: { date: message.date, message_id: message.message_id, text: message.text, from: { id: message.from?.id }, chat: { id: chatId } }, anomalies }, env);
+        await sendText(env, chatId, formatAnomalyReview(anomalies, reviewToken), anomalyReviewKeyboard(reviewToken));
+        return;
+      }
     }
     const reply = await processMessage(text, message, env);
     await sendTelegramReply(reply, chatId, env);
@@ -392,6 +421,53 @@ async function handleCallbackQuery(query, env) {
     return;
   }
   const data = String(query?.data || "");
+  const anomalyMatch = data.match(/^anom:([a-f0-9]{8}):(save|edit|cancel)$/i);
+  if (anomalyMatch && chatId) {
+    const [, token, decision] = anomalyMatch;
+    await answerCallbackQuery(env, callbackId, decision === "save" ? "ثبت با تأیید انجام می‌شود." : decision === "edit" ? "متن را اصلاح کن." : "ثبت لغو شد.");
+    const pending = decision === "edit" ? await getPendingAnomaly(token, env) : await consumePendingAnomaly(token, env);
+    if (!pending) { await sendText(env, chatId, "⏳ درخواست بررسی منقضی شده یا قبلاً پردازش شده است.", false); return; }
+    if (decision === "cancel") { await sendText(env, chatId, "✅ ثبت لغو شد؛ هیچ رویداد جدیدی ذخیره نشد.", false); return; }
+    if (decision === "edit") { await sendText(env, chatId, `✏️ متن را اصلاح و با این قالب بفرست:
+<code>/revise ${token} متن کامل اصلاح‌شده</code>
+تا زمان تأیید، هیچ رویدادی از این درخواست ثبت نمی‌شود.`, false); return; }
+    const duplicate = await findMessageDuplicate(pending.text, env);
+    if (duplicate) {
+      const dupeToken = await savePendingDuplicate({ kind: "message", text: pending.text, message: pending.message, existingEventIds: [duplicate.event.id] }, env);
+      await sendText(env, chatId, `🟡 <b>پیش از ثبت تأییدشده، یک مورد مشابه پیدا شد.</b>
+شناسه قبلی: <code>${duplicate.event.id.slice(0,8)}</code>
+می‌خواهی با وجود شباهت ثبت شود؟`, duplicateConfirmationKeyboard(dupeToken));
+      return;
+    }
+    const reply = await processMessage(pending.text, pending.message, env, { skipDuplicateChecks: true });
+    await sendTelegramReply(reply, chatId, env);
+    return;
+  }
+  if (data === "isslist:refresh" && chatId) {
+    await answerCallbackQuery(env, callbackId, "در حال تازه‌سازی فهرست خرابی‌ها…");
+    const reply = await openIssuesReport(env);
+    await sendTelegramReply(reply, chatId, env);
+    return;
+  }
+  const issueMatch = data.match(/^iss:([a-f0-9]{8}):(close|detail)$/i);
+  if (issueMatch && chatId) {
+    const [, id, action] = issueMatch;
+    await answerCallbackQuery(env, callbackId, action === "close" ? "در حال بستن خرابی…" : "در حال دریافت جزئیات…");
+    const event = await findEventByPrefix(id, env);
+    if (!event || event.type !== "issue") { await sendText(env, chatId, "خرابی فعال با این شناسه پیدا نشد.", false); return; }
+    if (action === "detail") { await sendText(env, chatId, formatEventDetails(event), eventActionKeyboard(event.id.slice(0,8))); return; }
+    if (event.status === "fixed") { await sendText(env, chatId, `این خرابی قبلاً بسته شده است.
+شناسه: <code>${event.id.slice(0,8)}</code>`, false); return; }
+    const result = await mutateEventByPrefix(event.id, { status: "fixed", resolvedAt: nowTehran().iso, resolutionNote: "بسته‌شده از دکمه خرابی‌های باز در تلگرام" }, env, senderId);
+    await sendText(env, chatId, result.error ? `❌ خرابی بسته نشد: ${result.error}` : `✅ خرابی بسته شد
+
+<b>${escapeTelegramText(result.event.title || result.event.description || "خرابی")}</b>
+شناسه: <code>${result.event.id.slice(0,8)}</code>
+تاریخ بستن: ${jalaliDateLabel(nowTehran().date)}
+
+برای مشاهده خرابی‌های باقی‌مانده: /issues`, false);
+    return;
+  }
   const pendingMatch = data.match(/^dupc:([a-f0-9]{8}):(yes|no)$/i);
   if (pendingMatch && chatId) {
     const [, token, decision] = pendingMatch;
@@ -469,6 +545,121 @@ ${formatEventDetails(event)}
   }
 }
 
+function escapeTelegramText(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function issueActionKeyboard(id) {
+  const short = String(id).slice(0,8);
+  return { inline_keyboard: [
+    [{ text: '✅ بستن خرابی', callback_data: `iss:${short}:close` }, { text: '🔎 جزئیات', callback_data: `iss:${short}:detail` }],
+    [{ text: '🌐 داشبورد', url: SITE_URL }, { text: '📋 همه خرابی‌ها', callback_data: 'isslist:refresh' }]
+  ] };
+}
+async function openIssuesReport(env) {
+  const issues = (await loadAllEvents(env)).filter(e => e.type === 'issue' && e.status !== 'fixed').sort((a,b) => eventTimestampForReport(b)-eventTimestampForReport(a));
+  if (!issues.length) return { text: '✅ خرابی باز ثبت‌شده‌ای وجود ندارد.\nاگر مشکلی باقی مانده، آن را با متن طبیعی ثبت کن؛ مثلاً «ماشین روشن نمی‌شود».', keyboard: false };
+  const messages = issues.slice(0,15).map(event => ({
+    text: `⚠️ <b>${escapeTelegramText(event.title || 'خرابی خودرو')}</b>\n<blockquote>${escapeTelegramText(event.description || 'شرح ثبت نشده')}</blockquote>\n👤 شخص: <code>${escapeTelegramText(event.actor || 'من')}</code>\n⌁ کیلومتر: <code>${event.odometerKm == null ? 'ثبت نشده' : `${formatNum(event.odometerKm)} km`}</code>\n📅 تاریخ: ${escapeTelegramText(event.jalaliDate || event.date || '—')}\n🧾 شناسه: <code>${escapeTelegramText(String(event.id).slice(0,8))}</code>\n${event.note ? `📝 توضیح: <blockquote>${escapeTelegramText(event.note)}</blockquote>\n` : ''}برای بستن، دکمه سبز را بزن.`,
+    markup: issueActionKeyboard(event.id)
+  }));
+  return { messages: [{ text: `🧰 <b>خرابی‌های باز خودرو</b>\nتعداد: <code>${formatNum(issues.length)}</code>\n\nهر مورد در پیام جداگانه با دکمه بستن/جزئیات نمایش داده می‌شود.`, markup: false }, ...messages] };
+}
+
+function anomalyReviewKeyboard(token) {
+  return { inline_keyboard: [
+    [{ text: '✅ ثبت به هر حال', callback_data: `anom:${token}:save` }, { text: '✏️ ویرایش متن', callback_data: `anom:${token}:edit` }],
+    [{ text: '🚫 لغو و عدم ثبت', callback_data: `anom:${token}:cancel` }]
+  ] };
+}
+function formatAnomalyReview(anomalies, token) {
+  return `🟠 <b>قبل از ثبت، چند مورد غیرعادی بررسی شود</b>\nهیچ رویداد جدیدی هنوز ذخیره نشده است.\n\n${anomalies.map((item, i) => `${i+1}. ${escapeTelegramText(item)}`).join('\n')}\n\nیکی از گزینه‌ها را انتخاب کن:\n• ثبت به هر حال\n• ویرایش متن با <code>/revise ${token} متن اصلاح‌شده</code>\n• لغو کامل ثبت\n\nاین هشدار جای تأیید دستی کیلومتر/مبلغ را نمی‌گیرد؛ ممکن است مقدار غیرعادی ولی واقعی باشد.`;
+}
+async function savePendingAnomaly(payload, env) {
+  const token = crypto.randomUUID().replace(/-/g, '').slice(0,8);
+  await mutateJsonFile(FILE_PENDING_ANOMALIES, env, () => ({ schemaVersion: 1, items: {} }), current => {
+    current.items = current.items && typeof current.items === 'object' ? current.items : {};
+    const now = Date.now();
+    for (const [key, item] of Object.entries(current.items)) if (!item?.expiresAt || Number(item.expiresAt) < now) delete current.items[key];
+    current.items[token] = { ...payload, token, createdAt: nowTehran().iso, expiresAt: now + 86400000 };
+    for (const key of Object.keys(current.items).slice(0, Math.max(0, Object.keys(current.items).length - 25))) delete current.items[key];
+    current.updatedAt = nowTehran().iso;
+    return current;
+  });
+  return token;
+}
+async function getPendingAnomaly(token, env) {
+  const current = await readJsonFile(FILE_PENDING_ANOMALIES, env, { items: {} });
+  const item = current.items?.[token] || null;
+  return item && Number(item.expiresAt) > Date.now() ? item : null;
+}
+async function consumePendingAnomaly(token, env) {
+  let result = null;
+  await mutateJsonFile(FILE_PENDING_ANOMALIES, env, () => ({ schemaVersion: 1, items: {} }), current => {
+    current.items = current.items && typeof current.items === 'object' ? current.items : {};
+    result = current.items[token] || null;
+    if (result) delete current.items[token];
+    current.updatedAt = nowTehran().iso;
+    return current;
+  });
+  return result && Number(result.expiresAt) > Date.now() ? result : null;
+}
+
+async function detectMessageAnomalies(text, env) {
+  const normalized = normalizeIntentText(text);
+  const anomalies = [];
+  const events = await loadAllEvents(env);
+  const odoPattern = /^\/(?:km|odo|odometer)\b/i.test(text) || /(?:کیلومتر(?:شمار)?|کارکرد|\bkm\s*[=:]|\bodo(?:meter)?\b)/i.test(normalized);
+  const newOdo = odoPattern ? (/^\/(?:km|odo|odometer)\b/i.test(text) ? parseFirstNumber(text.replace(/^\S+/, '')) : extractOdometer(text)) : null;
+  if (Number.isFinite(newOdo) && newOdo > 0) {
+    const odometers = events.filter(e => e.type === 'odometer' && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>String(b.occurredAt).localeCompare(String(a.occurredAt)));
+    const prior = odometers[0];
+    if (prior) {
+      const delta = Number(newOdo) - Number(prior.odometerKm);
+      const elapsed = Math.abs(Date.parse(getOccurredAt(text, new Date()).iso) - Date.parse(prior.occurredAt || prior.createdAt || '')) / 86400000;
+      if (delta < -5) anomalies.push(`کیلومتر جدید (${formatNum(newOdo)}) از آخرین قرائت (${formatNum(prior.odometerKm)}) کمتر است؛ اختلاف ${formatNum(Math.abs(delta))} km. ممکن است تایپی/اصلاحی باشد.`);
+      else if (delta > 2500 || (delta > 1000 && Number.isFinite(elapsed) && elapsed < 2)) anomalies.push(`افزایش کیلومتر ${formatNum(delta)} km است${Number.isFinite(elapsed) ? ` در حدود ${formatNum(elapsed)} روز` : ''}؛ پیش از ثبت، رقم را بررسی کن.`);
+    }
+  }
+  const liters = parseLiters(text);
+  if (Number.isFinite(liters) && liters > 55) anomalies.push(`مقدار سوخت ${formatNum(liters)} لیتر است؛ برای جلوگیری از اشتباه در عدد/اعشار، باک و واحد را بررسی کن.`);
+  const amount = extractMoneyRial(text);
+  if (Number.isFinite(amount) && amount > 0) {
+    const type = /جریمه|خلافی|قبض/i.test(normalized) ? 'fine' : /بنزین|سوخت|fuel|petrol/i.test(normalized) ? 'fuel' : /تعمیر|اجرت|مکانیک|repair/i.test(normalized) ? 'repair' : 'expense';
+    const thresholds = { fuel: 100000000, fine: 1000000000, repair: 500000000, expense: 500000000 };
+    if (amount > thresholds[type]) anomalies.push(`مبلغ ${formatMoneyToman(amount)} برای «${type === 'fine' ? 'جریمه' : type === 'fuel' ? 'سوخت‌گیری' : type === 'repair' ? 'تعمیر' : 'هزینه'}» بسیار بالا است؛ واحد تومان/ریال و تعداد صفرها را بررسی کن.`);
+    const historical = events.filter(e => Number(e.costRial) > 0 && (type === 'fine' ? e.type === 'fine' : type === 'fuel' ? e.type === 'fuel' : type === 'repair' ? ['repair','issue','part','service'].includes(e.type) : ['expense','wash','part','service'].includes(e.type))).sort((a,b)=>eventTimestampForReport(b)-eventTimestampForReport(a)).slice(0,20).map(e=>Number(e.costRial)).filter(v=>Number.isFinite(v)&&v>0).sort((a,b)=>a-b);
+    if (historical.length >= 4) {
+      const median = historical.length % 2 ? historical[(historical.length-1)/2] : (historical[historical.length/2-1]+historical[historical.length/2])/2;
+      if (amount > median * 4 && amount - median > 20000000) anomalies.push(`مبلغ ${formatMoneyToman(amount)} بیش از چهار برابر میانهٔ ثبت‌های مشابه اخیر است (${formatMoneyToman(median)}). بررسی کن که مبلغ درست وارد شده باشد.`);
+    }
+  }
+  return anomalies;
+}
+
+async function reviseAnomalyMessage(text, message, env) {
+  const match = String(text || '').match(/^\/revise\s+([a-f0-9]{8})\s+([\s\S]+)$/i);
+  if (!match) return { text: 'قالب اصلاح پیام:\n<code>/revise TOKEN متن کامل اصلاح‌شده</code>\nTOKEN از پیام هشدار اولیه برداشته می‌شود؛ برای لغو، دکمه لغو را بزن.', keyboard: false };
+  const [, token, revisedTextRaw] = match;
+  const pending = await getPendingAnomaly(token, env);
+  if (!pending) return { text: '⏳ درخواست اصلاح پیدا نشد یا منقضی شده است. پیام اصلی را دوباره بفرست.', keyboard: false };
+  const revisedText = revisedTextRaw.trim();
+  const duplicate = await findMessageDuplicate(revisedText, env);
+  if (duplicate) {
+    const dupeToken = await savePendingDuplicate({ kind: 'message', text: revisedText, message: { ...pending.message, text: revisedText, date: message?.date || pending.message?.date }, existingEventIds: [duplicate.event.id] }, env);
+    await consumePendingAnomaly(token, env);
+    return { text: `🟡 احتمال ثبت تکراری پس از اصلاح متن پیدا شد.\nشناسه قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nاگر عملیات جدیدی است تأیید کن.`, markup: duplicateConfirmationKeyboard(dupeToken) };
+  }
+  const anomalies = await detectMessageAnomalies(revisedText, env);
+  const revisedMessage = { ...pending.message, text: revisedText, date: message?.date || pending.message?.date };
+  if (anomalies.length) {
+    await consumePendingAnomaly(token, env);
+    const nextToken = await savePendingAnomaly({ text: revisedText, message: revisedMessage, anomalies }, env);
+    return { text: formatAnomalyReview(anomalies, nextToken), markup: anomalyReviewKeyboard(nextToken) };
+  }
+  await consumePendingAnomaly(token, env);
+  return await processMessage(revisedText, revisedMessage, env, { skipDuplicateChecks: true });
+}
+
 async function answerCallbackQuery(env, callbackId, text = "", showAlert = false) {
   if (!callbackId || !env.TELEGRAM_BOT_TOKEN) return;
   await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
@@ -494,6 +685,7 @@ function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*
 const COMMAND_ALIASES = {
   catalog: "catalog", parts: "catalog", قطعات: "catalog", کاتالوگ: "catalog",
   components: "components", installed: "components", قطعات_نصب: "components",
+  issues: "issues", openissues: "issues", open_issues: "issues", خرابی: "issues", خرابیها: "issues", خرابی_ها: "issues",
   services: "services", servicecatalog: "services", فهرست_سرویس: "services",
   repairjob: "repairjob", workshop: "repairjob", تعمیرگاه: "repairjob", مراجعه: "repairjob",
   fineinfo: "fineinfo", جزئیات_جریمه: "fineinfo",
@@ -505,8 +697,7 @@ const COMMAND_ALIASES = {
   trip: "trip", drive: "trip", distance: "trip", مسافت: "trip", سفر: "trip",
   fuel: "fuel", petrol: "fuel", gas: "fuel", refuel: "fuel", بنزین: "fuel", سوخت: "fuel",
   service: "service", maintenance: "service", سرویس: "service", part: "part", قطعه: "part",
-  interval: "interval", reminder: "interval", بازه: "interval", فاصله: "interval", lifespan: "interval", عمر: "interval",
-  maintnote: "maintnote", maintenance_note: "maintnote", servicenote: "maintnote", plan_note: "maintnote", توضیح_نگهداری: "maintnote", توضیح_سرویس: "maintnote",
+  interval: "interval", reminder: "interval", بازه: "interval", فاصله: "interval",
   due: "due", upcoming: "due", service_due: "due", سرویسها: "due", سرویس_ها: "due", موعد: "due",
   summary: "summary", report: "summary", stats: "summary", گزارش: "summary", خلاصه: "summary",
   config: "config", settings: "config", تنظیمات: "config",
@@ -520,7 +711,7 @@ const COMMAND_ALIASES = {
   latest: "latest", recent: "latest", آخرین: "latest",
   fuelstats: "fuelstats", fuel_stats: "fuelstats", consumption: "fuelstats", مصرف: "fuelstats",
   detail: "detail", event: "detail", info: "detail", جزئیات: "detail", رویداد: "detail",
-  edit: "edit", اصلاح: "edit", ویرایش: "edit",
+  edit: "edit", اصلاح: "edit", ویرایش: "edit", revise: "revise", اصلاح_پیام: "revise",
   annotate: "annotate", comment: "annotate", noteevent: "annotate", توضیح: "annotate",
   actor: "actor", who: "actor", person: "actor", شخص: "actor", انجامدهنده: "actor",
   delete: "delete", remove: "delete", حذف: "delete",
@@ -599,11 +790,15 @@ async function processMessage(text, message, env, options = {}) {
   if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
   if (/^\/catalog\b|^\/parts\b|^\/قطعات\b|^\/کاتالوگ\b/i.test(text)) return { messages: await catalogGuideMessages(env), keyboard: false };
   if (/^\/components\b|^\/installed\b/i.test(text)) return { messages: await componentInventoryReport(env), keyboard: false };
+  if (/^\/issues\b|^\/openissues\b|^\/خرابی(?:ها|_ها)?\b/i.test(text)) return await openIssuesReport(env);
+  if (/^\/revise\b|^\/اصلاح_پیام\b/i.test(text)) return await reviseAnomalyMessage(text, message, env);
   if (/^\/services\b|^\/servicecatalog\b|^\/فهرست_سرویس\b/i.test(text)) return { messages: await serviceCatalogMessages(env), keyboard: false };
   if (/^\/repairjob\b|^\/workshop\b|^\/تعمیرگاه\b|^\/مراجعه\b/i.test(text)) {
     const result = await recordRepairJob(text.replace(/^\/\S+/, "").trim(), message, env, options);
     return typeof result === "string" ? { text: result, keyboard: false } : result;
   }
+  if (/^\/issues\b|^\/openissues\b|^\/خرابی(?:ها|_ها)?\b/i.test(text)) return await openIssuesReport(env);
+  if (/^\/revise\b|^\/اصلاح_پیام\b/i.test(text)) return await reviseAnomalyMessage(text, message, env);
   if (/^\/duplicates\b|^\/duplicate\b|^\/تکراری\b/i.test(text)) return { messages: await duplicateReviewMessages(env), keyboard: false };
   if (/^\/fineinfo\b|^\/جزئیات_جریمه\b/i.test(text)) return { text: await fineInfoCommand(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/purchasekm\b|^\/کیلومترخرید\b/i.test(text)) return { text: await purchaseOdometerCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
@@ -681,7 +876,6 @@ async function processMessage(text, message, env, options = {}) {
     return { text: await recordServiceOrPart(raw || text, text.startsWith("/part") ? "part" : "service", getOccurredAt(text, fromDate), env), keyboard: true };
   }
   if (/^\/interval\b|^\/بازه\b/i.test(text)) return { text: await updateInterval(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
-  if (/^\/maintnote\b|^\/توضیح_نگهداری\b|^\/توضیح_سرویس\b/i.test(text)) return { text: await updateMaintenanceNote(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/wash\b|^\/شستشو\b|^\/کارواش\b/i.test(text)) {
     const raw = text.replace(/^\/\S+/, "").trim();
     return { text: await saveEvent({ type: "wash", title: "شست‌وشوی خودرو", description: raw || "شست‌وشوی خودرو", costRial: extractMoneyRial(raw), odometerKm: extractOdometer(raw), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
@@ -778,15 +972,17 @@ function helpText() {
 🚦 جزئیات جریمه: /fineinfo شناسه
 📈 گزارش تصویری با چهار نمودار: /analysis month (هزینه، سوخت، مسافت و سهم راننده)
 گزینه‌های تحلیل: hour · day · week · month
+⚠️ خرابی‌های باز و بستن با دکمه: /issues
 
-🧭 کیلومتر خرید و برآورد پیمایش
+🧭 کیلومتر خرید و پیمایش واقعی
 /purchasekm — نمایش مبنا و اختلاف با کیلومتر فعلی
-/purchasekm 428000 estimate=2400 — تنظیم کیلومتر خرید و برآورد تقریبی
-مبنا ۴۲۸٬۰۰۰ است؛ کیلومتر واقعی فعلی هرگز برای هم‌خوان شدن با برآورد تغییر داده نمی‌شود.
+/purchasekm 428000 — تنظیم کیلومتر خرید
+مبنا ۴۲۸٬۰۰۰ است؛ پیمایش فقط از تفریق دو قرائت واقعی محاسبه می‌شود و تاریخ خرید نامعلوم به روز فرضی تبدیل نمی‌شود.
 
 🛠 مدیریت عملیات
 /operations — آخرین ۲۰ عملیات با شناسه و دکمه‌ها
 /operations all — فهرست کامل عملیات
+/revise TOKEN متن اصلاح‌شده — اصلاح پیام هشدارخورده قبل از ثبت
 /detail a1b2c3d4 — جزئیات
 /edit a1b2c3d4 شخص=بابام | توضیح=سفر
 /annotate a1b2c3d4 توضیح تکمیلی
@@ -801,8 +997,6 @@ function helpText() {
 /due — سرویس‌های نزدیک موعد یا عقب‌افتاده
 /config — تنظیمات و بازه‌های نگهداری
 /interval engine_oil 5000 180 — تنظیم فاصله سرویس
-/interval spark_plugs 20000 730 | توضیح: نوع شمع — تنظیم عمر قطعه یا سرویس
-/maintnote spark_plugs | توضیح برنامه — ثبت توضیح جداگانه برای کارت نگهداری
 
 📦 خروجی
 /export all — CSV همه عملیات
@@ -828,7 +1022,6 @@ async function guideMessages(env) {
 امروز ۸۵ کیلومتر رانندگی کردم — ثبت مسافت با شخص پیش‌فرض من
 
 پیش‌فرض مالکیت: کیلومتر خرید ${formatNum(ownership.purchaseOdometerKm)} km
-برآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km
 برای بررسی اختلاف و تنظیم مبنا: /purchasekm
 
 اگر تاریخ دقیق خرید مشخص نیست، سیستم مسافت تاریخی را در مجموع مالکیت نشان می‌دهد؛ آن را به ساعت/روز خاصی نسبت نمی‌دهد.` },
@@ -840,8 +1033,6 @@ async function guideMessages(env) {
 /service oil cost=900000 toman km=430000
 /part air_filter cost=250000 toman km=430000
 /interval engine_oil 5000 180
-/interval spark_plugs 20000 730 | توضیح: توضیح مخصوص این قطعه
-/maintnote spark_plugs | توضیح ثابت در کارت نگهداری
 /fine 100000 toman سرعت غیرمجاز
 /fines — مجموع کل، پرداخت‌شده و پرداخت‌نشده
 /paid a1b2c3d4 — ثبت پرداخت جریمه
@@ -880,7 +1071,7 @@ async function guideMessages(env) {
 /fuelstats — آمار سوخت و مصرف
 /due — موعد نگهداری
 /latest — آخرین عملیات
-/purchasekm 428000 estimate=2400 — مبنای کیلومتر خرید
+/purchasekm 428000 — مبنای کیلومتر خرید
 /export all — خروجی CSV همهٔ عملیات
 /backup — فایل پشتیبان JSON
 /config — بازه‌های نگهداری
@@ -895,10 +1086,8 @@ async function guideMessages(env) {
 function getOwnershipSettings(config = {}) {
   const source = config.ownership || {};
   const purchaseOdometerKm = Number(source.purchaseOdometerKm ?? config.vehicle?.purchaseOdometerKm ?? DEFAULT_PURCHASE_ODOMETER_KM);
-  const estimatedKmSincePurchaseKm = Number(source.estimatedKmSincePurchaseKm ?? source.estimatedDrivenSincePurchaseKm ?? DEFAULT_ESTIMATED_KM_SINCE_PURCHASE);
   return {
     purchaseOdometerKm: Number.isFinite(purchaseOdometerKm) && purchaseOdometerKm > 0 ? Math.round(purchaseOdometerKm) : DEFAULT_PURCHASE_ODOMETER_KM,
-    estimatedKmSincePurchaseKm: Number.isFinite(estimatedKmSincePurchaseKm) && estimatedKmSincePurchaseKm >= 0 ? Math.round(estimatedKmSincePurchaseKm) : DEFAULT_ESTIMATED_KM_SINCE_PURCHASE,
     purchaseDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.purchaseDate || "")) ? String(source.purchaseDate) : null,
     defaultActor: String(source.defaultActor || "من")
   };
@@ -910,27 +1099,17 @@ async function purchaseOdometerCommand(raw, env) {
   if (!String(raw || "").trim()) {
     const events = await loadAllEvents(env);
     const current = calculateCurrentOdometer(events);
-    const actual = current !== null && current >= existing.purchaseOdometerKm ? current - existing.purchaseOdometerKm : null;
-    const diff = actual === null ? null : actual - existing.estimatedKmSincePurchaseKm;
-    return `🚘 مبنای مالکیت پژو ۲۰۶
-کیلومتر هنگام خرید: ${formatNum(existing.purchaseOdometerKm)} km
-آخرین کیلومتر ثبت‌شده: ${current === null ? "ثبت نشده" : `${formatNum(current)} km`}
-پیمایش محاسبه‌شده از خرید: ${actual === null ? "قابل محاسبه نیست؛ کیلومتر فعلی از مبنا کمتر است" : `${formatNum(actual)} km`}
-برآورد تقریبی اعلام‌شده: ${formatNum(existing.estimatedKmSincePurchaseKm)} km
-اختلاف محاسبه با برآورد: ${diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNum(diff)} km`}
-
-اگر کیلومتر فعلی ۴۳۱۳۸۱ باشد، از مبنای ۴۲۸۰۰۰ اختلاف ۳۳۸۱ کیلومتر می‌شود؛ این با برآورد ۲۴۰۰ کیلومتر ۹۸۱ کیلومتر اختلاف دارد. برای هم‌خوان شدن اعداد، کیلومتر واقعی روی کیلومترشمار را تأیید کن؛ این دستور کیلومتر واقعی را دست‌کاری نمی‌کند.
-
-تنظیم نمونه: /purchasekm 428000 estimate=2400`;
+    const driven = current !== null && current >= existing.purchaseOdometerKm ? current - existing.purchaseOdometerKm : null;
+    return `🚘 مبنای مالکیت پژو ۲۰۶\nکیلومتر هنگام خرید: ${formatNum(existing.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${current === null ? "ثبت نشده" : `${formatNum(current)} km`}\nپیمایش محاسبه‌شده از زمان خرید: ${driven === null ? "قابل محاسبه نیست؛ کیلومتر فعلی را بررسی کن" : `${formatNum(driven)} km`}\nتاریخ خرید: ${existing.purchaseDate || "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nتنظیم کیلومتر خرید: /purchasekm 428000\nتنظیم همراه تاریخ خرید: /purchasekm 428000 date=2025-11-14\nعدد پیمایش از تفریق کیلومتر واقعی محاسبه می‌شود؛ هیچ برآورد حدسی دخیل نیست.`;
   }
   const km = parseFirstNumber(raw);
-  if (!(km >= 10000 && km < 1000000)) return `نمونه: /purchasekm 428000 estimate=2400\nکیلومتر خرید باید یک مقدار معتبر کیلومترشمار باشد.`;
-  const estimateMatch = normalizeDigits(raw).match(/(?:estimate|برآورد|تخمین)\s*[:=]?\s*(\d[\d,._]*)/i);
+  if (!(km >= 10000 && km < 1000000)) return `نمونه: /purchasekm 428000\nکیلومتر خرید باید یک مقدار معتبر کیلومترشمار باشد.`;
   const dateMatch = normalizeDigits(raw).match(/(?:date|تاریخ)\s*[:=]\s*(\d{4}-\d{2}-\d{2})/i);
   const saved = await mutateJsonFile(FILE_CONFIG, env, () => ({ schemaVersion: 1, serviceIntervals: {}, people: [] }), current => {
     current.ownership ||= {};
     current.ownership.purchaseOdometerKm = Math.round(km);
-    current.ownership.estimatedKmSincePurchaseKm = estimateMatch ? Math.max(0, Math.round(parseNumericToken(estimateMatch[1]))) : existing.estimatedKmSincePurchaseKm;
+    delete current.ownership.estimatedKmSincePurchaseKm;
+    delete current.ownership.estimatedDrivenSincePurchaseKm;
     current.ownership.purchaseDate = dateMatch ? dateMatch[1] : current.ownership.purchaseDate || null;
     current.ownership.defaultActor = "من";
     current.ownership.updatedAt = nowTehran().iso;
@@ -938,14 +1117,7 @@ async function purchaseOdometerCommand(raw, env) {
   });
   const currentOdo = calculateCurrentOdometer(await loadAllEvents(env));
   const actual = currentOdo !== null && currentOdo >= saved.ownership.purchaseOdometerKm ? currentOdo - saved.ownership.purchaseOdometerKm : null;
-  return `✅ مبنای مالکیت ذخیره شد
-کیلومتر خرید: ${formatNum(saved.ownership.purchaseOdometerKm)} km
-آخرین کیلومتر ثبت‌شده: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}
-مسافت محاسبه‌شده: ${actual === null ? "—" : `${formatNum(actual)} km`}
-برآورد ذخیره‌شده: ${formatNum(saved.ownership.estimatedKmSincePurchaseKm)} km
-تاریخ خرید: ${saved.ownership.purchaseDate || "ثبت نشده؛ بخش تاریخی در تحلیل ساعتی/روزانه پخش نمی‌شود"}
-
-سوابق قبلی بدون نام شخص «من» فرض می‌شوند مگر اینکه قبلاً شخص دیگری ثبت شده باشد.`;
+  return `✅ مبنای مالکیت ذخیره شد\nکیلومتر خرید: ${formatNum(saved.ownership.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nپیمایش واقعی از خرید: ${actual === null ? "—" : `${formatNum(actual)} km`}\nتاریخ خرید: ${saved.ownership.purchaseDate || "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nبرآورد فرضی در محاسبات استفاده نمی‌شود.`;
 }
 
 function buildAnalysisBuckets(period) {
@@ -1016,7 +1188,6 @@ async function createAnalysisReply(rawPeriod, env) {
   const currentOdo = calculateCurrentOdometer(events);
   const ownership = getOwnershipSettings(config);
   const ownershipKm = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
-  const discrepancy = ownershipKm === null ? null : ownershipKm - ownership.estimatedKmSincePurchaseKm;
   const sumDistance = distanceValues.reduce((a,b)=>a+b,0);
   const report = `📊 گزارش تحلیلی پژو ۲۰۶ · ${analysisPeriodLabel(period)}
 
@@ -1031,11 +1202,10 @@ async function createAnalysisReply(rawPeriod, env) {
 پرداخت‌شده: ${formatMoneyToman(finePaid)}
 بدهی باز: ${formatMoneyToman(fineUnpaid)} (${formatNum(fines.filter(e=>!e.paid).length)} مورد)
 
-👤 از زمان خرید
+🛒 پیمایش واقعی از زمان خرید
 کیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km
-پیمایش بر مبنای کیلومترهای ثبت‌شده: ${ownershipKm === null ? "—" : `${formatNum(ownershipKm)} km`}
-برآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km
-اختلاف دو محاسبه: ${discrepancy === null ? "—" : `${discrepancy > 0 ? "+" : ""}${formatNum(discrepancy)} km`}${discrepancy !== null && Math.abs(discrepancy)>150 ? "\n⚠️ کیلومترهای موجود با برآورد تقریبی تطابق کامل ندارند؛ کیلومتر واقعی را تأیید کن." : ""}
+تفریق کیلومتر فعلی منهای کیلومتر خرید: ${ownershipKm === null ? "قابل محاسبه نیست" : `${formatNum(ownershipKm)} km`}
+تاریخ خرید: ${ownership.purchaseDate || "ثبت نشده؛ پیمایش به زمان ساختگی نسبت داده نمی‌شود"}
 
 📈 چهار نمودار تصویری در پیام‌های بعدی ارسال می‌شوند: هزینه، سوخت، مسافت و سهم راننده.`;
   try {
@@ -1599,98 +1769,23 @@ async function recordRepairJob(rawText, message, env, options = {}) {
 
 
 async function updateInterval(raw, env) {
-  const [mainRaw, ...noteParts] = String(raw || "").split(/\s+\|\s+/);
-  const main = normalizeDigits(mainRaw || "").trim();
-  const match = main.match(/^(.+?)\s+(\d[\d,._]*)(?:\s+(\d[\d,._]*))?\s*$/);
-  if (!match) return `⚙️ تنظیم بازه یا عمر قطعه/سرویس
-نمونه‌ها:
-<code>/interval engine_oil 5000 180</code>
-<code>/interval crankshaft_position_sensor 60000 1460</code>
-<code>/interval شمع موتور 20000 730 | توضیح: نوع شمع و شرایط رانندگی ملاک است</code>
-عدد اول فاصلهٔ کیلومتری و عدد دوم (اختیاری) روز است. برای قطعهٔ عمرمحور که بازهٔ ثابت ندارد از 0 0 استفاده کن.`;
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return "نمونه: /interval oil 5000 یا /interval engine_oil 5000 180\nعدد اول کیلومتر و عدد دوم (اختیاری) تعداد روز است.";
   const config = await readConfig(env);
-  const query = match[1].trim();
-  const detected = detectServiceKey(query, config);
-  if (!detected) return `قطعه یا سرویس «${query}» در فرهنگ پروژه پیدا نشد. /catalog و /services را ببین یا ابتدا آن را به دیکشنری اضافه کن.`;
-  const key = String(detected).startsWith("serviceCatalog:") ? String(detected).slice("serviceCatalog:".length) : detected;
-  const numeric = value => Math.max(0, Math.round(Number(String(value || "0").replace(/[,_]/g, "")) || 0));
-  const intervalKm = numeric(match[2]);
-  const intervalDays = match[3] ? numeric(match[3]) : null;
-  const catalogItem = config.partCatalog?.items?.[key] || config.partCatalog?.services?.[key] || {};
-  const existing = config.serviceIntervals?.[key] || config.maintenanceOverrides?.[key] || catalogItem || {};
-  const noteText = noteParts.join(" | ").replace(/^(?:note|توضیح|یادداشت)\s*[:=：]?\s*/i, "").trim();
-  const saved = await mutateJsonFile(FILE_CONFIG, env,
-    () => ({ schemaVersion: 1, serviceIntervals: {}, maintenanceOverrides: {}, people: [] }),
-    current => {
-      current.serviceIntervals ||= {};
-      const existingCurrent = current.serviceIntervals[key] || current.maintenanceOverrides?.[key] || catalogItem || {};
-      current.serviceIntervals[key] = {
-        ...existingCurrent,
-        label: existingCurrent.label || catalogItem.label || key,
-        category: existingCurrent.category || catalogItem.category || "service",
-        icon: existingCurrent.icon || catalogItem.icon || "🧰",
-        intervalKm,
-        intervalDays: intervalDays === null ? (Number(existingCurrent.intervalDays) || 0) : intervalDays,
-        mode: intervalKm > 0 || (intervalDays !== null && intervalDays > 0) || (intervalDays === null && Number(existingCurrent.intervalDays) > 0) ? "periodic" : "condition",
-        note: noteText || existingCurrent.note || catalogItem.note || "",
-        updatedAt: nowTehran().iso
-      };
-      if (current.maintenanceOverrides?.[key]) delete current.maintenanceOverrides[key];
-      return current;
-    });
-  const savedItem = saved.serviceIntervals[key];
-  return `✅ بازهٔ نگهداری ذخیره شد
-
-🔧 مورد: <b>${savedItem.label || key}</b>
-🆔 کلید: <code>${key}</code>
-⌁ بازهٔ کیلومتری: <code>${intervalKm ? `${formatNum(intervalKm)} km` : "بدون بازهٔ کیلومتری"}</code>
-📅 بازهٔ زمانی: <code>${savedItem.intervalDays ? `${formatNum(savedItem.intervalDays)} روز` : "بدون بازهٔ زمانی"}</code>
-📝 توضیح: ${savedItem.note || "ثبت نشده"}
-
-از این پس در کارت نگهداری و گزارش موعد برای این قطعه/سرویس استفاده می‌شود. بازه‌ها یادآور قابل تنظیم‌اند؛ مشخصات سازنده و دفترچهٔ همان تیپ خودرو ملاک نهایی است.`;
-}
-
-async function updateMaintenanceNote(raw, env) {
-  const parts = String(raw || "").split(/\s+\|\s+/);
-  if (parts.length < 2 || !parts.slice(1).join(" | ").trim()) return `📝 افزودن توضیح به برنامهٔ نگهداری
-نمونه:
-<code>/maintnote spark_plugs | شمع نصب‌شده از نوع ایریدیوم؛ بعد از سرویس، وضعیت جرقه بررسی شود</code>
-از کلید قطعه/سرویس استفاده کن؛ توضیح با یادداشت هر عملیات جداگانه ذخیره می‌شود.`;
-  const config = await readConfig(env);
-  const query = parts[0].trim();
-  const detected = detectServiceKey(query, config);
-  if (!detected) return `قطعه یا سرویس «${query}» در فرهنگ پیدا نشد. از /catalog یا /services کلید دقیق را بردار.`;
-  const key = String(detected).startsWith("serviceCatalog:") ? String(detected).slice("serviceCatalog:".length) : detected;
-  const note = parts.slice(1).join(" | ").trim().slice(0, 1200);
-  const catalogItem = config.partCatalog?.items?.[key] || config.partCatalog?.services?.[key] || {};
-  const saved = await mutateJsonFile(FILE_CONFIG, env,
-    () => ({ schemaVersion: 1, serviceIntervals: {}, maintenanceOverrides: {}, people: [] }),
-    current => {
-      current.maintenanceOverrides ||= {};
-      const existing = current.serviceIntervals?.[key] || current.maintenanceOverrides[key] || catalogItem || {};
-      const updated = {
-        ...existing,
-        label: existing.label || catalogItem.label || key,
-        category: existing.category || catalogItem.category || "service",
-        icon: existing.icon || catalogItem.icon || "🧰",
-        intervalKm: Number(existing.intervalKm) || 0,
-        intervalDays: Number(existing.intervalDays) || 0,
-        mode: existing.mode || catalogItem.mode || "condition",
-        note,
-        updatedAt: nowTehran().iso
-      };
-      if (current.serviceIntervals?.[key]) current.serviceIntervals[key] = updated;
-      else current.maintenanceOverrides[key] = updated;
-      return current;
-    });
-  const savedPlan = saved.serviceIntervals?.[key] || saved.maintenanceOverrides?.[key] || {};
-  return `✅ توضیح برنامهٔ نگهداری ذخیره شد
-🔧 مورد: <b>${savedPlan.label || key}</b>
-🆔 کلید: <code>${key}</code>
-📝 توضیح:
-<blockquote>${note}</blockquote>
-
-این توضیح در کارت سرویس/قطعه نمایش داده می‌شود و یادداشت رویدادهای قبلی را تغییر نمی‌دهد.`;
+  const key = detectServiceKey(parts.slice(0, -1).join(" "), config) || detectServiceKey(parts[0], config);
+  const numbers = parts.map(parseFirstNumber).filter(n => Number.isFinite(n) && n >= 0);
+  if (!key || !config.serviceIntervals?.[key] || numbers.length < 1) return "کلید سرویس یا عدد بازه شناخته نشد. /config را ببین. نمونه: /interval engine_oil 5000 180";
+  const intervalKm = Math.round(numbers[0]);
+  const intervalDays = numbers.length > 1 ? Math.round(numbers[1]) : config.serviceIntervals[key].intervalDays;
+  const updated = await mutateJsonFile(FILE_CONFIG, env, () => config, current => {
+    current.serviceIntervals ||= {};
+    current.serviceIntervals[key] ||= {};
+    current.serviceIntervals[key].intervalKm = intervalKm;
+    current.serviceIntervals[key].intervalDays = intervalDays;
+    current.serviceIntervals[key].updatedAt = nowTehran().iso;
+    return current;
+  });
+  return `✅ بازه «${updated.serviceIntervals[key].label || key}» ذخیره شد.\nهر ${intervalKm ? `${formatNum(intervalKm)} کیلومتر` : "بدون بازه کیلومتری"}${intervalDays ? ` یا ${formatNum(intervalDays)} روز` : ""}\nمقادیر قابل تغییرند و یادآور جایگزین دفترچه یا نظر متخصص نیست.`;
 }
 
 async function saveEvent(input, env) {
@@ -1862,9 +1957,6 @@ function eventTimestampForReport(event) {
   const value = event?.occurredAt || (event?.date ? `${event.date}T${event.time || "12:00"}:00+03:30` : event?.createdAt);
   const stamp = Date.parse(value || "");
   return Number.isFinite(stamp) ? stamp : 0;
-}
-function escapeTelegramText(value) {
-  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 async function peopleCommand(raw, env) {
@@ -2246,83 +2338,107 @@ async function dueReport(env) {
   const [events, config] = await Promise.all([loadAllEvents(env), readConfig(env)]);
   const currentOdo = calculateCurrentOdometer(events);
   const due = calculateDueItems(events, config, currentOdo, nowTehran());
-  if (!due.length) return `✅ مورد فوری برای سرویس ثبت‌شده پیدا نشد.\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده؛ با /km ثبت کن" : `${formatNum(currentOdo)} km`}\nاین نتیجه فقط بر اساس سرویس‌هایی است که در ربات ثبت کرده‌ای.`;
-  return `🧰 وضعیت سرویس‌های پژو ۲۰۶\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\n\n` + due.map(d => `${d.overdue ? "🔴 عقب‌افتاده" : "🟠 نزدیک موعد"} · ${d.label}\n${d.kmText}${d.daysText ? `\n${d.daysText}` : ""}`).join("\n\n") + "\n\nبازه‌ها پیش‌فرض و قابل تنظیم‌اند؛ مشخصات دفترچه/موتور خودت ملاک نهایی است.";
+  if (!due.length) return `✅ سرویس نزدیک موعد یا عقب‌افتاده‌ای با داده‌های فعلی پیدا نشد.\nکارکرد معتبر: ${currentOdo === null ? "ثبت نشده؛ با /km ثبت کن" : `${formatNum(currentOdo)} km`}\nبرای سرویس‌های بدون سابقه، مبنای کیلومتری ${formatNum(getOwnershipSettings(config).purchaseOdometerKm)} km استفاده می‌شود؛ اگر تاریخ خرید مشخص نیست، روزهای گذشته حدس زده نمی‌شوند.`;
+  const labels = { critical: '🔴 بحرانی', overdue: '⛔ عقب‌افتاده', due: '🟠 موعد رسیده', upcoming: '🟡 نزدیک موعد' };
+  return `🧰 وضعیت سرویس‌های پژو ۲۰۶\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\n\n` + due.map(item => `${labels[item.stage] || '🔎 بررسی'} · ${item.label}${item.baseline ? ' · سابقه ندارد؛ مبنا خرید' : ''}\n${item.remainingKm === null ? "موعد کیلومتری قابل محاسبه نیست" : item.remainingKm <= 0 ? `${formatNum(Math.abs(item.remainingKm))} km از موعد گذشته` : `${formatNum(item.remainingKm)} km تا موعد`}${item.remainingDays === null ? (item.baseline && item.intervalDays > 0 ? '\nتاریخ مبنا ثبت نشده؛ روزهای گذشته حدس زده نمی‌شوند' : '') : `\n${item.remainingDays <= 0 ? `${formatNum(Math.abs(item.remainingDays))} روز از موعد زمانی گذشته` : `${formatNum(item.remainingDays)} روز تا موعد زمانی`}`}`).join("\n\n") + "\n\nترتیب از بحرانی‌ترین مورد شروع می‌شود. بازه‌ها یادآورند؛ مشخصات دفترچه و بازدید تعمیرکار ملاک نهایی است.";
 }
 
-function isMaintenanceCompletionForKey(event, key) {
-  const matches = event.serviceKey === key || event.serviceCatalogKey === key || event.componentKey === key;
-  if (!matches) return false;
-  if (event.type === "service" || event.type === "repair" || event.type === "wash") return true;
-  if (event.type === "issue") return event.status === "fixed";
-  if (event.type === "part") return Boolean(event.componentReplaced);
-  return false;
-}
-
-function calculateDueItems(events, config, currentOdo, now) {
+function calculateDueItems(events, config, currentOdo, now, options = {}) {
   const today = now.date;
+  const ownership = getOwnershipSettings(config);
   const items = [];
-  const schedules = { ...(config.serviceIntervals || {}), ...(config.maintenanceOverrides || {}) };
-  for (const [key, interval] of Object.entries(schedules)) {
-    const kmIntervalConfigured = Number(interval.intervalKm) || 0;
-    const dayIntervalConfigured = Number(interval.intervalDays) || 0;
-    if (kmIntervalConfigured <= 0 && dayIntervalConfigured <= 0) continue;
-    const previous = events.filter(e => isMaintenanceCompletionForKey(e, key))
-      .sort((a, b) => String(b.occurredAt || b.createdAt || "").localeCompare(String(a.occurredAt || a.createdAt || "")))[0];
-    if (!previous) continue;
+  const stageRank = { critical: 0, overdue: 1, due: 2, upcoming: 3, ok: 4 };
+  const stageFor = (remainingKm, remainingDays, intervalKm, intervalDays) => {
+    const kmOver = remainingKm != null && remainingKm < 0 ? Math.abs(remainingKm) : 0;
+    const daysOver = remainingDays != null && remainingDays < 0 ? Math.abs(remainingDays) : 0;
+    if ((intervalKm > 0 && kmOver >= Math.max(1000, intervalKm * .2)) || daysOver >= 30) return 'critical';
+    if ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0)) return 'overdue';
+    if ((remainingKm != null && intervalKm > 0 && remainingKm <= Math.max(100, intervalKm * .02)) || (remainingDays != null && remainingDays <= 3)) return 'due';
+    if ((remainingKm != null && intervalKm > 0 && remainingKm <= Math.max(500, intervalKm * .1)) || (remainingDays != null && remainingDays <= 14)) return 'upcoming';
+    return 'ok';
+  };
+  for (const [key, interval] of Object.entries(config.serviceIntervals || {})) {
+    const previous = events.filter(e =>
+      (e.type === 'service' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key)) ||
+      ((e.type === 'part' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'repair' || e.status === 'fixed'))
+    ).sort((a,b) => eventTimestampForReport(b)-eventTimestampForReport(a))[0] || null;
+    const baseline = !previous;
     const kmInterval = Number(interval.intervalKm) || 0;
     const dayInterval = Number(interval.intervalDays) || 0;
-    let remainingKm = null;
-    if (kmInterval > 0 && currentOdo !== null && Number.isFinite(previous.odometerKm)) remainingKm = Math.round(previous.odometerKm + kmInterval - currentOdo);
-    const nextDate = dayInterval > 0 ? addDaysToDate(previous.date || String(previous.occurredAt).slice(0, 10), dayInterval) : null;
-    const remainingDays = nextDate ? daysBetween(today, nextDate) : null;
-    const kmNear = remainingKm !== null && remainingKm <= Math.max(500, Math.round(kmInterval * 0.1));
-    const dateNear = remainingDays !== null && remainingDays <= 14;
-    if (!kmNear && !dateNear) continue;
-    items.push({
-      key, label: interval.label || key,
-      overdue: (remainingKm !== null && remainingKm <= 0) || (remainingDays !== null && remainingDays <= 0),
-      remainingKm, remainingDays,
-      kmText: remainingKm === null ? "موعد کیلومتری: برای محاسبه، کیلومترشمار و کیلومتر زمان سرویس باید ثبت شده باشد" : remainingKm <= 0 ? `${formatNum(Math.abs(remainingKm))} km از موعد گذشته` : `${formatNum(remainingKm)} km تا موعد`,
-      daysText: remainingDays === null ? "" : remainingDays <= 0 ? `${formatNum(Math.abs(remainingDays))} روز از موعد زمانی گذشته` : `${formatNum(remainingDays)} روز تا موعد زمانی`,
-      lastEventId: previous.id
-    });
+    const refKm = previous ? (previous.odometerKm != null && Number.isFinite(Number(previous.odometerKm)) ? Number(previous.odometerKm) : null) : ownership.purchaseOdometerKm;
+    const refDate = previous?.date || (previous?.occurredAt ? String(previous.occurredAt).slice(0,10) : null) || (baseline ? ownership.purchaseDate : null);
+    const remainingKm = kmInterval > 0 && currentOdo != null && refKm != null ? Math.round(refKm + kmInterval - currentOdo) : null;
+    const dueDate = dayInterval > 0 && refDate ? addDaysToDate(refDate, dayInterval) : null;
+    const remainingDays = dueDate ? daysBetween(today, dueDate) : null;
+    const stage = stageFor(remainingKm, remainingDays, kmInterval, dayInterval);
+    if (stage !== 'ok' || options.includeAll) items.push({ key, label: interval.label || key, stage, stageRank: stageRank[stage], overdue: stage === 'overdue' || stage === 'critical', remainingKm, remainingDays, kmText: remainingKm === null ? `موعد کیلومتری: دادهٔ کافی در دست نیست${baseline ? `؛ مبنای خرید ${formatNum(ownership.purchaseOdometerKm)} km است` : ''}` : remainingKm <= 0 ? `${formatNum(Math.abs(remainingKm))} km از موعد گذشته` : `${formatNum(remainingKm)} km تا موعد`, daysText: remainingDays === null ? (baseline && dayInterval > 0 ? 'تاریخ خرید/سرویس ثبت نشده؛ روزهای سپری‌شده حدس زده نمی‌شوند' : '') : remainingDays <= 0 ? `${formatNum(Math.abs(remainingDays))} روز از موعد زمانی گذشته` : `${formatNum(remainingDays)} روز تا موعد زمانی`, lastEventId: previous?.id || `purchase-baseline-${key}`, baseline, intervalKm: kmInterval, intervalDays: dayInterval, referenceOdometerKm: refKm, referenceDate: refDate });
   }
-  return items.sort((a, b) => Number(b.overdue) - Number(a.overdue) || Math.min(a.remainingKm ?? Infinity, (a.remainingDays ?? Infinity) * 100) - Math.min(b.remainingKm ?? Infinity, (b.remainingDays ?? Infinity) * 100));
+  for (const [key, item] of Object.entries(config.partCatalog?.items || {})) {
+    if (item.mode !== 'periodic' || config.serviceIntervals?.[key]) continue;
+    const previous = events.filter(e => (e.componentKey === key || e.serviceKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'service' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open').sort((a,b)=>eventTimestampForReport(b)-eventTimestampForReport(a))[0] || null;
+    const baseline = !previous;
+    const kmInterval = Number(item.intervalKm) || 0;
+    const dayInterval = Number(item.intervalDays) || 0;
+    const refKm = previous ? (previous.odometerKm != null && Number.isFinite(Number(previous.odometerKm)) ? Number(previous.odometerKm) : null) : ownership.purchaseOdometerKm;
+    const refDate = previous?.date || (previous?.occurredAt ? String(previous.occurredAt).slice(0,10) : null) || (baseline ? ownership.purchaseDate : null);
+    const kmSince = currentOdo != null && refKm != null ? currentOdo - refKm : null;
+    const remainingKm = kmInterval > 0 && kmSince != null ? Math.round(kmInterval-kmSince) : null;
+    const dueDate = dayInterval > 0 && refDate ? addDaysToDate(refDate,dayInterval) : null;
+    const remainingDays = dueDate ? daysBetween(today,dueDate) : null;
+    const stage = stageFor(remainingKm,remainingDays,kmInterval,dayInterval);
+    if (stage !== 'ok' || options.includeAll) items.push({ key, label:item.label || key, stage, stageRank:stageRank[stage], overdue:stage==='overdue'||stage==='critical', remainingKm, remainingDays, kmText:remainingKm===null?'موعد کیلومتری قابل محاسبه نیست':remainingKm<=0?`${formatNum(Math.abs(remainingKm))} km از موعد گذشته`:`${formatNum(remainingKm)} km تا موعد`, daysText:remainingDays===null?(baseline&&dayInterval>0?'تاریخ خرید/نصب مشخص نیست':''):remainingDays<=0?`${formatNum(Math.abs(remainingDays))} روز از موعد گذشته`:`${formatNum(remainingDays)} روز تا موعد زمانی`, lastEventId:previous?.id || `purchase-baseline-${key}`, baseline, intervalKm:kmInterval, intervalDays:dayInterval, referenceOdometerKm:refKm, referenceDate:refDate, component:true });
+  }
+  return items.sort((a,b)=>(a.stageRank ?? stageRank[a.stage] ?? 9)-(b.stageRank ?? stageRank[b.stage] ?? 9) || Math.min(a.remainingKm ?? Infinity,(a.remainingDays ?? Infinity)*100)-Math.min(b.remainingKm ?? Infinity,(b.remainingDays ?? Infinity)*100));
 }
 
 async function runDueReminders(env) {
-  if (!env.ALLOWED_TELEGRAM_USER_ID) return;
+  if (!env.ALLOWED_TELEGRAM_USER_ID) return { sent: 0, reason: 'ALLOWED_TELEGRAM_USER_ID is not configured' };
   const events = await loadAllEvents(env);
   const config = await readConfig(env);
   const currentOdo = calculateCurrentOdometer(events);
-  const due = calculateDueItems(events, config, currentOdo, nowTehran());
-  if (!due.length) return;
+  const due = calculateDueItems(events, config, currentOdo, nowTehran(), { includeAll: true });
   const state = await readJsonFile(FILE_REMINDERS, env, { sent: {} });
-  state.sent ||= {};
-  const nowMs = Date.now();
+  state.sent = state.sent && typeof state.sent === 'object' ? state.sent : {};
+  const rank = { ok: 0, upcoming: 1, due: 2, overdue: 3, critical: 4 };
+  const now = nowTehran();
   const alertLines = [];
+  const activeCycles = new Set();
   for (const item of due) {
-    const stage = item.overdue ? "overdue" : "warning";
-    const key = `${item.key}:${item.lastEventId}:${stage}`;
-    const last = Number(state.sent[key] || 0);
-    // Warnings send once per service cycle; overdue reminders are throttled to every seven days.
-    if (last && (!item.overdue || nowMs - last < 7 * 86400000)) continue;
-    alertLines.push(`${item.overdue ? "🔴" : "🟠"} ${item.label}: ${item.kmText}${item.daysText ? `، ${item.daysText}` : ""}`);
-    state.sent[key] = nowMs;
+    const cycleKey = `${item.key}:${item.lastEventId}`;
+    activeCycles.add(cycleKey);
+    const previous = state.sent[cycleKey];
+    const previousStage = typeof previous === 'string' ? previous : previous?.stage || 'ok';
+    if (item.stage === 'ok') {
+      if (previous) { state.sent[cycleKey] = { stage: 'ok', changedAt: now.iso, notifiedStage: previous?.notifiedStage || previousStage }; }
+      continue;
+    }
+    const firstAlert = !previous || previousStage === 'ok';
+    const escalation = rank[item.stage] > (rank[previousStage] ?? 0);
+    if (firstAlert || escalation) {
+      const icon = item.stage === 'critical' ? '🆘' : item.stage === 'overdue' ? '🔴' : item.stage === 'due' ? '🟠' : '🟡';
+      alertLines.push(`${icon} <b>${escapeTelegramText(item.label)}</b> · ${({ upcoming:'نزدیک موعد', due:'موعد رسیده', overdue:'عقب‌افتاده', critical:'بحرانی' })[item.stage]}${item.baseline ? ' · سابقه ثبت نشده؛ مبنا خرید' : ''}\n${escapeTelegramText(item.kmText)}${item.daysText ? `\n${escapeTelegramText(item.daysText)}` : ''}`);
+      state.sent[cycleKey] = { stage: item.stage, notifiedStage: item.stage, sentAt: now.iso, changedAt: now.iso };
+    } else if (rank[item.stage] < (rank[previousStage] ?? 0)) {
+      // Adjusting odometer/service dates can de-escalate a stage; store the lower state without notifying.
+      state.sent[cycleKey] = { ...(typeof previous === 'object' ? previous : {}), stage: item.stage, changedAt: now.iso };
+    }
   }
+  // Prune stale reminder cycles while retaining the current stage for current maintenance items.
+  for (const key of Object.keys(state.sent)) {
+    if (!activeCycles.has(key)) delete state.sent[key];
+  }
+  await mutateJsonFile(FILE_REMINDERS, env, () => ({ sent: {} }), current => ({ ...current, sent: state.sent, updatedAt: now.iso }));
   if (alertLines.length) {
-    await mutateJsonFile(FILE_REMINDERS, env, () => ({ sent: {} }), current => ({ ...current, sent: { ...(current.sent || {}), ...state.sent }, updatedAt: nowTehran().iso }));
-    await sendText(env, env.ALLOWED_TELEGRAM_USER_ID, `🚘 یادآور نگهداری پژو ۲۰۶\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\n\n${alertLines.join("\n\n")}\n\nبرای جزئیات: /due\nبرای ثبت سرویس: /service oil cost=... km=...`, false);
+    await sendText(env, env.ALLOWED_TELEGRAM_USER_ID, `🚘 <b>یادآور نگهداری پژو ۲۰۶</b>\nکارکرد فعلی: ${currentOdo === null ? 'ثبت نشده' : `${formatNum(currentOdo)} km`}\n\n${alertLines.join('\n\n')}\n\nاین پیام فقط هنگام ورود به یک مرحلهٔ جدید (نزدیک موعد، موعد رسیده، عقب‌افتاده یا بحرانی) ارسال می‌شود؛ هشدار یک مرحله در هر چرخه تکرار نمی‌شود.\n\nجزئیات: /due · سرویس‌های باز: /issues`, false);
   }
+  return { sent: alertLines.length, checked: due.length, time: now.iso, currentOdometerKm: currentOdo, stages: alertLines.length ? 'transition-notifications' : 'no-stage-transition' };
 }
 
 async function configReport(env) {
   const config = await readConfig(env);
-  const plans = { ...(config.maintenanceOverrides || {}), ...(config.serviceIntervals || {}) };
-  const rows = Object.entries(plans).map(([key, value]) => `${value.label || key} [${key}]\n${value.intervalKm ? `${formatNum(value.intervalKm)} km` : "بدون فاصله کیلومتری"}${value.intervalDays ? ` · ${formatNum(value.intervalDays)} روز` : ""}${value.note ? `\n📝 ${value.note}` : ""}`);
+  const rows = Object.entries(config.serviceIntervals || {}).map(([key, value]) => `${value.label || key} [${key}]\n${value.intervalKm ? `${formatNum(value.intervalKm)} km` : "بدون فاصله کیلومتری"}${value.intervalDays ? ` · ${formatNum(value.intervalDays)} روز` : ""}`);
   const ownership = getOwnershipSettings(config);
-  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\nکیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km\nبرآورد پیمایش از خرید: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km\n\n${rows.join("\n\n")}\n\nتغییر بازه: /interval spark_plugs 20000 730\nتوضیح برنامهٔ نگهداری: /maintnote spark_plugs | توضیح سفارشی\nتغییر کیلومتر خرید: /purchasekm 428000 estimate=2400\nنام‌های کوتاه انگلیسی و فارسی پشتیبانی می‌شوند.`;
+  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\nکیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km\n\n${rows.join("\n\n")}\n\nتغییر بازه: /interval engine_oil 5000 180\nتغییر کیلومتر خرید: /purchasekm 428000\nنام‌های کوتاه انگلیسی و فارسی پشتیبانی می‌شوند.`;
 }
 
 async function summaryReport(text, env) {
@@ -2371,8 +2487,7 @@ async function summaryReport(text, env) {
   const config = await readConfig(env);
   const ownership = getOwnershipSettings(config);
   const lifetimeFromPurchase = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
-  const estimateGap = lifetimeFromPurchase === null ? null : lifetimeFromPurchase - ownership.estimatedKmSincePurchaseKm;
-  return `📊 گزارش ${label}\nرویدادها: ${formatNum(events.length)}\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nمسافت ثبت‌شده در بازه: ${formatNum(trips)} km\nسوخت‌گیری: ${formatNum(fuelLiters)} لیتر\nهزینه سوخت: ${formatMoneyToman(fuelCost)}\nکل هزینه‌های پرداخت‌شده: ${formatMoneyToman(cost)}\n\n🚦 وضعیت جریمه‌های همین بازه\nمجموع جریمه: ${formatMoneyToman(totalFine)}\nپرداخت‌شده: ${formatMoneyToman(paidFine)}\nپرداخت‌نشده: ${formatMoneyToman(unpaid)} (${formatNum(fines.filter(e=>!e.paid).length)} مورد)\n\n👤 از زمان خرید در کیلومتر ${formatNum(ownership.purchaseOdometerKm)}: ${lifetimeFromPurchase === null ? "—" : `${formatNum(lifetimeFromPurchase)} km طبق آخرین کیلومتر ثبت‌شده`}\nبرآورد اعلام‌شده: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km${estimateGap === null ? "" : `\nاختلاف با برآورد: ${estimateGap > 0 ? "+" : ""}${formatNum(estimateGap)} km`}${estimateGap !== null && Math.abs(estimateGap)>150 ? "\n⚠️ اختلاف بیشتر از حد معمول است؛ کیلومتر فعلی را روی خودرو تأیید کن." : ""}\n\n` + Object.entries(typeCounts).map(([type, count]) => `${eventTypeLabel(type)}: ${formatNum(count)}`).join("\n") + `\n\nخروجی CSV: /export all · نمودار تصویری: /analysis month`;
+  return `📊 گزارش ${label}\nرویدادها: ${formatNum(events.length)}\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nمسافت ثبت‌شده در بازه: ${formatNum(trips)} km\nسوخت‌گیری: ${formatNum(fuelLiters)} لیتر\nهزینه سوخت: ${formatMoneyToman(fuelCost)}\nکل هزینه‌های پرداخت‌شده: ${formatMoneyToman(cost)}\n\n🚦 وضعیت جریمه‌های همین بازه\nمجموع جریمه: ${formatMoneyToman(totalFine)}\nپرداخت‌شده: ${formatMoneyToman(paidFine)}\nپرداخت‌نشده: ${formatMoneyToman(unpaid)} (${formatNum(fines.filter(e=>!e.paid).length)} مورد)\n\n👤 از زمان خرید در کیلومتر ${formatNum(ownership.purchaseOdometerKm)}: ${lifetimeFromPurchase === null ? "—" : `${formatNum(lifetimeFromPurchase)} km طبق آخرین کیلومتر ثبت‌شده`}\nپیمایش واقعی از مبنای خرید: ${lifetimeFromPurchase === null ? "—" : `${formatNum(lifetimeFromPurchase)} km`}. برآورد فرضی در گزارش استفاده نمی‌شود.\n\n` + Object.entries(typeCounts).map(([type, count]) => `${eventTypeLabel(type)}: ${formatNum(count)}`).join("\n") + `\n\nخروجی CSV: /export all · نمودار تصویری: /analysis month`;
 }
 
 async function latestReport(env) {
@@ -2581,10 +2696,10 @@ function detectServiceKeys(text, config) {
   };
   const catalog = config.partCatalog || {};
   for (const [key, item] of Object.entries(catalog.items || {})) {
-    addAliases(key, [key, key.replace(/_/g," "), item.label, ...(item.aliases || [])], "", 3);
+    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "", 3);
   }
   for (const [key, item] of Object.entries(catalog.services || {})) {
-    addAliases(key, [key, key.replace(/_/g," "), item.label, ...(item.aliases || [])], "serviceCatalog:", 4);
+    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "serviceCatalog:", 4);
   }
   for (const [key, aliases] of Object.entries(SERVICE_ALIASES)) {
     if (!config.serviceIntervals?.[key] && !catalog.items?.[key]) continue;
@@ -2605,7 +2720,7 @@ function detectServiceKey(text, config) {
 }
 
 async function readConfig(env) {
-  return await readJsonFile(FILE_CONFIG, env, { serviceIntervals: {}, vehicle: { label: "Peugeot 206" }, ownership: { purchaseOdometerKm: DEFAULT_PURCHASE_ODOMETER_KM, estimatedKmSincePurchaseKm: DEFAULT_ESTIMATED_KM_SINCE_PURCHASE } });
+  return await readJsonFile(FILE_CONFIG, env, { serviceIntervals: {}, vehicle: { label: "Peugeot 206" }, ownership: { purchaseOdometerKm: DEFAULT_PURCHASE_ODOMETER_KM } });
 }
 async function getMonth(month, env) {
   if (!/^\d{4}-\d{2}$/.test(month)) return { month, events: [] };

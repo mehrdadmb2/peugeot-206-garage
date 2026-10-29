@@ -1,0 +1,200 @@
+Peugeot 206 Garage OS v3.9.0 — Validation Results
+Date: 2026-10-29
+
+Worker test suite:
+
+> peugeot-206-garage-worker@3.9.0 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: GET /health is request-driven and does not require scheduled triggers
+ok 1 - GET /health is request-driven and does not require scheduled triggers
+  ---
+  duration_ms: 34.29683
+  type: 'test'
+  ...
+# Subtest: GET / returns API guide
+ok 2 - GET / returns API guide
+  ---
+  duration_ms: 0.44069
+  type: 'test'
+  ...
+# Subtest: unknown route returns 404
+ok 3 - unknown route returns 404
+  ---
+  duration_ms: 0.363646
+  type: 'test'
+  ...
+# Subtest: private Telegram webhook rejects missing secret
+ok 4 - private Telegram webhook rejects missing secret
+  ---
+  duration_ms: 0.397916
+  type: 'test'
+  ...
+# Subtest: protected API rejects missing bearer token
+ok 5 - protected API rejects missing bearer token
+  ---
+  duration_ms: 1.997482
+  type: 'test'
+  ...
+# Subtest: API guide advertises reciprocal links and event management routes
+ok 6 - API guide advertises reciprocal links and event management routes
+  ---
+  duration_ms: 0.433608
+  type: 'test'
+  ...
+# Subtest: event update rejects an empty/unsupported patch before any GitHub write
+ok 7 - event update rejects an empty/unsupported patch before any GitHub write
+  ---
+  duration_ms: 1.868943
+  type: 'test'
+  ...
+# Subtest: typed record stores actor and separate note while keeping the event description clean
+ok 8 - typed record stores actor and separate note while keeping the event description clean
+  ---
+  duration_ms: 43.312274
+  type: 'test'
+  ...
+# Subtest: odometer submitted by another driver attributes the distance since the prior reading to that driver
+ok 9 - odometer submitted by another driver attributes the distance since the prior reading to that driver
+  ---
+  duration_ms: 18.965261
+  type: 'test'
+  ...
+# Subtest: Telegram operations list formats IDs and quotes and uses named clickable navigation links
+ok 10 - Telegram operations list formats IDs and quotes and uses named clickable navigation links
+  ---
+  duration_ms: 6.594512
+  type: 'test'
+  ...
+# Subtest: /analysis week sends one textual summary and four PNG charts
+ok 11 - /analysis week sends one textual summary and four PNG charts
+  ---
+  duration_ms: 11.322215
+  type: 'test'
+  ...
+# Subtest: /fines reports total, paid and unpaid amounts
+ok 12 - /fines reports total, paid and unpaid amounts
+  ---
+  duration_ms: 3.554665
+  type: 'test'
+  ...
+# Subtest: /purchasekm reports actual odometer subtraction and never displays the removed estimate
+ok 13 - /purchasekm reports actual odometer subtraction and never displays the removed estimate
+  ---
+  duration_ms: 4.140849
+  type: 'test'
+  ...
+# Subtest: repairjob expands a multi-part workshop visit, preserves actor/specs and keeps unknown costs blank
+ok 14 - repairjob expands a multi-part workshop visit, preserves actor/specs and keeps unknown costs blank
+  ---
+  duration_ms: 92.270317
+  type: 'test'
+  ...
+# Subtest: Telegram webhook acknowledges immediately when waitUntil is available and later sends the response
+ok 15 - Telegram webhook acknowledges immediately when waitUntil is available and later sends the response
+  ---
+  duration_ms: 1.366092
+  type: 'test'
+  ...
+# Subtest: exact duplicate Telegram message is not saved without confirmation and offers yes/no actions
+ok 16 - exact duplicate Telegram message is not saved without confirmation and offers yes/no actions
+  ---
+  duration_ms: 6.771283
+  type: 'test'
+  ...
+# Subtest: repeated multi-part repairjob prompts before writing a second workshop visit
+ok 17 - repeated multi-part repairjob prompts before writing a second workshop visit
+  ---
+  duration_ms: 52.728216
+  type: 'test'
+  ...
+# Subtest: /duplicates presents manual merge and archive choices without changing events
+ok 18 - /duplicates presents manual merge and archive choices without changing events
+  ---
+  duration_ms: 2.760706
+  type: 'test'
+  ...
+# Subtest: replacement part counts as the latest maintenance event in the due report
+ok 19 - replacement part counts as the latest maintenance event in the due report
+  ---
+  duration_ms: 3.08943
+  type: 'test'
+  ...
+# Subtest: natural no-start report without odometer inherits the latest valid odometer and gets a Telegram acknowledgement
+ok 20 - natural no-start report without odometer inherits the latest valid odometer and gets a Telegram acknowledgement
+  ---
+  duration_ms: 10.14387
+  type: 'test'
+  ...
+# Subtest: fuel report calculates full-to-full consumption from partial fills between checkpoints
+ok 21 - fuel report calculates full-to-full consumption from partial fills between checkpoints
+  ---
+  duration_ms: 3.37506
+  type: 'test'
+  ...
+# Subtest: /km 431503 تعمیر ماشین بابام preserves the driver and note instead of recording only the mileage
+ok 22 - /km 431503 تعمیر ماشین بابام preserves the driver and note instead of recording only the mileage
+  ---
+  duration_ms: 18.094169
+  type: 'test'
+  ...
+# Subtest: repairjob understands oils, crankshaft sensor and cable prices, labor, and an unresolved gearbox leak without false replacement cost
+ok 23 - repairjob understands oils, crankshaft sensor and cable prices, labor, and an unresolved gearbox leak without false replacement cost
+  ---
+  duration_ms: 181.586513
+  type: 'test'
+  ...
+# Subtest: natural self car wash is recorded as a wash and keeps the default actor
+ok 24 - natural self car wash is recorded as a wash and keeps the default actor
+  ---
+  duration_ms: 9.405883
+  type: 'test'
+  ...
+# Subtest: scheduled reminders endpoint requires its shared secret and safely completes without alert spam
+ok 25 - scheduled reminders endpoint requires its shared secret and safely completes without alert spam
+  ---
+  duration_ms: 1.906839
+  type: 'test'
+  ...
+# Subtest: unusual fuel volume requires explicit Telegram confirmation before any event is saved
+ok 26 - unusual fuel volume requires explicit Telegram confirmation before any event is saved
+  ---
+  duration_ms: 3.624067
+  type: 'test'
+  ...
+# Subtest: /due shows purchase-baseline kilometre lateness and does not invent elapsed days
+ok 27 - /due shows purchase-baseline kilometre lateness and does not invent elapsed days
+  ---
+  duration_ms: 1.469764
+  type: 'test'
+  ...
+# Subtest: scheduled reminders notify once per maintenance stage and stay quiet on repeated daily checks
+ok 28 - scheduled reminders notify once per maintenance stage and stay quiet on repeated daily checks
+  ---
+  duration_ms: 3.057042
+  type: 'test'
+  ...
+1..28
+# tests 28
+# suites 0
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 630.109701
+
+Additional static checks:
+- worker/src/index.js syntax (`npm run check`): PASS
+- assets/js/app.js syntax (`node --check`): PASS
+- scripts/upgrade-config-v3.9.mjs syntax (`node --check`): PASS
+- .github/workflows/maintenance-reminders.yml YAML parse: PASS
+- upgrade-config-v3.9.mjs fixture: removed obsolete guessed estimate; preserved purchase odometer, people, custom service interval, custom maintenance override and event logs; timestamped backup created: PASS
+- Safe patch ZIP content check: no live data/config.json, data/index.json, data/logs, deleted-events.json, pending-duplicates.json or backup files: PASS
+- Safe ZIP overlay rehearsal: 5 runtime data files remained byte-identical after extracting the patch: PASS
+
+Notes:
+- These are local/fixture tests, not a deployment test against the live Cloudflare Worker or GitHub repository.
+- The user must deploy the Worker and push the website/workflow to the repository's default branch.
+- The scheduled GitHub Action requires SCHEDULE_TRIGGER_SECRET to be configured both as a Cloudflare Worker secret and as a GitHub Actions repository secret.

@@ -85,8 +85,12 @@
     </div>
     <div class="view-pane" data-view-pane="maintenance" id="page-maintenance">
 <section class="section-block" id="maintenance" aria-labelledby="maintenanceTitle">
-      <div class="section-heading"><div><span class="section-kicker">PREVENTIVE CARE / 02</span><h2 id="maintenanceTitle">تقویم نگهداری و مصرفی‌ها</h2></div><span class="section-note">عمر از آخرین نصب/سرویس · موعد بر اساس بازهٔ شخصی</span></div>
+      <div class="section-heading"><div><span class="section-kicker">PREVENTIVE CARE / 02</span><h2 id="maintenanceTitle">تقویم نگهداری و مصرفی‌ها</h2></div><span class="section-note">پیشرفت تا سرویس بعدی</span></div>
       <div id="serviceGrid" class="service-grid"><div class="empty-state shimmer">در حال محاسبه موعد سرویس‌ها…</div></div>
+      <section class="dynamic-maintenance-section" aria-labelledby="dynamicMaintenanceTitle">
+        <div class="section-heading"><div><span class="section-kicker">DYNAMIC ITEMS / SECONDARY TRACKING</span><h3 id="dynamicMaintenanceTitle">قطعات و موارد تکمیلی</h3><p class="section-note">موارد کاتالوگ در این بخش، بعد از سرویس‌های اصلی مرتب می‌شوند؛ موارد بحرانی در ابتدای همین بخش قرار می‌گیرند.</p></div><span class="tag-outline">DYNAMIC TRACKING</span></div>
+        <div id="dynamicMaintenanceGrid" class="service-grid"><div class="empty-state">در حال ساخت کارت‌های پویای قطعات…</div></div>
+      </section>
       <section class="component-directory panel" aria-labelledby="componentCatalogTitle">
         <div class="section-heading component-directory-heading"><div><span class="section-kicker">PARTS & COMPONENT INTELLIGENCE</span><h2 id="componentCatalogTitle">دیکشنری تخصصی قطعات</h2><p class="section-note">هر قطعه گروه، آیکون و راهنمای مستقل دارد؛ فواصل یادآوری قابل تنظیم‌اند.</p></div><span class="tag-outline">58+ COMPONENTS</span></div>
         <div id="componentCategoryFilters" class="component-category-filters" role="group" aria-label="فیلتر دسته قطعات"></div>
@@ -139,12 +143,11 @@
         <article class="period-summary-card"><span>🧰 سرویس و تعمیر</span><strong id="periodServiceNumber">—</strong><small>تعداد سرویس، قطعه و تعمیر</small></article>
       </div>
       <section class="ownership-overview panel" aria-labelledby="ownershipOverviewTitle">
-        <div class="ownership-overview-head"><span class="section-kicker">OWNERSHIP MILEAGE / BASELINE</span><h3 id="ownershipOverviewTitle">از کیلومتر خرید تا امروز</h3><p>مسافت کل از اختلاف کیلومتر فعلی و کیلومتر روز خرید محاسبه می‌شود؛ عدد تخمینی برای مقایسه است و کیلومتر واقعی را تغییر نمی‌دهد.</p></div>
+        <div class="ownership-overview-head"><span class="section-kicker">OWNERSHIP MILEAGE / BASELINE</span><h3 id="ownershipOverviewTitle">از کیلومتر خرید تا امروز</h3><p>مسافت کل فقط از اختلاف آخرین کیلومتر معتبر و کیلومتر خرید محاسبه می‌شود؛ هیچ برآورد تخمینی در محاسبات وارد نمی‌شود.</p></div>
         <div class="ownership-kpi-grid">
           <article class="ownership-kpi"><span>🛒 کیلومتر خرید</span><strong id="ownershipPurchaseKm">۴۲۸٬۰۰۰ km</strong><small>مبنای مالکیت</small></article>
           <article class="ownership-kpi"><span>⌁ آخرین کیلومتر</span><strong id="ownershipCurrentKm">—</strong><small>آخرین عدد ثبت‌شده</small></article>
           <article class="ownership-kpi ownership-kpi-primary"><span>🚗 پیمایش از خرید</span><strong id="ownershipDrivenKm">—</strong><small>بر مبنای کیلومترشمار</small></article>
-          <article class="ownership-kpi"><span>🧭 برآورد اولیه</span><strong id="ownershipEstimateKm">۲٬۴۰۰ km</strong><small>طبق تخمین اعلام‌شده</small></article>
         </div>
         <div id="ownershipReconciliation" class="ownership-reconciliation">در حال تطبیق مبنای خرید و آخرین کیلومتر…</div>
         <div class="ownership-driver-panel"><div class="ownership-driver-panel-heading"><div><span class="card-overline">DRIVER ATTRIBUTION</span><h4>توزیع پیمایش بر اساس راننده</h4></div><span class="tag-outline">PER PERSON</span></div><div id="ownershipDriverBreakdown" class="ownership-driver-breakdown"><div class="empty-state">در حال محاسبهٔ سهم رانندگی…</div></div></div>
@@ -222,7 +225,6 @@
         <article class="command-card"><span>⛽ FUEL</span><code>/fuel 20l cost=700000 toman km=156200 full</code><p>سوخت‌گیری، مقدار، هزینه و کیلومتر؛ full برای باک کامل.</p></article>
         <article class="command-card"><span>⚙ SERVICE</span><code>/service oil cost=900000 toman km=156000</code><p>ثبت سرویس و محاسبه‌ی موعد بعدی از بازه‌ی تنظیم‌شده.</p></article>
         <article class="command-card"><span>⏱ INTERVAL</span><code>/interval engine_oil 4000 180</code><p>تنظیم فاصله کیلومتری و زمانی برای هر قطعه‌ی شناخته‌شده.</p></article>
-        <article class="command-card"><span>📝 MAINTENANCE NOTE</span><code>/maintnote spark_plugs | توضیح ثابت</code><p>افزودن توضیح ثابت به کارت نگهداری یک قطعه یا سرویس؛ جدا از توضیح هر عملیات.</p></article>
         <article class="command-card"><span>▦ REPORT</span><code>/summary week</code><p>خلاصه‌ی مسافت، سوخت، هزینه‌ی پرداخت‌شده و جریمه‌ی باز.</p></article>
         <article class="command-card"><span>⇩ EXPORT</span><code>/export all</code><p>ارسال CSV همه سوابق؛ /backup نسخه JSON کامل را به تلگرام می‌فرستد.</p></article>
         <article class="command-card"><span>👤 PEOPLE</span><code>/people add بابام</code><p>افزودن شخص دلخواه؛ شروع پیام با «بابام: ...» انتساب را ثبت می‌کند.</p></article>
@@ -235,7 +237,7 @@
         <div class="guide-command-grid" id="fullGuideGrid">
           <article class="command-card guide-card" data-search="شروع start help راهنما منو دستورها"><span>🚘 START / HELP</span><code>/start · /help · /guide</code><p>شروع کار، راهنمای سریع و دفترچهٔ کامل چندبخشی. برای فهرست فرمان‌ها و روش ثبت درست از <code>/guide</code> استفاده کن.</p></article>
           <article class="command-card guide-card" data-search="کیلومترشمار کارکرد odometer km من رانندگی"><span>⌁ ODOMETER</span><code>/km 431381</code><p>ثبت عدد واقعی کیلومترشمار. پیام «بابام کیلومتر ۴۳۱۳۸۱» اختلاف با ثبت قبلی را به نام بابا ثبت می‌کند. نام نداشتن یعنی «من».</p></article>
-          <article class="command-card guide-card" data-search="خرید مبنا پیمایش تخمین مالکیت purchasekm"><span>🛒 PURCHASE BASELINE</span><code>/purchasekm 428000 estimate=2400</code><p>ثبت کیلومتر خرید و برآورد تقریبی پیمایش. فاصلهٔ واقعی از تفریق آخرین کیلومتر از مبنای خرید محاسبه می‌شود؛ تخمین فقط برای کنترل اختلاف است.</p></article>
+          <article class="command-card guide-card" data-search="خرید مبنا پیمایش تخمین مالکیت purchasekm"><span>🛒 PURCHASE BASELINE</span><code>/purchasekm 428000</code><p>ثبت کیلومتر خرید؛ پیمایش فقط از اختلاف کیلومترهای واقعی محاسبه می‌شود.</p></article>
           <article class="command-card guide-card" data-search="مسافت trip راه رانندگی"><span>🚗 TRIP</span><code>/trip 85</code><p>ثبت مسافت پیموده‌شده. مثال طبیعی: «امروز ۸۵ کیلومتر رانندگی کردم». برای انتساب به یکی از اعضای خانواده، نام او را ابتدای پیام بنویس.</p></article>
           <article class="command-card guide-card" data-search="سوخت بنزین fuel لیتر باک هزینه"><span>⛽ FUEL</span><code>/fuel 20l cost=700000 toman km=431381 full</code><p>حجم سوخت، مبلغ، کیلومتر و پر بودن باک را ثبت می‌کند. برای مصرف لیتر در ۱۰۰ کیلومتر، حداقل دو ثبت باک کامل همراه کیلومتر لازم است.</p></article>
           <article class="command-card guide-card" data-search="service oil سرویس روغن فیلتر تعویض نگهداری"><span>🧰 SERVICE</span><code>/service oil cost=900000 toman km=431000</code><p>ثبت سرویس و محاسبهٔ موعد بعدی. کلیدهای سرویس در <code>/config</code> دیده می‌شوند؛ بازه‌ها را با دفترچه و نظر تعمیرکار بررسی کن.</p></article>
@@ -245,7 +247,6 @@
           <article class="command-card guide-card" data-search="فهرست سرویس عیب یابی کولر دیاگ services"><span>🛠 SERVICE CATALOG</span><code>/services</code><p>فهرست سرویس‌های موتور، دیاگ، خنک‌کاری، تهویه و خدمات مرتبط.</p></article>
           <article class="command-card guide-card" data-search="تعمیرگاه ثبت چندبخشی قطعه اجرت repairjob workshop"><span>🧾 WORKSHOP VISIT</span><code>/repairjob بابام کیلومتر 431462؛ دیاگ؛ شمع تعویض شد</code><p>ثبت یک مراجعه به‌صورت چند عملیات مجزا با شخص، کیلومتر و هزینه‌های جداگانه. مبالغ نامعلوم حدس زده نمی‌شوند.</p></article>
           <article class="command-card guide-card" data-search="interval بازه کیلومتر روز سرویس"><span>⚙️ INTERVAL</span><code>/interval engine_oil 5000 180</code><p>تنظیم فاصلهٔ کیلومتری و روزهای نگهداری؛ اعداد پیش‌فرض جای دفترچهٔ خودرو را نمی‌گیرند.</p></article>
-          <article class="command-card guide-card" data-search="توضیح برنامه نگهداری قطعه سرویس maintnote note plan"><span>📝 MAINTENANCE NOTE</span><code>/maintnote spark_plugs | توضیح نگهداری</code><p>ثبت توضیح ثابت برای کارت قطعه/سرویس؛ برای یادداشت یک رویداد مشخص از <code>/annotate</code> استفاده کن.</p></article>
           <article class="command-card guide-card" data-search="موعد نزدیک سرویس due تعمیر"><span>⏰ DUE</span><code>/due</code><p>نمایش سرویس‌های نزدیک موعد یا عقب‌افتاده طبق سوابق ثبت‌شده.</p></article>
           <article class="command-card guide-card" data-search="جریمه fine خلافی مبلغ ثبت"><span>🚦 FINE</span><code>/fine 100000 toman سرعت غیرمجاز</code><p>ثبت تخلف و مبلغ. در صورت پرداخت، تاریخ پرداخت را با <code>/paid شناسه</code> ثبت کن.</p></article>
           <article class="command-card guide-card" data-search="fines مجموع کل بدهی پرداخت شده نشده جریمه"><span>💳 FINES</span><code>/fines</code><p>تعداد و مجموع مبلغ کل جریمه‌ها، پرداخت‌شده‌ها و بدهی باز، به همراه فهرست شناسه‌دار.</p></article>
@@ -282,7 +283,7 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <div class="workflow-actions"><a class="secondary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">باز کردن ربات ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">داشبورد زنده ↗</a><a class="secondary-button" href="#top">بازگشت به بالا ↑</a></div>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.7.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.9.0</b></span></footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>

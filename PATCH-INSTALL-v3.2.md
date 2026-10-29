@@ -1,6 +1,6 @@
 # Install the Peugeot 206 Garage v3.2 safe patch
 
-This patch intentionally omits `data/config.json`, `data/index.json`, `data/logs/`, and deletion archives so extraction does not overwrite current vehicle records. It updates the app, worker code, tests, and documentation. The Worker defaults to a purchase baseline of 428,000 km and estimate of 2,400 km if no `ownership` object exists.
+This patch intentionally omits `data/config.json`, `data/index.json`, `data/logs/`, and deletion archives so extraction does not overwrite current vehicle records. It updates the app, worker code, tests, and documentation. The Worker defaults to a purchase odometer baseline of 428,000 km when no `ownership` object exists; no distance estimate is assumed.
 
 ## 1. Back up first
 
@@ -65,7 +65,7 @@ Message the bot:
 
 ## Purchase mileage reconciliation (important)
 
-The current snapshot's newest logged reading is `431381`, and the configured purchase reading is `428000`. Their arithmetic difference is `3381 km`, not `2400 km`; the estimate differs by `981 km`. The system deliberately surfaces this difference instead of editing real odometer data. If the current dashboard display actually reads `430400`, you may record `/km 430400` after checking the car, but never enter that value just to fit the estimate. A lower new reading starts a correction checkpoint in lifetime driver-distance attribution.
+The system calculates the distance driven since purchase from the latest valid odometer reading minus the purchase baseline. It does not inject an estimated distance or edit odometer history. Only record a reading after checking the car’s real odometer. A lower new reading starts a correction checkpoint in lifetime driver-distance attribution.
 
 The exact purchase date is unknown, so the baseline historical distance is included in total ownership mileage and assigned to `من` unless a recorded first reading names someone else; it is not assigned to a fabricated hour/day/week. For future odometer updates, a message such as `بابام کیلومتر 431500` attributes the interval since the prior valid reading to `بابام`.
 

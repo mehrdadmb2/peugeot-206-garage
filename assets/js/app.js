@@ -184,161 +184,164 @@
     $('#statDueFoot').textContent = due.some(x => x.overdue) ? 'حداقل یک سرویس از موعد گذشته' : due.length ? 'سرویس نزدیک موعد را بررسی کن' : 'از داده‌های سرویس ثبت‌شده';
   }
 
-  function isMaintenanceCompletionForKey(event, key) {
-    const matches = event.serviceKey === key || event.serviceCatalogKey === key || event.componentKey === key;
-    if (!matches) return false;
-    if (event.type === 'service' || event.type === 'repair' || event.type === 'wash') return true;
-    if (event.type === 'issue') return event.status === 'fixed';
-    if (event.type === 'part') return Boolean(event.componentReplaced);
-    return false;
+  function maintenanceStage(remainingKm, remainingDays, intervalKm, intervalDays) {
+    const kmOver = remainingKm != null && remainingKm < 0 ? Math.abs(remainingKm) : 0;
+    const daysOver = remainingDays != null && remainingDays < 0 ? Math.abs(remainingDays) : 0;
+    if ((intervalKm > 0 && kmOver >= Math.max(1000, intervalKm * .2)) || daysOver >= 30) return 'critical';
+    if ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0)) return 'overdue';
+    if ((remainingKm != null && intervalKm > 0 && remainingKm <= Math.max(100, intervalKm * .02)) || (remainingDays != null && remainingDays <= 3)) return 'due';
+    if ((remainingKm != null && intervalKm > 0 && remainingKm <= Math.max(500, intervalKm * .1)) || (remainingDays != null && remainingDays <= 14)) return 'upcoming';
+    return 'ok';
+  }
+  function maintenanceStageLabel(stage) {
+    return ({ critical: '🔴 بحرانی', overdue: '⛔ عقب‌افتاده', due: '🟠 سر موعد', upcoming: '🟡 نزدیک موعد', ok: '🟢 در بازه مجاز', monitor: '🔎 پایش عمر' })[stage] || '🔎 بررسی';
+  }
+  function maintenanceStageClass(stage) {
+    return ({ critical: 'critical', overdue: 'danger', due: 'due', upcoming: 'warn', ok: 'ok', monitor: 'ok' })[stage] || '';
+  }
+  function maintenanceStageRank(stage) {
+    return ({ critical: 0, overdue: 1, due: 2, upcoming: 3, ok: 4, monitor: 5 })[stage] ?? 6;
+  }
+  function latestMaintenanceEvent(events, key, typeKey = 'serviceKey') {
+    return events.filter(e =>
+      ((e.type === 'service' || e.type === 'part' || e.type === 'repair') && (e[typeKey] === key || e.componentKey === key)) &&
+      !(e.type === 'issue' && e.status !== 'fixed')
+    ).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
   }
 
   function renderServices() {
     const config = state.config || {};
-    const schedules = { ...(config.serviceIntervals || {}), ...(config.maintenanceOverrides || {}) };
-    const services = Object.entries(schedules);
+    const services = Object.entries(config.serviceIntervals || {});
     const events = state.events;
+    const ownership = config.ownership || {};
+    const purchaseKm = Number(ownership.purchaseOdometerKm ?? config.vehicle?.purchaseOdometerKm ?? 428000);
+    const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
     const currentOdo = calculateOdometer(events);
-    const planCards = services.map(([key, service]) => {
-      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
-      if (!latest) return serviceCard({ key, service, latest: null, status: 'بدون سابقه', statusClass: '', headline: 'ثبت نشده', subline: 'اولین سرویس را در تلگرام ثبت کن', progress: 0, foot: 'هنوز انجام/تعویضی ثبت نشده؛ بعد از ثبت، عمر کیلومتری و زمانی نمایش داده می‌شود.' });
+    const serviceCards = services.map(([key, service]) => {
+      const latest = events.filter(e =>
+        (e.type === 'service' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key)) ||
+        ((e.type === 'part' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'repair' || e.status === 'fixed'))
+      ).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+      const baseline = !latest;
+      const reference = latest || {
+        id: `purchase-${key}`,
+        type: 'purchase-baseline',
+        odometerKm: purchaseKm,
+        date: purchaseDate,
+        occurredAt: purchaseDate ? `${purchaseDate}T12:00:00+03:30` : null,
+        jalaliDate: purchaseDate ? purchaseDate : 'از مبنای خرید',
+        baseline: true
+      };
       const intervalKm = Number(service.intervalKm) || 0;
       const intervalDays = Number(service.intervalDays) || 0;
-      const kmSince = currentOdo != null && latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Math.max(0, currentOdo - Number(latest.odometerKm)) : null;
-      const daysSince = latest.date || latest.occurredAt ? Math.max(0, daysBetween(String(latest.date || latest.occurredAt).slice(0,10), localDateString(new Date()))) : null;
-      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
-      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
-      const isOverdue = (remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0);
-      const near = !isOverdue && ((remainingKm != null && remainingKm <= Math.max(500, intervalKm * .1)) || (remainingDays != null && remainingDays <= 14));
-      const status = isOverdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : (intervalKm || intervalDays) ? 'در بازه مجاز' : 'آخرین انجام ثبت شده';
-      const statusClass = isOverdue ? 'danger' : near ? 'warn' : 'ok';
-      const progress = intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100, 0, 100) : (intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100, 0, 100) : 0);
-      const headline = (intervalKm || intervalDays)
-        ? (remainingKm != null ? `${formatNumber(Math.max(0, remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0, remainingDays))} روز` : 'موعد نامشخص')
-        : (kmSince != null ? `${formatNumber(kmSince)} km` : `${formatNumber(daysSince || 0)} روز`);
-      const subline = (intervalKm || intervalDays)
-        ? (isOverdue ? 'از موعد نگهداری عبور کرده' : intervalKm && remainingKm != null ? 'تا موعد کیلومتری بعدی' : 'تا موعد زمانی بعدی')
-        : 'از آخرین انجام / تعویض';
+      const referenceKm = Number.isFinite(Number(reference.odometerKm)) ? Number(reference.odometerKm) : null;
+      const remainingKm = intervalKm > 0 && currentOdo != null && referenceKm != null ? Math.round(referenceKm + intervalKm - currentOdo) : null;
+      const referenceDate = reference.date || String(reference.occurredAt || '').slice(0, 10) || null;
+      const dueDate = intervalDays > 0 && referenceDate ? addDays(referenceDate, intervalDays) : null;
+      const remainingDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
+      const hasInterval = intervalKm > 0 || intervalDays > 0;
+      const stage = hasInterval ? maintenanceStage(remainingKm, remainingDays, intervalKm, intervalDays) : 'monitor';
+      const status = `${maintenanceStageLabel(stage)}${baseline ? ' · بدون سابقه' : ''}`;
+      const statusClass = maintenanceStageClass(stage);
+      const progress = intervalKm > 0 && remainingKm != null
+        ? clamp((intervalKm - remainingKm) / intervalKm * 100, 0, 100)
+        : (intervalDays > 0 && remainingDays != null ? clamp((intervalDays - remainingDays) / intervalDays * 100, 0, 100) : 0);
+      const headline = remainingKm != null
+        ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : `${formatNumber(remainingKm)} km`)
+        : remainingDays != null ? `${formatNumber(Math.abs(remainingDays))} روز${remainingDays <= 0 ? ' عبور از موعد' : ' تا موعد'}`
+          : currentOdo != null && referenceKm != null ? `${formatNumber(Math.max(0, currentOdo - referenceKm))} km از مبنا` : 'نامشخص';
+      const subline = remainingKm != null ? (remainingKm <= 0 ? 'از موعد کیلومتری گذشته' : 'تا موعد کیلومتری بعدی')
+        : remainingDays != null ? (remainingDays <= 0 ? 'از موعد زمانی گذشته' : 'تا موعد زمانی بعدی')
+          : baseline ? 'از مبنای کیلومتر خرید؛ تاریخ خرید برای محاسبه روز مشخص نیست' : 'برای تخمین موعد، تاریخ/کیلومتر معتبر لازم است';
       const footParts = [];
-      footParts.push(`آخرین انجام: ${latest.jalaliDate || latest.date || '—'}`);
-      if (latest.odometerKm != null) footParts.push(`کیلومتر انجام: ${formatNumber(latest.odometerKm)} km`);
-      if (kmSince != null) footParts.push(`از آن زمان ${formatNumber(kmSince)} km`);
-      if (daysSince != null) footParts.push(`${formatNumber(daysSince)} روز گذشته`);
-      if (latest.actor) footParts.push(`انجام‌دهنده: ${latest.actor}`);
-      if (latest.note) footParts.push(`توضیح: ${latest.note}`);
-      return serviceCard({ key, service, latest, status, statusClass, headline, subline, progress, foot: footParts.map(escapeHtml).join(' · '), remainingKm, remainingDays, currentOdo });
-    });
-    const dynamicCards = renderDynamicMaintenanceCards(config, events, currentOdo, schedules);
-    const installedCards = renderInstalledMaintenanceCards(config, events, currentOdo, schedules);
-    const planRows = services.map(([key], index) => {
-      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0] || null;
-      return { html: planCards[index], latest };
-    });
-    const plansWithHistory = planRows.filter(row => row.latest).sort((a,b)=>eventEpoch(b.latest)-eventEpoch(a.latest)).map(row=>row.html);
-    const plansWithoutHistory = planRows.filter(row => !row.latest).map(row=>row.html);
-    const cards = [...dynamicCards, ...installedCards.reverse(), ...plansWithHistory, ...plansWithoutHistory];
-    $('#serviceGrid').innerHTML = cards.length ? cards.join('') : '<div class="empty-state">هنوز برنامه یا سابقهٔ نگهداری ثبت نشده است. با /service، /part یا /repairjob یک مورد ثبت کن.</div>';
+      if (baseline) {
+        footParts.push(`سابقه سرویس ثبت نشده؛ مبنای کیلومتری ${formatNumber(purchaseKm)} km`);
+        footParts.push(purchaseDate ? `تاریخ مبنا: ${escapeHtml(purchaseDate)}` : 'سن تقویمی از خرید محاسبه نمی‌شود');
+      } else {
+        if (latest.odometerKm != null) footParts.push(`آخرین سرویس/تعویض: ${formatNumber(latest.odometerKm)} km`);
+        footParts.push(`تاریخ: ${escapeHtml(latest.jalaliDate || latest.date || '—')}`);
+        if (latest.actor) footParts.push(`انجام‌دهنده: ${escapeHtml(latest.actor)}`);
+        if (latest.note) footParts.push(`توضیح: ${escapeHtml(latest.note)}`);
+      }
+      return { key, stage, rank: maintenanceStageRank(stage), kmSort: remainingKm ?? Infinity, card: serviceCard({ key, service, latest: reference, status, statusClass, headline, subline, progress, foot: footParts.join(' · ') }) };
+    }).sort((a, b) => a.rank - b.rank || a.kmSort - b.kmSort || a.key.localeCompare(b.key));
+    const dynamicCards = renderInstalledMaintenanceCards(config, events, currentOdo);
+    $('#serviceGrid').innerHTML = serviceCards.length
+      ? serviceCards.map(item => item.card).join('')
+      : '<div class="empty-state">سرویس اصلی تعریف نشده است؛ موارد پویای قطعات در بخش پایین نمایش داده می‌شوند.</div>';
+    const dynamicRoot = $('#dynamicMaintenanceGrid');
+    if (dynamicRoot) dynamicRoot.innerHTML = dynamicCards.length ? dynamicCards.join('') : '<div class="empty-state">هنوز قلم تکمیلی در کاتالوگ تعریف نشده است.</div>';
     renderComponentCatalog();
     renderInstalledComponents();
     renderServiceCatalog();
   }
 
-  function renderInstalledMaintenanceCards(config, events, currentOdo, scheduled = { ...(config?.serviceIntervals || {}), ...(config?.maintenanceOverrides || {}) }) {
-    const items = config?.partCatalog?.items || {};
-    const catalogCategories = config?.partCatalog?.categories || {};
-    scheduled = scheduled || {};
-    const latestByKey = new Map();
-    events.filter(event => event.componentKey && event.componentReplaced).sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event=>latestByKey.set(event.componentKey,event));
-    const cards = [];
-    for (const [key,event] of latestByKey) {
-      const item = items[key];
-      if (!item) continue;
-      if ((event.serviceKey && scheduled[event.serviceKey]) || (key in scheduled)) continue;
-      const category = catalogCategories[item.category] || { label:item.category || 'قطعه', icon:'🔩', theme:'#36c7e8' };
-      const plan = scheduled[key] || config?.maintenanceOverrides?.[key] || item;
-      const kmSince = currentOdo != null && event.odometerKm != null ? Math.max(0, currentOdo - Number(event.odometerKm)) : null;
-      const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(new Date()))) : null;
-      const intervalKm = Number(plan.intervalKm) || 0;
-      const intervalDays = Number(plan.intervalDays) || 0;
-      const hasInterval = plan.mode !== 'condition' && (intervalKm > 0 || intervalDays > 0);
-      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
-      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
-      const overdue = hasInterval && ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0));
-      const near = hasInterval && !overdue && ((remainingKm != null && remainingKm <= Math.max(500,intervalKm*.1)) || (remainingDays != null && remainingDays <= 14));
-      const status = hasInterval ? (overdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'در بازه مجاز') : 'پایش عمر / بازدید';
-      const statusClass = hasInterval ? (overdue ? 'danger' : near ? 'warn' : 'ok') : 'ok';
-      const headline = hasInterval
-        ? (remainingKm != null ? `${formatNumber(Math.max(0,remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0,remainingDays))} روز` : 'موعد نامشخص')
-        : (daysSince != null ? `${formatNumber(daysSince)} روز` : 'عمر ثبت نشده');
-      const subline = hasInterval
-        ? (overdue ? 'از موعد تعویض عبور کرده' : 'تا بازهٔ نگهداری بعدی')
-        : `${kmSince != null ? `${formatNumber(kmSince)} km از نصب` : 'کیلومتر نصب موجود نیست'}`;
-      const notes = [
-        `آخرین نصب: ${event.jalaliDate || event.date || '—'}`,
-        event.odometerKm != null ? `کیلومتر نصب: ${formatNumber(event.odometerKm)} km` : '',
-        daysSince != null ? `${formatNumber(daysSince)} روز از نصب` : '',
-        event.actor ? `انجام‌دهنده: ${event.actor}` : '',
-        event.brand ? `برند: ${event.brand}` : '',
-        event.model ? `مدل: ${event.model}` : '',
-        event.note ? `یادداشت: ${event.note}` : '',
-        plan.note ? `برنامه: ${plan.note}` : ''
-      ].filter(Boolean).map(escapeHtml).join(' · ');
-      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '',intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'بازهٔ تعویض تعریف نشده';
-      const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
-      cards.push(`<article class="service-card installed-lifetime-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(plan.note || item.note || 'وضعیت و عمر قطعه را از روی سوابق نصب پایش کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ کاتالوگ قابل تنظیم' : 'عمر تا آخرین ثبت کیلومتر'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${notes} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div></article>`);
-    }
-    return cards;
-  }
-
-  function renderDynamicMaintenanceCards(config, events, currentOdo, scheduled) {
+  function renderInstalledMaintenanceCards(config, events, currentOdo) {
     const catalog = config?.partCatalog || {};
-    const categoryLookup = catalog.categories || {};
-    const latestByKey = new Map();
-    const stableKey = event => {
-      if (event.componentKey) return `component:${event.componentKey}`;
-      if (event.serviceKey) return `schedule:${event.serviceKey}`;
-      if (event.serviceCatalogKey) return `catalog-service:${event.serviceCatalogKey}`;
-      if (event.type === 'wash') return 'activity:car-wash';
-      const label = String(event.componentName || event.serviceLabel || event.title || event.description || event.type).trim().toLowerCase();
-      return `${event.type || 'activity'}:${label}`;
-    };
-    const sourceEvents = events.filter(event => ['service','repair','wash','issue'].includes(event.type) || (event.type === 'part' && event.componentKey && event.componentReplaced));
-    sourceEvents.sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event => {
-      const key = stableKey(event);
-      // Completed maintenance is rendered by the matching schedule card; unresolved issues stay visible.
-      if (event.type === 'part' && event.componentKey && event.componentReplaced && catalog.items?.[event.componentKey]) return;
-      const matchedSchedule = [event.serviceKey, event.serviceCatalogKey, event.componentKey].filter(Boolean).find(scheduleKey => scheduled[scheduleKey]);
-      if (matchedSchedule && isMaintenanceCompletionForKey(event, matchedSchedule)) return;
-      latestByKey.set(key, event);
-    });
-    return [...latestByKey.entries()].sort((a,b)=>eventEpoch(b[1])-eventEpoch(a[1])).map(([stable,event]) => {
-      let key = event.componentKey || event.serviceKey || event.serviceCatalogKey || stable;
-      const component = catalog.items?.[event.componentKey || event.serviceKey] || null;
-      const catalogService = catalog.services?.[event.serviceCatalogKey] || null;
-      const label = event.componentName || event.serviceLabel || component?.label || catalogService?.label || event.title || event.type;
-      const categoryKey = component?.category || catalogService?.category || event.componentCategory || (event.type === 'wash' ? 'body' : event.type === 'issue' ? 'diagnostics' : 'service');
-      const category = categoryLookup[categoryKey] || { label: categoryKey || 'نگهداری', icon: '🧰', theme: '#42e8b4' };
-      const plan = scheduled[key] || config?.maintenanceOverrides?.[key] || component || catalogService || {};
-      const intervalKm = Number(plan.intervalKm) || 0;
-      const intervalDays = Number(plan.intervalDays) || 0;
-      const kmSince = currentOdo != null && event.odometerKm != null && Number.isFinite(Number(event.odometerKm)) ? Math.max(0,currentOdo - Number(event.odometerKm)) : null;
-      const daysSince = event.date || event.occurredAt ? Math.max(0,daysBetween(String(event.date || event.occurredAt).slice(0,10),localDateString(new Date()))) : null;
-      const hasInterval = (intervalKm > 0 || intervalDays > 0) && plan.mode !== 'condition';
-      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
-      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
-      const overdue = hasInterval && ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0));
-      const near = hasInterval && !overdue && ((remainingKm != null && remainingKm <= Math.max(500,intervalKm*.1)) || (remainingDays != null && remainingDays <= 14));
-      let status = hasInterval ? (overdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'برنامه‌ریزی‌شده') : 'ثبت‌شده / پایش عمر';
-      if (event.type === 'issue') status = event.status === 'fixed' ? 'رفع‌شده' : 'خرابی باز';
-      const statusClass = event.type === 'issue' && event.status !== 'fixed' ? 'danger' : hasInterval && overdue ? 'danger' : hasInterval && near ? 'warn' : 'ok';
-      const headline = hasInterval ? (remainingKm != null ? `${formatNumber(Math.max(0,remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0,remainingDays))} روز` : 'موعد نامشخص') : (kmSince != null ? `${formatNumber(kmSince)} km` : `${formatNumber(daysSince || 0)} روز`);
-      const subline = hasInterval ? (overdue ? 'از بازهٔ تنظیم‌شده عبور کرده' : 'تا موعد بعدی') : (kmSince != null ? 'پیمایش از آخرین انجام' : 'مدت از آخرین انجام');
-      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '', intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'بدون بازهٔ ثابت';
-      const detail = [event.jalaliDate || event.date || 'تاریخ نامشخص', event.odometerKm != null ? `${formatNumber(event.odometerKm)} km هنگام ثبت` : '', daysSince != null ? `${formatNumber(daysSince)} روز گذشته` : '', event.actor ? `انجام‌دهنده: ${event.actor}` : '', event.costRial != null ? `${moneyText(Number(event.costRial)/10)} تومان` : '', event.note ? `توضیح: ${event.note}` : '', event.description && event.description !== label ? event.description : '', plan.note ? `برنامه: ${plan.note}` : ''].filter(Boolean).map(escapeHtml).join(' · ');
-      const icon = component?.icon || catalogService?.icon || (event.type === 'wash' ? '🫧' : event.type === 'issue' ? '⚠️' : event.type === 'repair' ? '🛠' : category.icon || '🧰');
+    const items = catalog.items || {};
+    const categories = catalog.categories || {};
+    const scheduled = config?.serviceIntervals || {};
+    const ownership = config?.ownership || {};
+    const purchaseKm = Number(ownership.purchaseOdometerKm ?? config?.vehicle?.purchaseOdometerKm ?? 428000);
+    const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
+    const cards = [];
+    for (const [key, item] of Object.entries(items)) {
+      if (key in scheduled || (item.serviceKey && item.serviceKey in scheduled)) continue;
+      const event = events.filter(e =>
+        ((e.componentKey === key || e.serviceKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'repair' || e.type === 'service' || (e.type === 'issue' && e.status === 'fixed')))
+      ).filter(e => e.status !== 'open').sort((a,b) => eventEpoch(b)-eventEpoch(a))[0] || null;
+      const baseline = !event;
+      const reference = event || { id: `purchase-${key}`, type: 'purchase-baseline', date: purchaseDate, occurredAt: purchaseDate ? `${purchaseDate}T12:00:00+03:30` : null, jalaliDate: purchaseDate || 'از مبنای خرید', odometerKm: purchaseKm, baseline: true };
+      const category = categories[item.category] || { label: item.category || 'قطعه', icon: '🔩', theme: '#36c7e8' };
+      const refKm = Number.isFinite(Number(reference.odometerKm)) ? Number(reference.odometerKm) : null;
+      const kmSince = currentOdo != null && refKm != null ? Number(currentOdo) - refKm : null;
+      const referenceDate = reference.date || String(reference.occurredAt || '').slice(0,10) || null;
+      const daysSince = referenceDate ? Math.max(0, daysBetween(referenceDate, localDateString(new Date()))) : null;
+      const intervalKm = Number(item.intervalKm) || 0;
+      const intervalDays = Number(item.intervalDays) || 0;
+      const hasInterval = item.mode === 'periodic' && (intervalKm > 0 || intervalDays > 0);
+      const remainingKm = hasInterval && intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
+      const remainingDays = hasInterval && intervalDays > 0 && referenceDate ? intervalDays - daysSince : null;
+      const stage = hasInterval ? maintenanceStage(remainingKm, remainingDays, intervalKm, intervalDays) : 'monitor';
+      const status = `${maintenanceStageLabel(stage)}${baseline ? ' · سابقه ندارد' : ''}`;
+      const statusClass = maintenanceStageClass(stage);
+      const headline = hasInterval
+        ? (remainingKm != null ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : `${formatNumber(remainingKm)} km`) : remainingDays != null ? `${formatNumber(Math.max(0, remainingDays))} روز` : 'موعد نامشخص')
+        : (kmSince != null ? `${formatNumber(Math.max(0, kmSince))} km` : 'عمر نامشخص');
+      const subline = hasInterval
+        ? (stage === 'critical' ? 'بسیار فراتر از بازه؛ بررسی فوری' : stage === 'overdue' ? 'از بازهٔ تنظیم‌شده عبور کرده' : stage === 'due' ? 'موعد تعویض/بازدید رسیده' : stage === 'upcoming' ? 'به موعد نزدیک می‌شود' : 'کارکرد از مرجع نگهداری')
+        : (baseline ? 'پایش از کیلومتر خرید؛ نصب/تعویض ثبت نشده' : 'کارکرد پس از نصب ثبت‌شده');
+      const footParts = [];
+      if (baseline) {
+        footParts.push(`سابقه نصب/تعویض ثبت نشده؛ مبنای کیلومتری ${formatNumber(purchaseKm)} km`);
+        footParts.push(purchaseDate ? `تاریخ مبنا: ${escapeHtml(purchaseDate)}` : 'روزهای گذشته از خرید قابل محاسبه نیست');
+      } else {
+        footParts.push(`آخرین ثبت: ${escapeHtml(reference.jalaliDate || reference.date || '—')}`);
+        if (reference.odometerKm != null) footParts.push(`کیلومتر ثبت: ${formatNumber(reference.odometerKm)} km`);
+        if (reference.actor) footParts.push(`شخص: ${escapeHtml(reference.actor)}`);
+        if (reference.brand) footParts.push(`برند: ${escapeHtml(reference.brand)}`);
+        if (reference.model) footParts.push(`مدل: ${escapeHtml(reference.model)}`);
+        if (reference.note) footParts.push(`توضیح: ${escapeHtml(reference.note)}`);
+      }
+      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '', intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'عمرمحور / بازدیدمحور؛ بازه ثابت تعریف نشده';
       const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
-      return `<article class="service-card installed-lifetime-card dynamic-maintenance-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#42e8b4')}"><div class="service-card-head"><span class="service-name">${escapeHtml(icon)} ${escapeHtml(label)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || categoryKey)} · ${escapeHtml(event.title || 'سابقهٔ نگهداری')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ شخصی/کاتالوگ' : 'عمر و سابقه از آخرین ثبت'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${detail} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div><div class="service-dynamic-actions">${(event.componentKey || event.serviceKey || event.serviceCatalogKey) ? `<button type="button" class="component-command-copy" data-component-command="/interval ${escapeAttr(String(event.componentKey || event.serviceKey || event.serviceCatalogKey))} ${intervalKm || 0} ${intervalDays || 0}">تنظیم بازه</button><button type="button" class="component-command-copy" data-component-command="/maintnote ${escapeAttr(String(event.componentKey || event.serviceKey || event.serviceCatalogKey))} | ">افزودن توضیح نگهداری</button>` : `<button type="button" class="component-command-copy" data-component-command="/annotate ${escapeAttr(String(event.id).slice(0,8))} ">افزودن توضیح به این رویداد</button>`}</div></article>`;
-    });
+      cards.push({ rank: maintenanceStageRank(stage), sortKm: remainingKm ?? Infinity, key, html: `<article class="service-card installed-lifetime-card maintenance-${stage}" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(item.note || 'وضعیت از روی سوابق و بازدید واقعی پایش شود.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(hasInterval ? 'وضعیت بازه' : (baseline ? 'از مبنای خرید، نه لزوماً از نصب' : 'از آخرین نصب/تعمیر ثبت‌شده'))}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${escapeHtml(hasInterval ? 'بازهٔ قابل تنظیم' : 'تعریف نشده')}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${footParts.join(' · ')} · ${baseline ? 'تأیید نصب/تعویض با ثبت عملیات لازم است' : `شناسه <code>${escapeHtml(String(reference.id).slice(0,8))}</code>`}</div></article>` });
+    }
+    // Include completed catalog services that do not already have their own primary interval card.
+    const serviceCatalog = catalog.services || {};
+    const serviceKeys = new Set();
+    for (const [key, service] of Object.entries(serviceCatalog)) {
+      if (key in scheduled) continue;
+      const latest = events.filter(e => e.type === 'service' && (e.serviceCatalogKey === key || e.serviceKey === key)).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0] || null;
+      if (!latest) continue;
+      serviceKeys.add(key);
+      const category = categories[service.category] || { label: service.category || 'سرویس', icon: '🧰', theme: '#4ade80' };
+      const kmSince = currentOdo != null && latest.odometerKm != null ? Math.max(0, Number(currentOdo)-Number(latest.odometerKm)) : null;
+      const daysSince = latest.date ? Math.max(0, daysBetween(latest.date, localDateString(new Date()))) : null;
+      cards.push({ rank: 4, sortKm: Infinity, key: `service-${key}`, html: `<article class="service-card installed-lifetime-card maintenance-monitor" style="--service-glow:rgba(93,230,176,.07);--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.icon || category.icon || '🧰')} ${escapeHtml(service.label || key)}</span><span class="service-status ok">🧾 آخرین سرویس ثبت‌شده</span></div><p class="service-description">${escapeHtml(service.note || 'شرح و نتیجهٔ عملیات را در دفتر وقایع بررسی کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${kmSince == null ? '—' : `${formatNumber(kmSince)} km`}</strong><small>از آخرین سرویس</small></div><div class="service-metric"><strong>${daysSince == null ? '—' : `${formatNumber(daysSince)} روز`}</strong><small>از تاریخ ثبت</small></div></div><div class="service-foot">تاریخ: ${escapeHtml(latest.jalaliDate || latest.date || '—')} · ${latest.odometerKm != null ? `کیلومتر: ${formatNumber(latest.odometerKm)} km · ` : ''}شناسه <code>${escapeHtml(String(latest.id).slice(0,8))}</code></div></article>` });
+    }
+    cards.sort((a,b)=>a.rank-b.rank || a.sortKm-b.sortKm || a.key.localeCompare(b.key));
+    return cards.map(item=>item.html);
   }
 
   function renderComponentCatalog() {
@@ -357,16 +360,15 @@
     const filtered = selected === 'all' ? items : items.filter(([, item]) => item.category === selected);
     root.innerHTML = filtered.map(([key, item]) => {
       const category = categories[item.category] || { label: 'سایر', icon: '🔩', theme: '#36c7e8' };
-      const plan = state.config?.serviceIntervals?.[key] || state.config?.maintenanceOverrides?.[key] || item;
-      const isPeriodic = plan.mode === 'periodic' || Number(plan.intervalKm) > 0 || Number(plan.intervalDays) > 0;
-      const interval = [Number(plan.intervalKm) > 0 ? `${formatNumber(plan.intervalKm)} km` : '', Number(plan.intervalDays) > 0 ? `${formatNumber(plan.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || (isPeriodic ? 'بازه تنظیم نشده' : 'عمرمحور / شرط‌محور');
+      const isPeriodic = item.mode === 'periodic';
+      const interval = [Number(item.intervalKm) > 0 ? `${formatNumber(item.intervalKm)} km` : '', Number(item.intervalDays) > 0 ? `${formatNumber(item.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || (isPeriodic ? 'بازه تنظیم نشده' : 'عمرمحور / شرط‌محور');
       const latest = state.events.filter(event => event.componentKey === key && event.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
       const fitment = latest ? `آخرین نصب: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز در سوابق نصب ثبت نشده';
       const technical = [latest?.brand ? `برند ${latest.brand}` : '', latest?.model ? `مدل ${latest.model}` : '', latest?.partNumber ? `کد ${latest.partNumber}` : ''].filter(Boolean).join(' · ');
       const modeLabel = isPeriodic ? 'مصرفی / موعدمحور' : 'عمرمحور / بازدیدمحور';
       const latestDetails = latest && latest.odometerKm != null && calculateOdometer(state.events) != null ? Math.max(0, calculateOdometer(state.events) - Number(latest.odometerKm)) : null;
       const tracking = latest ? (isPeriodic ? `آخرین تعویض ثبت شده${latestDetails != null ? ` · ${formatNumber(latestDetails)} km پیموده‌شده` : ''}` : `مدت ثبت‌شده از نصب: ${formatNumber(daysBetween(latest.date || String(latest.occurredAt).slice(0,10), localDateString(new Date())))} روز${latestDetails != null ? ` · ${formatNumber(latestDetails)} km` : ''}`) : 'برای شروع پایش، نصب/تعویض را ثبت کن';
-      return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(plan.note || item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
+      return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
     }).join('');
   }
 
@@ -404,12 +406,7 @@
     root.innerHTML = services.map(([key,item]) => {
       const category = catalog.categories?.[item.category] || {label:item.category || 'سرویس',icon:'🧰',theme:'#4ade80'};
       const latest = state.events.filter(event => event.type === 'service' && event.serviceCatalogKey === key).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
-      const plan = state.config?.serviceIntervals?.[key] || state.config?.maintenanceOverrides?.[key] || item;
-      const currentOdo = calculateOdometer(state.events);
-      const kmSince = latest && currentOdo != null && latest.odometerKm != null ? Math.max(0,currentOdo-Number(latest.odometerKm)) : null;
-      const daysSince = latest ? Math.max(0,daysBetween(String(latest.date || latest.occurredAt).slice(0,10),localDateString(new Date()))) : null;
-      const interval = [Number(plan.intervalKm)>0?`${formatNumber(plan.intervalKm)} km`:'',Number(plan.intervalDays)>0?`${formatNumber(plan.intervalDays)} روز`:''].filter(Boolean).join(' · ');
-      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(plan.note || item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین انجام: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''} · ${daysSince == null ? '' : `${formatNumber(daysSince)} روز گذشته`}${kmSince == null ? '' : ` · ${formatNumber(kmSince)} km پیمایش`}${latest.actor ? ` · ${escapeHtml(latest.actor)}` : ''}` : 'هنوز سابقه ثبت نشده'}</small>${interval?`<small class="service-last-entry">بازهٔ تنظیم‌شده: ${escapeHtml(interval)}</small>`:''}</div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
+      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین ثبت: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز سابقه ثبت نشده'}</small></div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
     }).join('');
   }
 
@@ -418,500 +415,76 @@
     const intervalLabel = [Number(service.intervalKm) ? `${formatNumber(service.intervalKm)} km` : '', Number(service.intervalDays) ? `${formatNumber(service.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || 'بدون بازه پیش‌فرض';
     const note = service.note ? escapeHtml(service.note) : 'بازه قابل تنظیم';
     const glow = serviceColors[service.category] || serviceColors.service;
-    return `<article class="service-card" style="--service-glow:${glow}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${note}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>بازه تنظیم‌شده</small></div></div><div class="service-progress"><span style="width:${clamp(Number(progress) || 0, 0, 100)}%"></span></div><div class="service-foot">${latest ? foot : 'هیچ سرویس قبلی ثبت نشده؛ این مورد هنوز قابل پیش‌بینی دقیق نیست.'}</div></article>`;
+    return `<article class="service-card" style="--service-glow:${glow}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${note}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>بازه تنظیم‌شده</small></div></div><div class="service-progress"><span style="width:${clamp(Number(progress) || 0, 0, 100)}%"></span></div><div class="service-foot">${latest ? foot : 'سابقه پیدا نشد؛ مبنای خرید برای محاسبه کیلومتر استفاده می‌شود.'}</div></article>`;
   }
 
   function calculateDue(events, config, currentOdo) {
     const result = [];
-    const schedules = { ...(config?.serviceIntervals || {}), ...(config?.maintenanceOverrides || {}) };
-    for (const [key, service] of Object.entries(schedules)) {
-      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
-      if (!latest) continue;
+    const ownership = config?.ownership || {};
+    const purchaseKm = Number(ownership.purchaseOdometerKm ?? 428000);
+    const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
+    const today = localDateString(new Date());
+    for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
+      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || ((e.type === 'part' || e.type === 'repair') && e.status !== 'open' && (e.serviceKey === key || e.componentKey === key) && (e.componentReplaced || e.type === 'repair' || e.status === 'fixed'))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+      const baseline = !latest;
+      const refOdo = latest ? (latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) : null) : purchaseKm;
+      const refDate = latest?.date || (latest?.occurredAt ? String(latest.occurredAt).slice(0,10) : null) || (baseline ? purchaseDate : null);
       const kmInterval = Number(service.intervalKm) || 0;
       const dayInterval = Number(service.intervalDays) || 0;
-      const leftKm = kmInterval > 0 && currentOdo != null && latest.odometerKm !== null && latest.odometerKm !== undefined && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) + kmInterval - currentOdo : null;
-      const nextDate = dayInterval > 0 ? addDays(latest.date || String(latest.occurredAt).slice(0, 10), dayInterval) : null;
-      const leftDays = nextDate ? daysBetween(localDateString(new Date()), nextDate) : null;
+      const leftKm = kmInterval > 0 && currentOdo != null && refOdo != null ? refOdo + kmInterval - currentOdo : null;
+      const dueDate = dayInterval > 0 && refDate ? addDays(refDate, dayInterval) : null;
+      const leftDays = dueDate ? daysBetween(today, dueDate) : null;
       const nearKm = leftKm != null && leftKm <= Math.max(500, kmInterval * .1);
       const nearDays = leftDays != null && leftDays <= 14;
-      if (nearKm || nearDays) result.push({ key, label: service.label || key, overdue: (leftKm != null && leftKm <= 0) || (leftDays != null && leftDays <= 0), leftKm, leftDays, latest });
+      const overdueKm = leftKm != null && leftKm < 0 ? Math.abs(leftKm) : 0;
+      const overdueDays = leftDays != null && leftDays < 0 ? Math.abs(leftDays) : 0;
+      const stage = (overdueKm >= Math.max(1000, kmInterval * .2) && kmInterval > 0) || overdueDays >= 30 ? 'critical'
+        : (leftKm != null && leftKm <= 0) || (leftDays != null && leftDays <= 0) ? 'overdue'
+        : (leftKm != null && kmInterval > 0 && leftKm <= Math.max(100, kmInterval * .02)) || (leftDays != null && leftDays <= 3) ? 'due'
+        : nearKm || nearDays ? 'upcoming' : 'ok';
+      if (stage !== 'ok') result.push({ key, label: service.label || key, stage, overdue: stage === 'overdue' || stage === 'critical', leftKm, leftDays, latest, baseline, intervalKm: kmInterval, intervalDays: dayInterval, refOdo, refDate });
     }
     const catalog = config?.partCatalog || {};
     for (const [key, item] of Object.entries(catalog.items || {})) {
-      if (item.mode !== 'periodic' || schedules[key]) continue;
-      const plan = config?.maintenanceOverrides?.[key] || item;
-      const latest = events.filter(e => e.componentKey === key && e.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
-      if (!latest) continue;
-      const kmInterval = Number(plan.intervalKm) || 0;
-      const dayInterval = Number(plan.intervalDays) || 0;
-      const leftKm = kmInterval > 0 && currentOdo != null && latest.odometerKm != null ? Number(latest.odometerKm) + kmInterval - currentOdo : null;
-      const dueDate = dayInterval > 0 ? addDays(latest.date || String(latest.occurredAt).slice(0,10), dayInterval) : null;
-      const leftDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
-      const nearKm = leftKm != null && leftKm <= Math.max(500,kmInterval*.1);
-      const nearDays = leftDays != null && leftDays <= 14;
-      if (nearKm || nearDays) result.push({ key, label:item.label || key, overdue:(leftKm != null && leftKm <= 0)||(leftDays != null && leftDays <= 0), leftKm,leftDays,latest,category:item.category,component:true });
+      if (item.mode !== 'periodic' || config?.serviceIntervals?.[key]) continue;
+      const latest = events.filter(e => (e.componentKey === key || e.serviceKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'service' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open').sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0] || null;
+      const baseline = !latest;
+      const refOdo = latest ? (latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) : null) : purchaseKm;
+      const refDate = latest?.date || (latest?.occurredAt ? String(latest.occurredAt).slice(0,10) : null) || (baseline ? purchaseDate : null);
+      const kmInterval = Number(item.intervalKm) || 0;
+      const dayInterval = Number(item.intervalDays) || 0;
+      const kmSince = currentOdo != null && refOdo != null ? currentOdo - refOdo : null;
+      const leftKm = kmInterval > 0 && kmSince != null ? kmInterval - kmSince : null;
+      const dueDate = dayInterval > 0 && refDate ? addDays(refDate,dayInterval) : null;
+      const leftDays = dueDate ? daysBetween(today,dueDate) : null;
+      const overdueKm = leftKm != null && leftKm < 0 ? Math.abs(leftKm) : 0;
+      const overdueDays = leftDays != null && leftDays < 0 ? Math.abs(leftDays) : 0;
+      const stage = (overdueKm >= Math.max(1000,kmInterval*.2) && kmInterval>0)||overdueDays>=30 ? 'critical'
+        : (leftKm != null && leftKm <= 0)||(leftDays != null && leftDays <= 0) ? 'overdue'
+        : (leftKm != null && kmInterval>0 && leftKm<=Math.max(100,kmInterval*.02))||(leftDays != null && leftDays<=3) ? 'due'
+        : (leftKm != null && kmInterval>0 && leftKm<=Math.max(500,kmInterval*.1))||(leftDays != null && leftDays<=14) ? 'upcoming' : 'ok';
+      if (stage !== 'ok') result.push({ key, label:item.label || key, stage, overdue:stage==='overdue'||stage==='critical', leftKm,leftDays,latest,baseline,intervalKm:kmInterval,intervalDays:dayInterval,refOdo,refDate,category:item.category,component:true });
     }
-    return result;
-  }
-
-  function renderAnalytics() {
-    const period = state.analyticsPeriod || 'month';
-    const buckets = buildAnalyticsBuckets(period);
-    const distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership);
-    const bucketIndex = timestamp => buckets.findIndex(bucket => timestamp >= bucket.start && timestamp < bucket.end);
-    const eventTime = event => eventEpoch(event);
-    const expenseTime = event => {
-      const value = event.type === 'fine' && event.paid && event.paidAt ? event.paidAt
-        : event.type === 'issue' && Number(event.repairCostRial) > 0 && event.resolvedAt ? event.resolvedAt
-        : event.occurredAt || (event.date ? `${event.date}T${event.time || '12:00'}:00+03:30` : event.createdAt);
-      const t = Date.parse(value || ''); return Number.isFinite(t) ? t : 0;
-    };
-    const rangeEvents = state.events.filter(event => bucketIndex(eventTime(event)) >= 0);
-    const rangeExpenses = state.events.filter(event => isActualExpense(event) && bucketIndex(expenseTime(event)) >= 0);
-    const rangeDistance = distanceEntries.filter(entry => !entry.estimatedHistorical && bucketIndex(eventEpoch(entry)) >= 0);
-    const datasets = buckets.map((bucket, index) => {
-      const items = rangeEvents.filter(event => bucketIndex(eventTime(event)) === index);
-      const costs = rangeExpenses.filter(event => bucketIndex(expenseTime(event)) === index);
-      const dist = rangeDistance.filter(entry => bucketIndex(eventEpoch(entry)) === index);
-      return {
-        month: bucket.key, label: bucket.label, start: bucket.start, end: bucket.end,
-        cost: sum(costs, e => e.costRial) / 10,
-        fuel: sum(items.filter(e => e.type === 'fuel'), e => e.liters),
-        distance: sum(dist, e => e.distanceKm),
-        eventCount: items.length,
-        services: items.filter(e => ['service','part','repair'].includes(e.type)).length,
-        expenses: costs.length,
-        unpaidFines: items.filter(e => e.type === 'fine' && !e.paid).length,
-        fuelCost: sum(items.filter(e => e.type === 'fuel'), e => e.costRial) / 10
-      };
-    });
-    const totalCost = sum(datasets, d => d.cost);
-    const totalFuel = sum(datasets, d => d.fuel);
-    const totalDistance = sum(datasets, d => d.distance);
-    const selectedUnpaid = rangeEvents.filter(e => e.type === 'fine' && !e.paid);
-    const selectedUnpaidRial = sum(selectedUnpaid, e => e.costRial);
-    $('#costChartTotal').textContent = moneyText(totalCost) + ' تومان';
-    $('#fuelChartTotal').textContent = `${formatNumber(totalFuel, 1)} لیتر`;
-    $('#costChart').innerHTML = barChart(datasets, 'cost', { id: 'expense', color: 'cyan', unit: 'تومان', empty: 'در بازه انتخابی هزینه‌ای ثبت نشده است.' });
-    $('#fuelChart').innerHTML = mixedChart(datasets);
-    const periodLabels = { hour: '۲۴ ساعت اخیر', day: '۳۰ روز اخیر', week: '۱۲ هفته اخیر', month: '۱۲ ماه اخیر' };
-    const chartTitles = { hour: ['هزینه به تفکیک ساعت','سوخت و مسافت ساعتی'], day: ['هزینه به تفکیک روز','سوخت و مسافت روزانه'], week: ['هزینه به تفکیک هفته','سوخت و مسافت هفتگی'], month: ['روند هزینه ماهانه','سوخت و مسافت ماهانه'] };
-    const labelRoot = $('#analyticsPeriodLabel'); if (labelRoot) labelRoot.textContent = periodLabels[period] || periodLabels.month;
-    const titles = chartTitles[period] || chartTitles.month;
-    if ($('#costChartTitle')) $('#costChartTitle').textContent = titles[0];
-    if ($('#fuelChartTitle')) $('#fuelChartTitle').textContent = titles[1];
-    const put = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
-    put('#periodEventsNumber', formatNumber(rangeEvents.length));
-    put('#periodDistanceNumber', formatNumber(totalDistance));
-    put('#periodFuelNumber', `${formatNumber(totalFuel, 1)} L`);
-    put('#periodCostNumber', compactMoney(totalCost));
-    put('#periodFineNumber', formatNumber(selectedUnpaid.length));
-    put('#periodFineFoot', selectedUnpaid.length ? `بدهی ثبت‌شده: ${moneyText(selectedUnpaidRial / 10)} تومان` : 'جریمهٔ پرداخت‌نشده در این بازه نیست');
-    put('#periodServiceNumber', formatNumber(sum(datasets, d => d.services)));
-    const currentBucket = datasets[datasets.length - 1];
-    put('#analyticsChartCaption', `${periodLabels[period]} · ${formatNumber(sum(datasets,d=>d.eventCount))} رویداد · ${formatNumber(totalDistance)} کیلومتر · ${moneyText(totalCost)} تومان هزینهٔ پرداخت‌شده`);
-    renderActorInsights(rangeExpenses);
-    renderDriverInsights(rangeDistance);
-    renderDriverTimeline(buckets, rangeDistance);
-    renderCostPerKm(rangeExpenses, rangeDistance);
-    renderAnalyticsCategories(rangeEvents);
-    renderInsights(datasets, period);
-  }
-
-  function buildAnalyticsBuckets(period) {
-    const now = Date.now(), offset = 210 * 60 * 1000, hour = 3600000, day = 86400000;
-    const local = new Date(now + offset);
-    let starts = [], count, base, unit;
-    if (period === 'hour') {
-      count = 24; unit = hour; base = Math.floor((now + offset) / hour) * hour - offset;
-      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
-    } else if (period === 'day') {
-      count = 30; unit = day; base = Math.floor((now + offset) / day) * day - offset;
-      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
-    } else if (period === 'week') {
-      count = 12; unit = 7 * day;
-      const localMidnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - offset;
-      base = localMidnight - ((local.getUTCDay() + 1) % 7) * day;
-      for (let i = count - 1; i >= 0; i--) starts.push(base - i * unit);
-    } else {
-      count = 12;
-      for (let i = count - 1; i >= 0; i--) starts.push(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - i, 1) - offset);
-    }
-    return starts.map((start, index) => {
-      const end = starts[index + 1] || (period === 'month' ? Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 1) - offset : start + unit);
-      const d = new Date(start + offset);
-      const dateString = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-      let label = '';
-      if (period === 'hour') label = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', hourCycle: 'h23' }).format(new Date(start));
-      else if (period === 'day') label = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', day: 'numeric', month: 'numeric' }).format(new Date(start + 12 * hour));
-      else if (period === 'week') label = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', day: 'numeric', month: 'short' }).format(new Date(start + 12 * hour));
-      else label = monthShort(dateString.slice(0,7));
-      return { start, end, key: period + ':' + start, date: dateString, label, period };
-    });
-  }
-
-  function renderAnalyticsCategories(events) {
-    const root = $('#analyticsCategoryBreakdown'); if (!root) return;
-    const counts = new Map();
-    events.forEach(event => { const key = event.type || 'note'; counts.set(key, (counts.get(key) || 0) + 1); });
-    const rows = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
-    if (!rows.length) { root.innerHTML = '<div class="empty-state">در بازهٔ انتخابی رویدادی ثبت نشده است.</div>'; return; }
-    const max = Math.max(1,...rows.map(row=>row[1]));
-    root.innerHTML = rows.map(([type,count],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${typeIcons[type]||'◈'}</i>${escapeHtml(typeLabels[type]||type)}</span><strong>${formatNumber(count)} <small>رویداد</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,count/max*100)}%"></span></div></div>`).join('');
-  }
-
-  function renderDriverTimeline(buckets, distanceEntries) {
-    const root=$('#driverTimelineChart'), legend=$('#driverTimelineLegend');
-    if (!root || !legend) return;
-    const palette=['#42e8bc','#ffad66','#59c8ff','#b6a1ff','#f58fc5','#d2ee77','#ff7b68'];
-    const actors=[...new Set(distanceEntries.map(entry=>String(entry.actor||'من').trim()||'من'))]
-      .map(actor=>({actor,total:sum(distanceEntries.filter(entry=>(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm)}))
-      .sort((a,b)=>b.total-a.total).slice(0,6).map(row=>row.actor);
-    if (!actors.length || !distanceEntries.some(entry=>Number(entry.distanceKm)>0)) {
-      root.innerHTML='<div class="empty-state">برای نمودار پیمایش به حداقل دو ثبت معتبر کیلومترشمار یا یک ثبت مسافت نیاز است. نام شخصی که کیلومتر دوم را می‌فرستد به آن فاصله نسبت داده می‌شود.</div>';
-      legend.innerHTML=''; return;
-    }
-    const values=buckets.map(bucket=>{
-      const row={bucket};
-      actors.forEach(actor=>{row[actor]=sum(distanceEntries.filter(entry=>eventEpoch(entry)>=bucket.start&&eventEpoch(entry)<bucket.end&&(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm)});
-      return row;
-    });
-    const max=niceMax(Math.max(1,...values.map(row=>actors.reduce((total,actor)=>total+(row[actor]||0),0))));
-    const width=760,height=300,left=42,right=12,top=20,bottom=42,plotW=width-left-right,plotH=height-top-bottom,slot=plotW/values.length,barW=Math.min(34,slot*.64);
-    const grid=[0,.25,.5,.75,1].map(t=>{const y=top+plotH*(1-t);return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${left-8}" y="${y+3}" text-anchor="end">${axisShort(max*t)}</text>`}).join('');
-    let bars='';
-    values.forEach((row,i)=>{
-      const x=left+i*slot+(slot-barW)/2; let stackY=top+plotH; let total=0;
-      actors.forEach((actor,index)=>{
-        const value=row[actor]||0; total+=value; if(!(value>0))return;
-        const bh=value/max*plotH; stackY-=bh;
-        bars+=`<rect x="${x}" y="${stackY}" width="${barW}" height="${Math.max(1,bh)}" rx="3" fill="${palette[index%palette.length]}" opacity=".88"><title>${escapeHtml(actor)} · ${escapeHtml(row.bucket.label)} · ${formatNumber(value)} km</title></rect>`;
-      });
-      if(total>0) bars+=`<text class="axis-text" x="${x+barW/2}" y="${height-13}" text-anchor="middle">${escapeHtml(i%(values.length>16?3:values.length>12?2:1)===0||i===values.length-1?row.bucket.label:'')}</text>`;
-      else if(i%(values.length>16?3:values.length>12?2:1)===0||i===values.length-1) bars+=`<text class="axis-text" x="${x+barW/2}" y="${height-13}" text-anchor="middle">${escapeHtml(row.bucket.label)}</text>`;
-    });
-    root.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار میله‌ای انباشته پیمایش خودرو بر اساس راننده در هر بازه">${grid}${bars}</svg>`;
-    legend.innerHTML=actors.map((actor,index)=>`<span class="driver-legend-item"><i style="--driver-color:${palette[index%palette.length]}"></i>${escapeHtml(actor)} <b>${formatNumber(sum(distanceEntries.filter(entry=>(String(entry.actor||'من').trim()||'من')===actor),entry=>entry.distanceKm))} km</b></span>`).join('');
-  }
-
-  function renderActorInsights(expenseEvents = state.events.filter(isActualExpense)) {
-    const root = $('#actorCostBreakdown');
-    if (!root) return;
-    const totals = new Map();
-    expenseEvents.filter(e => isActualExpense(e) && Number(e.costRial) > 0).forEach(event => {
-      const actor = String(event.actor || 'من').trim() || 'من';
-      totals.set(actor, (totals.get(actor) || 0) + Number(event.costRial) / 10);
-    });
-    const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    if (!rows.length) { root.innerHTML = '<div class="empty-state">هزینهٔ پرداخت‌شده‌ای برای مقایسه ثبت نشده است.</div>'; return; }
-    const max = Math.max(...rows.map(row => row[1]), 1);
-    root.innerHTML = rows.map(([actor, cost], index) => `<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index + 1}</i>${escapeHtml(actor)}</span><strong>${escapeHtml(moneyText(cost))} <small>تومان</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2, cost / max * 100)}%"></span></div><small class="actor-cost-share">${formatNumber(cost / rows.reduce((n, row) => n + row[1], 0) * 100, 1)}٪ از هزینه‌های تفکیک‌شده</small></div>`).join('');
-  }
-
-  function renderDriverInsights(distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership)) {
-    const root = $('#actorDistanceBreakdown'); if (!root) return;
-    const totals = new Map();
-    distanceEntries.forEach(entry => { const actor = String(entry.actor || 'من').trim() || 'من'; totals.set(actor, (totals.get(actor) || 0) + (Number(entry.distanceKm) || 0)); });
-    const rows = [...totals.entries()].sort((a,b)=>b[1]-a[1]);
-    if (!rows.length) { root.innerHTML = '<div class="empty-state">برای محاسبه مسافت هر راننده، کیلومترشمار را در دو یا چند نوبت ثبت کن. رانندهٔ ثبت دوم به فاصلهٔ بین دو ثبت منتسب می‌شود.</div>'; return; }
-    const total = rows.reduce((n,row)=>n+row[1],0), max = Math.max(1,...rows.map(row=>row[1]));
-    root.innerHTML = rows.map(([actor,km],index)=>`<div class="actor-cost-row"><div class="actor-cost-head"><span><i>${index+1}</i>${escapeHtml(actor)}</span><strong>${formatNumber(km)} <small>km</small></strong></div><div class="actor-cost-track"><span style="width:${Math.max(2,km/max*100)}%"></span></div><small class="actor-cost-share">${formatNumber(total ? km/total*100 : 0,1)}٪ از مسافت قابل محاسبه در بازه</small></div>`).join('');
-  }
-
-  function renderCostPerKm(expenseEvents = state.events.filter(isActualExpense), distanceEntries = calculateDistanceEntries(state.events, state.config?.ownership)) {
-    const value = $('#costPerKmValue');
-    if (!value) return;
-    const costRial = sum(expenseEvents.filter(e => isActualExpense(e)), e => e.costRial);
-    const kms = distanceEntries.reduce((total, entry) => total + (Number(entry.distanceKm) || 0), 0);
-    if (!(kms > 0) || !(costRial > 0)) {
-      value.textContent = '—';
-      $('#costPerKmFoot').textContent = 'هنوز هم‌زمان هزینه و مسافت قابل محاسبه کافی ثبت نشده است.';
-      $('#costPerKmTrack').style.width = '0%';
-      return;
-    }
-    const perKm = costRial / 10 / kms;
-    value.textContent = formatNumber(Math.round(perKm));
-    $('#costPerKmFoot').textContent = `بر پایه ${formatNumber(Math.round(kms))} کیلومترِ قابل محاسبه و ${moneyText(costRial / 10)} تومان هزینهٔ ثبت‌شده در کل سوابق. این میانگین با کامل‌تر شدن داده‌ها تغییر می‌کند.`;
-    $('#costPerKmTrack').style.width = `${Math.min(100, Math.max(3, Math.log10(perKm + 1) * 15))}%`;
-  }
-
-  function barChart(data, key, options = {}) {
-    if (!data.some(d => d[key] > 0)) return `<div class="empty-state">${options.empty || 'داده‌ای برای نمایش وجود ندارد.'}</div>`;
-    const width = 540, height = 220, left = 12, right = 10, top = 18, bottom = 34;
-    const plotW = width - left - right, plotH = height - top - bottom;
-    const max = niceMax(Math.max(...data.map(d => d[key]), 1));
-    const slot = plotW / data.length, barW = Math.min(34, slot * .58);
-    const lines = [0, .25, .5, .75, 1].map(t => {
-      const y = top + plotH * t;
-      return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${width-right}" y="${y-4}" text-anchor="end">${axisShort(max * (1-t))}</text>`;
-    }).join('');
-    const labelEvery = data.length > 20 ? 4 : data.length > 12 ? 2 : 1;
-    const bars = data.map((d, i) => {
-      const bh = (d[key] / max) * plotH;
-      const x = left + i * slot + (slot - barW) / 2;
-      const y = top + plotH - bh;
-      const tick = i % labelEvery === 0 || i === data.length - 1 ? d.label : '';
-      return `<g><title>${escapeHtml(d.month)}: ${formatNumber(d[key], 1)} ${escapeHtml(options.unit || 'تومان')}</title><rect class="bar-expense" x="${x}" y="${y}" width="${barW}" height="${Math.max(0,bh)}" rx="5"/><text class="axis-text" x="${x+barW/2}" y="${height-10}" text-anchor="middle">${escapeHtml(tick)}</text></g>`;
-    }).join('');
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار میله‌ای هزینه‌های ماهانه"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#71f0f7"/><stop offset="1" stop-color="#2f79d7" stop-opacity=".56"/></linearGradient></defs>${lines}${bars}</svg>`;
-  }
-
-  function mixedChart(data) {
-    if (!data.some(d => d.fuel > 0 || d.distance > 0)) return '<div class="empty-state">برای ساخت نمودار، سوخت‌گیری و مسافت را از تلگرام ثبت کن.</div>';
-    const width = 540, height = 220, left = 13, right = 12, top = 18, bottom = 34;
-    const plotW = width - left - right, plotH = height - top - bottom;
-    const slot = plotW / data.length, barW = Math.min(26, slot * .44);
-    const maxFuel = niceMax(Math.max(...data.map(d => d.fuel), 1));
-    const maxDist = niceMax(Math.max(...data.map(d => d.distance), 1));
-    const grid = [0,.25,.5,.75,1].map(t=>`<line class="chart-gridline" x1="${left}" y1="${top+plotH*t}" x2="${width-right}" y2="${top+plotH*t}"/>`).join('');
-    const bars = data.map((d,i)=>{ const h=d.fuel/maxFuel*plotH; const x=left+i*slot+(slot-barW)/2; const y=top+plotH-h; return `<g><title>${escapeHtml(d.month)}: ${formatNumber(d.fuel,1)} لیتر</title><rect class="bar-fuel" x="${x}" y="${y}" width="${barW}" height="${h}" rx="4"/></g>`;}).join('');
-    const points = data.map((d,i)=>({x:left+i*slot+slot/2,y:top+plotH-(d.distance/maxDist*plotH),d}));
-    const path = points.map((p,i)=>`${i?'L':'M'} ${p.x} ${p.y}`).join(' ');
-    const circles = points.map(p=>`<g><title>${escapeHtml(p.d.month)}: ${formatNumber(p.d.distance)} کیلومتر</title><circle class="point-distance" cx="${p.x}" cy="${p.y}" r="3.5"/></g>`).join('');
-    const labelEvery = data.length > 20 ? 4 : data.length > 12 ? 2 : 1;
-    const labels = data.map((d,i)=>`<text class="axis-text" x="${left+i*slot+slot/2}" y="${height-10}" text-anchor="middle">${escapeHtml(i % labelEvery === 0 || i === data.length - 1 ? d.label : '')}</text>`).join('');
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="نمودار سوخت و مسافت"><defs><linearGradient id="fuelGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffbc79"/><stop offset="1" stop-color="#bb6a4b" stop-opacity=".42"/></linearGradient></defs>${grid}${bars}<path class="line-distance" d="${path}"/>${circles}${labels}</svg><div class="chart-legend"><span><i class="legend-fuel"></i>سوخت (لیتر)</span><span><i class="legend-distance"></i>مسافت (کیلومتر، مقیاس مستقل)</span></div>`;
-  }
-
-  function renderInsights(datasets, period = 'month') {
-    const allFuel = state.events.filter(e => e.type === 'fuel');
-    const fullTanks = allFuel.filter(e => e.fullTank && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
-    let consumption = 'برای محاسبه دقیق‌تر، دو سوخت‌گیری با باک کامل و کیلومترشمار ثبت کن.';
-    if (fullTanks.length >= 2) {
-      const a = fullTanks[fullTanks.length - 2], b = fullTanks[fullTanks.length - 1];
-      const km = Number(b.odometerKm) - Number(a.odometerKm);
-      const liters = allFuel.filter(e => eventEpoch(e) > eventEpoch(a) && eventEpoch(e) <= eventEpoch(b)).reduce((s,e)=>s+(Number(e.liters)||0),0);
-      if (km > 0 && liters > 0) consumption = `در بازه بین دو سوخت‌گیری کامل، حدود ${formatNumber(liters / km * 100, 1)} لیتر در ۱۰۰ کیلومتر ثبت شده است. این برآورد به کامل بودن باک و درست بودن کیلومترها وابسته است.`;
-    }
-    $('#fuelInsight').textContent = consumption;
-    const costByType = {};
-    state.events.filter(isActualExpense).forEach(e => costByType[e.type] = (costByType[e.type] || 0) + (Number(e.costRial) || 0));
-    const top = Object.entries(costByType).sort((a,b)=>b[1]-a[1])[0];
-    $('#topCostInsight').textContent = top ? `${typeLabels[top[0]] || top[0]} با حدود ${moneyText(top[1]/10)} تومان، بیشترین هزینه ثبت‌شده را دارد.` : 'هنوز هزینه کافی برای مقایسه دسته‌ها ثبت نشده است.';
-    const totalDistance = datasets.reduce((s,d)=>s+d.distance,0);
-    const activeMonths = datasets.filter(d=>d.distance>0).length;
-    const windowLabel = ({hour:'ساعت',day:'روز',week:'هفته',month:'ماه'})[period] || 'بازه';
-    $('#driveInsight').textContent = totalDistance ? `در ${formatNumber(activeMonths)} ${windowLabel} از بازهٔ انتخابی، ${formatNumber(totalDistance)} کیلومتر مسافت محاسبه شده است. فاصلهٔ بین دو کیلومترشمار به نام راننده‌ای منظور می‌شود که کیلومتر جدید را ثبت کرده است.` : 'مسافتی در بازه انتخابی محاسبه نشده؛ کیلومترشمار را در چند نوبت با نام راننده ثبت کن یا از /trip استفاده کن.';
-  }
-
-  function renderOverviewExtras() {
-    const recent = state.events.slice().sort((a,b)=>eventEpoch(b)-eventEpoch(a)).slice(0,4);
-    $('#recentEvents').innerHTML = recent.length ? recent.map(event => {
-      const cost = Number(event.costRial) > 0 ? `${moneyText(Number(event.costRial)/10)} تومان` : event.liters != null ? `${formatNumber(event.liters,1)} لیتر` : event.odometerKm != null ? `${formatNumber(event.odometerKm)} km` : 'ثبت اطلاعات';
-      return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(event.title || typeLabels[event.type] || 'رویداد')}</div><div class="mini-row-desc">${escapeHtml((event.description || '').slice(0,72))}</div><div class="mini-row-meta">${escapeHtml(event.jalaliDate || event.date || '—')} · ${escapeHtml(event.time || '')}</div></div><div class="mini-row-value">${escapeHtml(cost)}</div></div>`;
-    }).join('') : '<div class="empty-state">هنوز رویدادی ثبت نشده است؛ از ربات اولین کیلومتر یا سوخت‌گیری را ثبت کن.</div>';
-    const due = calculateDue(state.events, state.config, calculateOdometer(state.events));
-    const alerts = [];
-    due.filter(item=>item.overdue).forEach(item=>alerts.push({kind:'danger',title:`${item.label} عقب‌افتاده`,detail:item.leftKm!=null?`${formatNumber(Math.abs(item.leftKm))} کیلومتر از موعد گذشته`: 'موعد زمانی گذشته است'}));
-    due.filter(item=>!item.overdue).forEach(item=>alerts.push({kind:'warn',title:`${item.label} نزدیک موعد`,detail:item.leftKm!=null?`${formatNumber(Math.max(0,item.leftKm))} کیلومتر باقی مانده`: `${formatNumber(Math.max(0,item.leftDays||0))} روز باقی مانده`}));
-    state.events.filter(e=>e.type==='issue' && e.status!=='fixed').slice(-3).reverse().forEach(e=>alerts.push({kind:'danger',title:'خرابی باز',detail:(e.description||e.title||'نیازمند بررسی').slice(0,90)}));
-    $('#overviewAlerts').innerHTML = alerts.length ? alerts.slice(0,5).map(a=>`<div class="alert-row ${a.kind}"><span class="alert-mark">${a.kind==='danger'?'!':'◷'}</span><div><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.detail)}</small></div></div>`).join('') : '<div class="empty-state">در داده‌های ثبت‌شده هشدار فوری پیدا نشد. این بررسی فقط به رویدادهایی وابسته است که ثبت کرده‌ای.</div>';
-  }
-
-  function getFuelConsumptionHistory() {
-    const fuel = state.events.filter(e => e.type === 'fuel').sort((a,b)=>eventEpoch(a)-eventEpoch(b));
-    const full = fuel.filter(e => e.fullTank && e.odometerKm !== null && e.odometerKm !== undefined && Number.isFinite(Number(e.odometerKm)));
-    const result = [];
-    for (let i=1;i<full.length;i++) {
-      const from=full[i-1], to=full[i];
-      const km=Number(to.odometerKm)-Number(from.odometerKm);
-      const fromTime=eventEpoch(from), toTime=eventEpoch(to);
-      if (!(km>0) || km>5000 || !(toTime>fromTime)) continue;
-      const rows=fuel.filter(e=>eventEpoch(e)>fromTime && eventEpoch(e)<=toTime);
-      const liters=sum(rows,e=>e.liters);
-      if (!(liters>0)) continue;
-      const costRial=sum(rows,e=>e.costRial);
-      result.push({from,to,km,liters,costRial,value:liters/km*100,costPerKm:costRial>0?costRial/10/km:null,fromOdo:Number(from.odometerKm),toOdo:Number(to.odometerKm)});
-    }
-    return result;
-  }
-
-  function getFuelConsumption() {
-    const history=getFuelConsumptionHistory();
-    return history.length ? history[history.length-1] : null;
-  }
-
-  function renderFuelConsumptionChart(history) {
-    const root=$('#fuelConsumptionChart');
-    if (!root) return;
-    if (!history.length) { root.innerHTML='<div class="empty-state">هنوز دو سوخت‌گیری متوالی باک کامل و کیلومتر معتبر برای محاسبه وجود ندارد.</div>'; $('#fuelWeightedAverage').textContent='—'; return; }
-    const width=620,height=250,left=44,right=14,top=22,bottom=45,plotW=width-left-right,plotH=height-top-bottom;
-    const max=niceMax(Math.max(1,...history.map(x=>x.value))*1.12), slot=plotW/history.length, barW=Math.min(42,slot*.58);
-    const grid=[0,.25,.5,.75,1].map(t=>{const y=top+plotH*(1-t);return `<line class="chart-gridline" x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text class="axis-text" x="${left-8}" y="${y+3}" text-anchor="end">${formatNumber(max*t,1)}</text>`}).join('');
-    const bars=history.slice(-18).map((d,i,arr)=>{const x=left+i*(plotW/arr.length)+(plotW/arr.length-barW)/2;const bh=d.value/max*plotH;const y=top+plotH-bh;const label=d.to?.jalaliDate||d.to?.date||'';return `<g><title>${escapeHtml(label)} · ${formatNumber(d.value,2)} L/100 km · ${formatNumber(d.km)} km · ${formatNumber(d.liters,1)} L</title><rect class="fuel-efficiency-bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(1,bh)}" rx="6"/><text class="axis-text" x="${x+barW/2}" y="${height-14}" text-anchor="middle">${escapeHtml(label.slice(-5))}</text></g>`}).join('');
-    root.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="روند اندازه‌گیری مصرف سوخت در لیتر بر صد کیلومتر"><defs><linearGradient id="fuelEfficiencyGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffbd72"/><stop offset="1" stop-color="#ff7c48" stop-opacity=".42"/></linearGradient></defs>${grid}${bars}</svg>`;
-    const km=sum(history,e=>e.km),liters=sum(history,e=>e.liters);
-    $('#fuelWeightedAverage').textContent=km>0?`${formatNumber(liters/km*100,2)} L/100 km`:'—';
-  }
-
-  function renderFuelConsumptionHistory(history) {
-    const root=$('#fuelConsumptionHistory');
-    if (!root) return;
-    if (!history.length) { root.innerHTML='<div class="empty-state">پس از ثبت دو باک کامل با کیلومتر معتبر، جزئیات هر بازه اینجا ظاهر می‌شود.</div>'; return; }
-    root.innerHTML=history.slice(-10).reverse().map((d,index)=>`<article class="fuel-measurement-row"><div class="fuel-measurement-index">${formatNumber(history.length-index)}</div><div class="fuel-measurement-main"><b>${escapeHtml(d.from?.jalaliDate||d.from?.date||'—')} ← ${escapeHtml(d.to?.jalaliDate||d.to?.date||'—')}</b><small>${formatNumber(d.fromOdo)} → ${formatNumber(d.toOdo)} km · پیمایش ${formatNumber(d.km)} km</small><small>مجموع سوخت بین دو باک کامل: ${formatNumber(d.liters,1)} لیتر${d.costRial>0?` · ${moneyText(d.costRial/10)} تومان`:''}</small></div><strong>${formatNumber(d.value,2)}<small> L/100 km</small></strong></article>`).join('');
-  }
-
-  function renderFuelPage() {
-    const fuel = state.events.filter(e=>e.type==='fuel').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    const totalLiters = sum(fuel,e=>e.liters);
-    const totalCost = sum(fuel,e=>e.costRial)/10;
-    const nowMonth = localDateString(new Date()).slice(0,7);
-    const monthFuel = fuel.filter(e=>String(e.date||e.occurredAt||'').slice(0,7)===nowMonth);
-    $('#fuelPageLiters').textContent = formatNumber(totalLiters,1);
-    $('#fuelPageLitersFoot').textContent = `${formatNumber(monthFuel.reduce((n,e)=>n+(Number(e.liters)||0),0),1)} لیتر در ماه جاری`;
-    $('#fuelPageCost').textContent = compactMoney(totalCost);
-    $('#fuelPageCostFoot').textContent = `${formatNumber(fuel.length)} ثبت سوخت‌گیری`;
-    $('#fuelPageStops').textContent = formatNumber(fuel.length);
-    $('#fuelPageStopsFoot').textContent = `${formatNumber(fuel.filter(e=>e.fullTank).length)} بار باک کامل علامت خورده`;
-    const history=getFuelConsumptionHistory();
-    const consumption=history.length?history[history.length-1]:null;
-    const measuredKm=sum(history,e=>e.km), measuredLiters=sum(history,e=>e.liters);
-    const weighted=measuredKm>0?measuredLiters/measuredKm*100:null;
-    $('#fuelPageEfficiency').textContent = consumption ? formatNumber(consumption.value,2) : '—';
-    $('#fuelPageEfficiencyFoot').textContent = consumption ? `آخرین بازه ${formatNumber(consumption.km)} km · میانگین کل ${formatNumber(weighted,2)} L/100 km` : 'برای اندازه‌گیری، دو سوخت‌گیری باک کامل با کیلومتر معتبر لازم است';
-    const months = getMonthKeys(nowMonth,Math.max(6,state.range)).map(month=>({month,label:monthShort(month),liters:sum(fuel.filter(e=>String(e.date||e.occurredAt||'').slice(0,7)===month),e=>e.liters)}));
-    $('#fuelOnlyChart').innerHTML = barChart(months,'liters',{unit:'لیتر',empty:'در این بازه هنوز سوخت‌گیری ثبت نشده است.'});
-    $('#fuelEventList').innerHTML = fuel.length ? fuel.slice(0,8).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.jalaliDate||e.date||'—')} · ${formatNumber(e.liters,1)} لیتر</div><div class="mini-row-desc">${escapeHtml((e.description||'سوخت‌گیری').slice(0,95))}</div><div class="mini-row-meta">${e.odometerKm!=null?`${formatNumber(e.odometerKm)} km`:'بدون کیلومتر'}${e.fullTank?' · باک کامل':''}</div></div><div class="mini-row-value">${Number(e.costRial)>0?`${moneyText(Number(e.costRial)/10)} ت`:'—'}</div></div>`).join('') : '<div class="empty-state">سوخت‌گیری ثبت نشده است. نمونه: <code>20l fuel cost=700000 toman km=156200 full</code></div>';
-    renderFuelConsumptionChart(history);
-    renderFuelConsumptionHistory(history);
-  }
-
-  function expenseCategoryName(event) {
-    if (event.type==='fuel') return 'سوخت';
-    if (event.type==='service') return 'سرویس و نگهداری';
-    if (event.type==='part') return 'قطعات';
-    if (event.type==='wash') return 'شست‌وشو';
-    if (event.type==='fine') return 'جریمه پرداخت‌شده';
-    if (event.type==='issue'||event.type==='repair') return 'تعمیرات';
-    return 'هزینه متفرقه';
-  }
-
-  function renderExpensePage() {
-    const expenses = state.events.filter(e=>isActualExpense(e) && Number(e.costRial)>0).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    const allTotal = sum(expenses,e=>e.costRial)/10;
-    const month = localDateString(new Date()).slice(0,7);
-    const monthRows = expenses.filter(e=>expenseDate(e).slice(0,7)===month);
-    const monthTotal = sum(monthRows,e=>e.costRial)/10;
-    const largest = expenses.slice().sort((a,b)=>(Number(b.costRial)||0)-(Number(a.costRial)||0))[0];
-    $('#expensePageTotal').textContent = compactMoney(allTotal);
-    $('#expensePageTotalFoot').textContent = `${formatNumber(expenses.length)} رویداد با هزینه‌ی حساب‌شده`;
-    $('#expensePageMonthly').textContent = compactMoney(monthTotal);
-    $('#expensePageMonthlyFoot').textContent = `${formatNumber(monthRows.length)} هزینه در ماه جاری`;
-    $('#expensePageLargest').textContent = largest ? compactMoney(Number(largest.costRial)/10) : '—';
-    $('#expensePageLargestFoot').textContent = largest ? `${escapeHtml(largest.title||typeLabels[largest.type]||'رویداد')} · ${escapeHtml(largest.jalaliDate||largest.date||'')}` : 'هنوز هزینه‌ای ثبت نشده';
-    const byCategory = {};
-    expenses.forEach(e=>{const key=expenseCategoryName(e);byCategory[key]=(byCategory[key]||0)+(Number(e.costRial)||0)/10;});
-    const categories = Object.entries(byCategory).sort((a,b)=>b[1]-a[1]);
-    $('#expensePageCategories').textContent = formatNumber(categories.length);
-    const monthly = getMonthKeys(month,Math.max(6,state.range)).map(key=>({month:key,label:monthShort(key),cost:sum(expenses.filter(e=>expenseDate(e).slice(0,7)===key),e=>e.costRial)/10}));
-    $('#expenseMonthlyChart').innerHTML = barChart(monthly,'cost',{unit:'تومان',empty:'در ماه‌های انتخابی هزینه‌ای ثبت نشده است.'});
-    $('#expenseCategoryChart').innerHTML = categories.length ? categories.map(([name,value])=>`<div class="category-row"><div class="category-row-head"><span>${escapeHtml(name)}</span><b>${escapeHtml(moneyText(value))} تومان</b></div><div class="category-track"><span style="width:${clamp(value/(categories[0][1]||1)*100,0,100)}%"></span></div><small>${formatNumber(allTotal?value/allTotal*100:0,1)}٪ از کل هزینه‌های حساب‌شده</small></div>`).join('') : '<div class="empty-state">با ثبت هزینه، تحلیل دسته‌ها در این بخش ظاهر می‌شود.</div>';
-    $('#expenseEventList').innerHTML = expenses.length ? expenses.slice(0,12).map(e=>`<div class="expense-row"><span class="expense-type-icon">${typeIcons[e.type]||'◈'}</span><div class="expense-row-main"><b>${escapeHtml(e.title||typeLabels[e.type]||'هزینه')}</b><small>${escapeHtml(e.jalaliDate||e.date||'—')} · ${escapeHtml(e.description||'').slice(0,100)}</small></div><span class="expense-row-category">${escapeHtml(expenseCategoryName(e))}</span><strong>${moneyText(Number(e.costRial)/10)} <small>تومان</small></strong></div>`).join('') : '<div class="empty-state">هیچ هزینه‌ی پرداخت‌شده‌ای ثبت نشده است.</div>';
-  }
-
-  function renderTrafficDetails() {
-    const unpaid = state.events.filter(e=>e.type==='fine'&&!e.paid).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    $('#unpaidFinesList').innerHTML = unpaid.length ? unpaid.slice(0,10).map(e=>{ const ticketDate=String(e.ticketDate||e.date||e.occurredAt||'').slice(0,10); const deadline=e.deadlineDate || (ticketDate ? addDays(ticketDate,e.appealed&&e.appealDecisionDate?20:60) : null); const days=deadline ? daysBetween(localDateString(new Date()),deadline) : null; const age=ticketDate ? Math.max(0,daysBetween(ticketDate,localDateString(new Date()))) : null; return `<div class="mini-row fine-unpaid-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description||'جریمه')}</div><div class="mini-row-meta">ID ${escapeHtml(String(e.id).slice(0,8))} · ${escapeHtml(e.jalaliDate||ticketDate||'—')}${age!=null?` · ${formatNumber(age)} روز گذشته`:''}</div><div class="mini-row-meta fine-deadline-meta">${days==null?'مهلت نیازمند بررسی':days<0?`⚠️ ${formatNumber(Math.abs(days))} روز از مهلت محاسباتی گذشته`:`⏳ ${formatNumber(days)} روز تا مهلت محاسباتی`}</div></div><div class="mini-row-value">${moneyText(Number(e.costRial||0)/10)} تومان</div></div>`; }).join('') : '<div class="empty-state">جریمه‌ی پرداخت‌نشده‌ای ثبت نشده است.</div>';
-    const open = state.events.filter(e=>e.type==='issue'&&e.status!=='fixed').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    $('#openIssuesList').innerHTML = open.length ? open.slice(0,10).map(e=>`<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.title||'خرابی ثبت‌شده')}</div><div class="mini-row-desc">${escapeHtml((e.description||'').slice(0,100))}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate||e.date||'—')} · ID ${escapeHtml(String(e.id).slice(0,8))}</div></div><div class="mini-row-value negative">باز</div></div>`).join('') : '<div class="empty-state">خرابی بازی ثبت نشده است.</div>';
-  }
-
-  function renderSettingsPage() {
-    const config = state.config || {};
-    const maintenancePlans = { ...(config.maintenanceOverrides || {}), ...(config.serviceIntervals || {}) };
-    const entries = Object.entries(maintenancePlans);
-    $('#settingsServiceTable').innerHTML = entries.length ? `<div class="settings-service-head"><span>سرویس / قطعه</span><span>بازه و یادداشت</span></div>`+entries.map(([key,item])=>`<div class="settings-service-row"><div><b>${escapeHtml(item.label||key)}</b><small>${escapeHtml(key)}${item.note?` · ${escapeHtml(item.note)}`:''}</small></div><span>${Number(item.intervalKm)?`${formatNumber(item.intervalKm)} km`:''}${Number(item.intervalDays)?` · ${formatNumber(item.intervalDays)} روز`:''}${!Number(item.intervalKm)&&!Number(item.intervalDays)?'پایش عمر / شرط‌محور':''}</span></div>`).join('') : '<div class="empty-state">فایل config.json بارگیری نشده است.</div>';
-    const people = Array.isArray(config.people) ? config.people : [];
-    const peopleRoot = $('#settingsPeopleList');
-    if (peopleRoot) peopleRoot.innerHTML = people.length ? people.map((person, index) => `<div class="person-settings-row"><span class="person-settings-index">${index + 1}</span><b>${escapeHtml(person)}</b><small>ACTOR</small></div>`).join('') : '<div class="empty-state">فهرست شخصی هنوز خالی است؛ از دستور /people add نام استفاده کن.</div>';
-    filterGuideCards();
-  }
-
-  async function copyApiExample() {
-    const sample = 'curl -X POST "https://peugeot-206-garage-bot.game-developer-mb.workers.dev/api/v1/record" ^\n  -H "Authorization: Bearer YOUR_API_ACCESS_TOKEN" ^\n  -H "Content-Type: application/json" ^\n  -d "{\\"text\\":\\"20l fuel, cost 700000 toman, km 156200\\"}"';
-    try { await navigator.clipboard.writeText(sample); showToast('نمونه درخواست CMD کپی شد؛ توکن آزمایشی را با Secret خودت جایگزین کن.'); }
-    catch { showToast('کپی خودکار در این مرورگر فعال نیست؛ نمونه را از صفحه انتخاب و کپی کن.'); }
-  }
-
-  function exportCsvAll() {
-    if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','fineLocation','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
-    const csv = [keys.join(','), ...state.events.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
-    downloadBlob(`206-garage-all-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('CSV کامل همه‌ی رویدادها آماده شد.');
-  }
-  function exportJsonAll() {
-    if (!state.events.length) { showToast('هنوز رویدادی برای خروجی وجود ندارد.'); return; }
-    downloadBlob(`206-garage-all-${localDateString(new Date())}.json`,JSON.stringify({exportedAt:new Date().toISOString(),vehicle:state.config?.vehicle||{},events:state.events},null,2),'application/json;charset=utf-8'); showToast('JSON کامل همه‌ی رویدادها آماده شد.');
-  }
-  function exportExpensesCsv() {
-    const rows = state.events.filter(e=>isActualExpense(e)&&Number(e.costRial)>0);
-    if (!rows.length) { showToast('هزینه‌ای برای خروجی وجود ندارد.'); return; }
-    const keys=['id','type','title','description','actor','note','occurredAt','jalaliDate','odometerKm','distanceKm','liters','costRial','paid','paidAt','resolvedAt','updatedAt','revision'];
-    const csv=[keys.join(','),...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
-    downloadBlob(`206-garage-expenses-${localDateString(new Date())}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8'); showToast('خروجی هزینه‌های قابل محاسبه آماده شد.');
-  }
-
-  function updateJournal() {
-    state.shown = 12;
-    const query = ($('#searchInput').value || '').trim().toLowerCase();
-    const type = $('#typeFilter').value;
-    const month = $('#monthFilter').value;
-    state.filtered = state.events.filter(event => {
-      const searchText = [event.title,event.description,event.note,event.actor,event.serviceLabel,event.serviceKey,event.id,event.jalaliDate,event.date,event.costRial,event.odometerKm].join(' ').toLowerCase();
-      const actor = $('#actorFilter')?.value || 'all';
-      return (type === 'all' || event.type === type) && (month === 'all' || String(event.date || event.occurredAt || '').slice(0,7) === month) && (actor === 'all' || String(event.actor || 'من') === actor) && (!query || searchText.includes(query));
-    }).sort((a,b)=>eventEpoch(b)-eventEpoch(a));
-    renderJournal();
-  }
-
-  function renderJournal() {
-    const visible = state.filtered.slice(0, state.shown);
-    $('#resultCount').textContent = `${formatNumber(state.filtered.length)} رویداد`;
-    $('#journalRange').textContent = state.filtered.length ? `${formatNumber(visible.length)} مورد از ${formatNumber(state.filtered.length)} مورد` : 'موردی با این فیلتر پیدا نشد';
-    $('#loadMoreButton').hidden = state.filtered.length <= state.shown;
-    if (!state.filtered.length) {
-      $('#eventList').innerHTML = `<div class="empty-state">${state.events.length ? 'با این جست‌وجو یا فیلتر، رویدادی پیدا نشد.' : 'هنوز رویدادی ثبت نشده است. در تلگرام /start را بزن و اولین کیلومتر یا هزینه را ثبت کن.'}</div>`;
-      return;
-    }
-    $('#eventList').innerHTML = visible.map(event => {
-      const icon = typeIcons[event.type] || '•';
-      const eventDate = escapeHtml(event.jalaliDate || formatJalaliDate(event.date || event.occurredAt));
-      const time = escapeHtml(event.time || formatTime(event.occurredAt));
-      const odo = Number.isFinite(Number(event.odometerKm)) && event.odometerKm !== null ? `<span>⌁ ${formatNumber(event.odometerKm)} km</span>` : '';
-      const liters = Number.isFinite(Number(event.liters)) && event.liters !== null ? `<span>⛽ ${formatNumber(event.liters,1)} L</span>` : '';
-      const distance = Number.isFinite(Number(event.distanceKm)) && event.distanceKm !== null ? `<span>↗ ${formatNumber(event.distanceKm)} km</span>` : '';
-      const status = event.type === 'fine' ? (event.paid ? 'پرداخت‌شده' : 'پرداخت‌نشده') : event.type === 'issue' ? (event.status === 'fixed' ? 'رفع‌شده' : 'باز') : event.type === 'service' ? 'سرویس' : '';
-      const cost = Number(event.costRial) > 0 ? `<div class="event-cost ${event.type==='fine'&&!event.paid?'negative':''}">${escapeHtml(moneyText(Number(event.costRial)/10))}<small>تومان</small></div>` : '<div class="event-cost">—</div>';
-      const desc = (event.description || '').slice(0, 200);
-      const actor = String(event.actor || 'من').trim() || 'من';
-      const note = String(event.note || '').trim();
-      const manageUrl = `https://t.me/Peugeot206GarageBot?start=e_${encodeURIComponent(String(event.id).slice(0,8))}`;
-      return `<article class="event-row"><div class="event-icon ${escapeAttr(event.type)}">${icon}</div><div class="event-body"><div class="event-title-line"><span class="event-title">${escapeHtml(event.title || typeLabels[event.type] || 'رویداد')}</span><span class="event-pill">${escapeHtml(typeLabels[event.type] || event.type || 'رویداد')}</span>${status ? `<span class="event-pill">${escapeHtml(status)}</span>` : ''}</div><div class="event-description">${escapeHtml(desc)}</div><div class="event-person-row"><span class="event-person">👤 ${escapeHtml(actor)}</span>${note ? `<span class="event-note">📝 ${escapeHtml(note)}</span>` : ''}</div><div class="event-meta"><span>${eventDate}</span><span>${time}</span>${odo}${distance}${liters}<span>ID: ${escapeHtml(String(event.id).slice(0,8))}</span></div><a class="event-manage-link" href="${escapeAttr(manageUrl)}" target="_blank" rel="noopener noreferrer">جزئیات و مدیریت در تلگرام ↗</a></div>${cost}</article>`;
-    }).join('');
+    const rank = { critical: 0, overdue: 1, due: 2, upcoming: 3, ok: 4 };
+    return result.sort((a,b)=>(rank[a.stage]??9)-(rank[b.stage]??9) || Math.min(a.leftKm ?? Infinity,(a.leftDays ?? Infinity)*100)-Math.min(b.leftKm ?? Infinity,(b.leftDays ?? Infinity)*100));
   }
 
   function renderOwnershipSummary() {
     const settings = state.config?.ownership || {};
     const purchaseKm = Number(settings.purchaseOdometerKm ?? settings.baselineOdometerKm ?? state.config?.vehicle?.purchaseOdometerKm ?? 428000);
-    const estimateKm = Number(settings.estimatedKmSincePurchaseKm ?? settings.estimatedDrivenSincePurchaseKm ?? 2400);
     const currentKm = calculateOdometer(state.events);
     const actualKm = currentKm != null && currentKm >= purchaseKm ? currentKm - purchaseKm : null;
-    const difference = actualKm == null ? null : actualKm - estimateKm;
     const put = (selector, value) => { const node=$(selector); if(node) node.textContent=value; };
     put('#ownershipPurchaseKm', `${formatNumber(purchaseKm)} km`);
     put('#ownershipCurrentKm', currentKm == null ? '—' : `${formatNumber(currentKm)} km`);
     put('#ownershipDrivenKm', actualKm == null ? '—' : `${formatNumber(actualKm)} km`);
-    put('#ownershipEstimateKm', `${formatNumber(estimateKm)} km`);
     const reconciliation = $('#ownershipReconciliation');
     if (reconciliation) {
-      const warning = difference != null && Math.abs(difference) > 150;
-      reconciliation.classList.toggle('is-warning', warning);
-      reconciliation.classList.toggle('is-confirmed', !warning && difference != null);
-      reconciliation.innerHTML = difference == null
-        ? 'برای محاسبهٔ پیمایش از زمان خرید، ابتدا کیلومترشمار فعلی را ثبت کن.'
-        : warning
-          ? `<b>⚠️ اختلاف نیازمند بررسی</b><span>آخرین عدد ثبت‌شده نسبت به کیلومتر خرید، ${formatNumber(actualKm)} کیلومتر پیمایش نشان می‌دهد؛ درحالی‌که برآورد اولیه ${formatNumber(estimateKm)} کیلومتر بوده است. اختلاف ${difference > 0 ? '+' : ''}${formatNumber(difference)} کیلومتر است. اگر کیلومتر واقعی خودرو ۴۳۰۴۰۰ است، آن را با /km 430400 ثبت کن؛ فقط درصورتی انجام بده که کیلومترشمار خودرو همین عدد را نشان دهد.</span>`
-          : `<b>✓ برآورد با کیلومتر ثبت‌شده نزدیک است</b><span>اختلاف برآورد و کیلومتر واقعی ثبت‌شده ${formatNumber(difference)} کیلومتر است.</span>`;
+      reconciliation.classList.remove('is-warning');
+      reconciliation.classList.toggle('is-confirmed', actualKm != null);
+      reconciliation.innerHTML = actualKm == null
+        ? '<b>⌁ کیلومتر معتبر برای محاسبه موجود نیست</b><span>آخرین کیلومترشمار را ثبت یا اصلاح کن؛ عدد پیمایش ساختگی استفاده نمی‌شود.</span>'
+        : `<b>✓ پیمایش واقعی از مبنای خرید</b><span>${formatNumber(currentKm)} − ${formatNumber(purchaseKm)} = ${formatNumber(actualKm)} کیلومتر. برآورد حدسی در محاسبات وجود ندارد.${settings.purchaseDate ? ` تاریخ خرید ثبت‌شده: ${escapeHtml(settings.purchaseDate)}.` : ' تاریخ خرید ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود.'}</span>`;
     }
     const breakdown = $('#ownershipDriverBreakdown');
     if (breakdown) {
@@ -920,7 +493,7 @@
       entries.forEach(entry => { const name=String(entry.actor||'من').trim()||'من'; grouped[name]=(grouped[name]||0)+(Number(entry.distanceKm)||0); });
       const rows = Object.entries(grouped).filter(([,value])=>value>0).sort((a,b)=>b[1]-a[1]);
       const total = rows.reduce((n,row)=>n+row[1],0);
-      breakdown.innerHTML = rows.length ? rows.map(([name,value],i)=>`<div class="ownership-driver-row"><div class="ownership-driver-title"><b>${escapeHtml(name)}</b><span>${formatNumber(value)} km · ${formatNumber(total?value/total*100:0,1)}٪</span></div><div class="ownership-driver-track"><span style="width:${clamp(total?value/total*100:0,0,100)}%"></span></div>${i===0?'<small>سهم تاریخی از مبنای خرید به نام «من» فرض شده، مگر اینکه شخص دیگری برای کیلومتر ثبت شده باشد.</small>':''}</div>`).join('') : '<div class="empty-state">برای ساخت سهم رانندگی، مبنای خرید و حداقل یک ثبت کیلومتر لازم است.</div>';
+      breakdown.innerHTML = rows.length ? rows.map(([name,value],i)=>`<div class="ownership-driver-row"><div class="ownership-driver-title"><b>${escapeHtml(name)}</b><span>${formatNumber(value)} km · ${formatNumber(total?value/total*100:0,1)}٪</span></div><div class="ownership-driver-track"><span style="width:${clamp(total?value/total*100:0,0,100)}%"></span></div>${i===0?'<small>فاصلهٔ تاریخی از مبنای خرید تا اولین قرائت، بدون جزئیات جداگانهٔ سفرها به نام شخص پیش‌فرض ثبت می‌شود.</small>':''}</div>`).join('') : '<div class="empty-state">برای ساخت سهم رانندگی، مبنای خرید و حداقل یک ثبت کیلومتر لازم است.</div>';
     }
   }
 

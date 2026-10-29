@@ -9,8 +9,8 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  const body = await response.json();
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
- assert.match(body.scheduler, /no scheduled handler/);
- assert.equal(body.version, "3.7.0");
+ assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
+ assert.equal(body.version, "3.9.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.7.0");
+ assert.equal(body.version, "3.9.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -203,7 +203,7 @@ test("Telegram operations list formats IDs and quotes and uses named clickable n
 test("/analysis week sends one textual summary and four PNG charts", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: "2026-10-23T09:00:00+03:30", months: ["2026-10"] })],
-  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400, defaultActor: "من" }, people: [], serviceIntervals: {} })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 428000, defaultActor: "من" }, people: [], serviceIntervals: {} })],
   ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [
    { id: "read-0001-aaaa", type: "odometer", title: "کیلومتر", description: "ثبت کیلومتر", actor: "من", occurredAt: "2026-10-22T08:00:00+03:30", date: "2026-10-22", time: "08:00", odometerKm: 431215, createdAt: "2026-10-22T04:30:00.000Z" },
    { id: "fine-0002-aaaa", type: "fine", title: "جریمه", description: "سرعت", actor: "من", occurredAt: "2026-10-23T08:00:00+03:30", date: "2026-10-23", time: "08:00", costRial: 5000000, paid: false, createdAt: "2026-10-23T04:30:00.000Z" },
@@ -240,7 +240,8 @@ test("/analysis week sends one textual summary and four PNG charts", async () =>
   assert.equal(response.status, 200);
   assert.equal(sentMessages.length, 1, "summary should be sent separately so image captions stay short");
   assert.match(sentMessages[0].text, /گزارش تحلیلی پژو/);
-  assert.match(sentMessages[0].text, /اختلاف دو محاسبه/);
+  assert.match(sentMessages[0].text, /تفریق کیلومتر فعلی منهای کیلومتر خرید/);
+  assert.doesNotMatch(sentMessages[0].text, /۲٬۴۰۰|2400|۹۸۱/);
   assert.equal(sentPhotos.length, 4);
  } finally {
   globalThis.fetch = originalFetch;
@@ -277,10 +278,10 @@ test("/fines reports total, paid and unpaid amounts", async () => {
  }finally{globalThis.fetch=originalFetch;}
 });
 
-test("/purchasekm surfaces the arithmetic discrepancy without changing odometer history", async () => {
+test("/purchasekm reports actual odometer subtraction and never displays the removed estimate", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
-  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400, defaultActor: "من" } })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, defaultActor: "من" } })],
   ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [
    { id: "odometer-current-1111", type: "odometer", description: "/km 431381", actor: "من", occurredAt: "2026-10-23T09:00:00+03:30", date: "2026-10-23", time: "09:00", odometerKm: 431381, createdAt: "2026-10-23T05:30:00.000Z" }
   ] })]
@@ -301,8 +302,9 @@ test("/purchasekm surfaces the arithmetic discrepancy without changing odometer 
   const response=await worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"test-secret"},body:JSON.stringify({update_id:102,message:{message_id:4,date:Math.floor(Date.now()/1000),text:"/purchasekm",from:{id:42},chat:{id:101}}})}),{TELEGRAM_WEBHOOK_SECRET:"test-secret",ALLOWED_TELEGRAM_USER_ID:"42",TELEGRAM_BOT_TOKEN:"fake-telegram-token",GITHUB_TOKEN:"fake-github-token",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
   assert.equal(response.status,200); assert.equal(sentMessages.length,1);
   assert.match(sentMessages[0].text,/۳٬۳۸۱/);
-  assert.match(sentMessages[0].text,/۹۸۱/);
-  assert.match(sentMessages[0].text,/کیلومتر واقعی روی کیلومترشمار را تأیید کن/);
+  assert.match(sentMessages[0].text,/۳٬۳۸۱/);
+  assert.doesNotMatch(sentMessages[0].text,/۲٬۴۰۰|2400|۹۸۱/);
+  assert.match(sentMessages[0].text,/سن تقویمی از خرید محاسبه نمی‌شود/);
   assert.equal(JSON.parse(files.get("data/logs/2026-10.json")).events[0].odometerKm,431381,"report must not rewrite the odometer to fit the estimate");
  }finally{globalThis.fetch=originalFetch;}
 });
@@ -313,7 +315,7 @@ test("repairjob expands a multi-part workshop visit, preserves actor/specs and k
  const log = { schemaVersion: 1, month: "2026-10", events: [{ id: "odo-before-0001", type: "odometer", title: "ثبت کیلومتر", description: "/km 431381", actor: "من", occurredAt: "2026-10-23T10:00:00+03:30", date: "2026-10-23", time: "10:00", odometerKm: 431381, createdAt: "2026-10-23T06:30:00.000Z" }] };
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
-  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: ["بابام"], ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 }, serviceIntervals: { spark_plugs: { label: "شمع موتور", intervalKm: 20000, intervalDays: 730 } }, partCatalog: { categories: {}, items: { spark_plugs: { label: "شمع موتور", category: "engine", mode: "periodic" }, spark_plug_wires: { label: "وایر شمع", category: "engine", mode: "condition" }, battery: { label: "باتری", category: "electrical", mode: "condition" }, thermostat: { label: "ترموستات", category: "cooling", mode: "condition" }, thermostat_housing: { label: "محفظه ترموستات", category: "cooling", mode: "condition" } }, services: { engine_diagnostics: { label: "دیاگ", aliases: ["دیاگ"] }, cooling_fan_adjustment: { label: "تنظیم فن", aliases: ["تنظیم دور فن"] }, cooling_bleed: { label: "هواگیری", aliases: ["هواگیری"] } } } })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: ["بابام"], ownership: { purchaseOdometerKm: 428000 }, serviceIntervals: { spark_plugs: { label: "شمع موتور", intervalKm: 20000, intervalDays: 730 } }, partCatalog: { categories: {}, items: { spark_plugs: { label: "شمع موتور", category: "engine", mode: "periodic" }, spark_plug_wires: { label: "وایر شمع", category: "engine", mode: "condition" }, battery: { label: "باتری", category: "electrical", mode: "condition" }, thermostat: { label: "ترموستات", category: "cooling", mode: "condition" }, thermostat_housing: { label: "محفظه ترموستات", category: "cooling", mode: "condition" } }, services: { engine_diagnostics: { label: "دیاگ", aliases: ["دیاگ"] }, cooling_fan_adjustment: { label: "تنظیم فن", aliases: ["تنظیم دور فن"] }, cooling_bleed: { label: "هواگیری", aliases: ["هواگیری"] } } } })],
   ["data/logs/2026-10.json", JSON.stringify(log)]
  ]);
  const originalFetch = globalThis.fetch;
@@ -548,33 +550,6 @@ test("replacement part counts as the latest maintenance event in the due report"
  }finally{globalThis.fetch=originalFetch;}
 });
 
-test("a completed repair for a scheduled component resets the maintenance countdown", async () => {
- const token="r".repeat(64);
- const files=new Map([
-  ["data/index.json",JSON.stringify({schemaVersion:1,updatedAt:null,months:["2026-10"]})],
-  ["data/config.json",JSON.stringify({schemaVersion:6,vehicle:{label:"206 SD"},people:[],serviceIntervals:{spark_plugs:{label:"شمع موتور",intervalKm:20000,intervalDays:730,mode:"periodic"}},maintenanceOverrides:{},partCatalog:{categories:{engine:{label:"موتور"}},items:{spark_plugs:{label:"شمع موتور",category:"engine",mode:"periodic",intervalKm:20000,intervalDays:730}},services:{}}})],
-  ["data/logs/2026-10.json",JSON.stringify({schemaVersion:1,month:"2026-10",events:[
-   {id:"odo-current-repair-01",type:"odometer",title:"کیلومتر فعلی",description:"قرائت",occurredAt:"2026-10-29T10:00:00+03:30",date:"2026-10-29",odometerKm:451500,createdAt:"2026-10-29T06:30:00.000Z"},
-   {id:"old-plugs-installed-01",type:"part",title:"تعویض شمع",description:"شمع قبلی",componentKey:"spark_plugs",componentReplaced:true,occurredAt:"2026-01-01T10:00:00+03:30",date:"2026-01-01",odometerKm:431462,createdAt:"2026-01-01T06:30:00.000Z"},
-   {id:"plugs-repaired-0001",type:"repair",title:"سرویس شمع",description:"بازدید و سرویس شمع",componentKey:"spark_plugs",occurredAt:"2026-10-27T10:00:00+03:30",date:"2026-10-27",odometerKm:451000,createdAt:"2026-10-27T06:30:00.000Z"}
-  ]})]
- ]);
- const originalFetch=globalThis.fetch;
- globalThis.fetch=async(input,init={})=>{
-  const url=new URL(input);
-  if(!url.hostname.includes("api.github.com"))return new Response("unexpected upstream",{status:500});
-  const path=url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
-  const content=files.get(path);if(content===undefined)return new Response("not found",{status:404});
-  return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}});
- };
- try{
-  const response=await worker.fetch(new Request("https://unit.test/api/v1/due",{headers:{authorization:`Bearer ${token}`}}),{API_ACCESS_TOKEN:token,GITHUB_TOKEN:"fake",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
-  assert.equal(response.status,200);
-  const body=await response.json();
-  assert.ok(!body.dueItems.some(item=>item.key==="spark_plugs"),"the more recent completed repair must be used instead of the old installation");
- }finally{globalThis.fetch=originalFetch;}
-});
-
 function mockContentsApi(files, timeline = [], telegramMessages = []) {
  const originalFetch = globalThis.fetch;
  globalThis.fetch = async (input, init = {}) => {
@@ -608,7 +583,7 @@ function mockContentsApi(files, timeline = [], telegramMessages = []) {
 test("natural no-start report without odometer inherits the latest valid odometer and gets a Telegram acknowledgement", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
-  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 } })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000 } })],
   ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [{ id: "latest-odo-001", type: "odometer", title: "کیلومترشمار", description: "آخرین کیلومتر معتبر", actor: "من", occurredAt: "2026-10-25T10:00:00+03:30", date: "2026-10-25", time: "10:00", odometerKm: 431462, createdAt: "2026-10-25T06:30:00.000Z" }] })]
  ]);
  const timeline = [], telegramMessages = [], restoreFetch = mockContentsApi(files, timeline, telegramMessages);
@@ -636,7 +611,7 @@ test("natural no-start report without odometer inherits the latest valid odomete
 test("fuel report calculates full-to-full consumption from partial fills between checkpoints", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
-  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, estimatedKmSincePurchaseKm: 2400 } })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000 } })],
   ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [
    { id: "full-a-00001", type: "fuel", title: "باک کامل اول", occurredAt: "2026-10-01T10:00:00+03:30", date: "2026-10-01", time: "10:00", odometerKm: 100000, liters: 0, fullTank: true, costRial: null },
    { id: "partial-00001", type: "fuel", title: "سوخت‌گیری نیمه", occurredAt: "2026-10-05T10:00:00+03:30", date: "2026-10-05", time: "10:00", odometerKm: 100180, liters: 10, fullTank: false, costRial: 2000000 },
@@ -660,7 +635,7 @@ test("fuel report calculates full-to-full consumption from partial fills between
 
 test("/km 431503 تعمیر ماشین بابام preserves the driver and note instead of recording only the mileage", async () => {
  const token = "k".repeat(64);
- const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const previousDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
  const files = new Map([
@@ -705,7 +680,7 @@ test("/km 431503 تعمیر ماشین بابام preserves the driver and note 
 
 test("repairjob understands oils, crankshaft sensor and cable prices, labor, and an unresolved gearbox leak without false replacement cost", async () => {
  const token = "j".repeat(64);
- const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const priorDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
  const files = new Map([
@@ -755,7 +730,7 @@ test("repairjob understands oils, crankshaft sensor and cable prices, labor, and
 
 test("natural self car wash is recorded as a wash and keeps the default actor", async () => {
  const token = "w".repeat(64);
- const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
@@ -780,54 +755,163 @@ test("natural self car wash is recorded as a wash and keeps the default actor", 
 });
 
 
-test("/interval can set a per-component lifetime and a maintenance note, and due reports include catalog service entries", async () => {
- const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
- const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
- const prior = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+test("scheduled reminders endpoint requires its shared secret and safely completes without alert spam", async () => {
  const files = new Map([
-  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
-  ["data/config.json", JSON.stringify(config)],
-  [`data/logs/${month}.json`, JSON.stringify({ schemaVersion: 1, month, events: [
-   { id: "service-key-test-0001", type: "service", title: "سرویس دیاگ", description: "دیاگ انجام شد", serviceCatalogKey: "engine_diagnostics", componentName: "دیاگ و عیب‌یابی موتور", occurredAt: `${prior}T10:00:00+03:30`, date: prior, time: "10:00", odometerKm: 431000, createdAt: `${prior}T06:30:00.000Z` },
-   { id: "service-key-test-0002", type: "odometer", title: "کیلومتری فعلی", description: "قرائت", occurredAt: new Date().toISOString(), date: month + "-28", odometerKm: 431600, createdAt: new Date().toISOString() }
-  ] })]
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000, purchaseDate: null } })]
  ]);
- const timeline = [], restoreFetch = mockContentsApi(files, timeline, []);
- const token = "i".repeat(64);
- const env = { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const raw = url.pathname.split("/contents/")[1];
+  const path = raw.split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") {
+   const content = files.get(path);
+   if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (init.method === "PUT") {
+   const body = JSON.parse(init.body);
+   files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+   return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected method", { status: 500 });
+ };
  try {
-  let response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/interval شمع موتور 20000 730 | توضیح: شمع نصب‌شده را پس از بدکارکردن بازدید کن" }) }), env);
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.match(body.reply, /بازهٔ نگهداری ذخیره شد/);
-  let savedConfig = JSON.parse(files.get("data/config.json"));
-  assert.equal(savedConfig.serviceIntervals.spark_plugs.intervalKm, 20000);
-  assert.equal(savedConfig.serviceIntervals.spark_plugs.intervalDays, 730);
-  assert.match(savedConfig.serviceIntervals.spark_plugs.note, /بدکارکردن/);
-
-  response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/maintnote spark_plugs | توضیح شخصی: برای بررسی بعد از سرویس، شمارهٔ قطعه ثبت شود" }) }), env);
-  assert.equal(response.status, 200);
-  savedConfig = JSON.parse(files.get("data/config.json"));
-  assert.match(savedConfig.serviceIntervals.spark_plugs.note, /شمارهٔ قطعه ثبت شود/);
-
-  response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/interval engine_diagnostics 5000 30" }) }), env);
-  assert.equal(response.status, 200);
-  savedConfig = JSON.parse(files.get("data/config.json"));
-  assert.equal(savedConfig.serviceIntervals.engine_diagnostics.intervalDays, 30);
-
-  response = await worker.fetch(new Request("https://unit.test/api/v1/due", { headers: { authorization: `Bearer ${token}` } }), env);
-  assert.equal(response.status, 200);
-  const due = await response.json();
-  assert.ok(Array.isArray(due.dueItems));
-  assert.ok(due.dueItems.some(item => item.key === "engine_diagnostics" && item.overdue), "custom intervals should attach to the most recent serviceCatalogKey and drive reminders");
- } finally { restoreFetch(); }
+  const denied = await worker.fetch(new Request("https://unit.test/scheduled/reminders", { method: "POST" }), {
+   SCHEDULE_TRIGGER_SECRET: "s".repeat(48), GITHUB_TOKEN: "fake", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage"
+  });
+  assert.equal(denied.status, 403);
+  const accepted = await worker.fetch(new Request("https://unit.test/scheduled/reminders", {
+   method: "POST", headers: { "X-Schedule-Secret": "s".repeat(48) }
+  }), {
+   SCHEDULE_TRIGGER_SECRET: "s".repeat(48), GITHUB_TOKEN: "fake", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", ALLOWED_TELEGRAM_USER_ID: "42"
+  });
+  assert.equal(accepted.status, 200);
+  const body = await accepted.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.sent, 0);
+  assert.equal(body.stages, "no-stage-transition");
+ } finally { globalThis.fetch = originalFetch; }
 });
 
-test("maintenance page implementation supports dynamic cards for unconfigured service catalog entries and elapsed distance/day details", () => {
- const app = readFileSync(new URL("../../assets/js/app.js", import.meta.url), "utf8");
- assert.match(app, /function renderDynamicMaintenanceCards/);
- assert.match(app, /serviceCatalogKey/);
- assert.match(app, /روز گذشته/);
- assert.match(app, /از آن زمان/);
- assert.match(app, /maintenanceOverrides/);
+test("unusual fuel volume requires explicit Telegram confirmation before any event is saved", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000 } })]
+ ]);
+ const sentMessages = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname.includes("api.github.com")) {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   if ((init.method || "GET").toUpperCase() === "GET") {
+    const content = files.get(path);
+    if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (init.method === "PUT") {
+    const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sentMessages.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sentMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 980, message: { message_id: 10, date: Math.floor(Date.now()/1000), text: "/fuel 60l", from: { id: 42 }, chat: { id: 101 } } })
+  }), { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-telegram-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  assert.equal(sentMessages.length, 2, "acknowledgement and anomaly confirmation should both be sent");
+  assert.match(sentMessages[1].text, /مقدار سوخت/);
+  assert.ok(sentMessages[1].reply_markup.inline_keyboard.some(row => row.some(button => /ثبت به هر حال/.test(button.text))));
+  assert.deepEqual(JSON.parse(files.get("data/index.json")).months, []);
+  assert.ok(files.has("data/pending-anomaly-reviews.json"));
+  assert.equal([...files.keys()].some(path => /^data\/logs\//.test(path)), false, "no fuel event should be written before confirmation");
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test("/due shows purchase-baseline kilometre lateness and does not invent elapsed days", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], ownership: { purchaseOdometerKm: 428000, purchaseDate: null }, serviceIntervals: { engine_oil: { label: "روغن موتور", intervalKm: 3000, intervalDays: 180 } } })],
+  ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [{ id: "odo-431503-0001", type: "odometer", title: "کیلومتر فعلی", description: "ثبت کیلومتر", occurredAt: "2026-10-29T12:00:00+03:30", date: "2026-10-29", time: "12:00", odometerKm: 431503, actor: "من", createdAt: "2026-10-29T08:30:00.000Z" }] })]
+ ]);
+ const sentMessages = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname.includes("api.github.com")) {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   if ((init.method || "GET").toUpperCase() === "GET") {
+    const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (init.method === "PUT") {
+    const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sentMessages.push(JSON.parse(init.body)); return new Response(JSON.stringify({ ok: true, result: { message_id: sentMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 981, message: { message_id: 11, date: Math.floor(Date.now()/1000), text: "/due", from: { id: 42 }, chat: { id: 101 } } })
+  }), { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-telegram-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0].text, /۵۰۳ km از موعد گذشته/);
+  assert.match(sentMessages[0].text, /روزهای گذشته حدس زده نمی‌شوند/);
+  assert.doesNotMatch(sentMessages[0].text, /۲٬۴۰۰|2400|۹۸۱/);
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test("scheduled reminders notify once per maintenance stage and stay quiet on repeated daily checks", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], ownership: { purchaseOdometerKm: 428000, purchaseDate: null }, serviceIntervals: { engine_oil: { label: "روغن موتور", intervalKm: 3000, intervalDays: 180 } } })],
+  ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [{ id: "odo-reminder-0001", type: "odometer", title: "کیلومتر فعلی", description: "ثبت کیلومتر", occurredAt: "2026-10-29T12:00:00+03:30", date: "2026-10-29", time: "12:00", odometerKm: 431503, actor: "من", createdAt: "2026-10-29T08:30:00.000Z" }] })]
+ ]);
+ const telegramMessages = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname.includes("api.github.com")) {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   if ((init.method || "GET").toUpperCase() === "GET") {
+    const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (init.method === "PUT") {
+    const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   telegramMessages.push(JSON.parse(init.body)); return new Response(JSON.stringify({ ok: true, result: { message_id: telegramMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ try {
+  const env = { SCHEDULE_TRIGGER_SECRET: "r".repeat(48), GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-telegram-token" };
+  const call = () => worker.fetch(new Request("https://unit.test/scheduled/reminders", { method: "POST", headers: { "X-Schedule-Secret": "r".repeat(48) } }), env);
+  const first = await call(); const firstBody = await first.json();
+  assert.equal(firstBody.ok, true); assert.equal(firstBody.sent, 1);
+  assert.equal(telegramMessages.length, 1);
+  assert.match(telegramMessages[0].text, /روغن موتور/);
+  const second = await call(); const secondBody = await second.json();
+  assert.equal(secondBody.ok, true); assert.equal(secondBody.sent, 0);
+  assert.equal(telegramMessages.length, 1, "same stage must not repeat the Telegram reminder");
+ } finally { globalThis.fetch = originalFetch; }
 });
