@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-29T21:36:00+03:30",
+  "updatedAt": "2026-10-29T21:51:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -1317,9 +1317,20 @@
       "description": "35 لیتر بنزین · هزینه 52500 هزار تومان کیلومتر 431581",
       "actor": "من",
       "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "updatedAt": "2026-10-29T21:51:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-10-29T21:51:00+03:30",
+          "by": "telegram",
+          "before": {
+            "costRial": 525000000
+          },
+          "after": {
+            "costRial": 525000
+          }
+        }
+      ],
       "createdAt": "2026-10-29T18:06:01.771Z",
       "occurredAt": "2026-10-29T21:35:00+03:30",
       "date": "2026-10-29",
@@ -1328,7 +1339,7 @@
       "odometerKm": 431581,
       "distanceKm": null,
       "liters": 35,
-      "costRial": 525000000,
+      "costRial": 525000,
       "serviceKey": null,
       "serviceLabel": null,
       "serviceCatalogKey": null,
