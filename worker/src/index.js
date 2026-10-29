@@ -43,7 +43,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.6.0",
+        version: "3.7.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -66,7 +66,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.6.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.7.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
@@ -505,7 +505,8 @@ const COMMAND_ALIASES = {
   trip: "trip", drive: "trip", distance: "trip", مسافت: "trip", سفر: "trip",
   fuel: "fuel", petrol: "fuel", gas: "fuel", refuel: "fuel", بنزین: "fuel", سوخت: "fuel",
   service: "service", maintenance: "service", سرویس: "service", part: "part", قطعه: "part",
-  interval: "interval", reminder: "interval", بازه: "interval", فاصله: "interval",
+  interval: "interval", reminder: "interval", بازه: "interval", فاصله: "interval", lifespan: "interval", عمر: "interval",
+  maintnote: "maintnote", maintenance_note: "maintnote", servicenote: "maintnote", plan_note: "maintnote", توضیح_نگهداری: "maintnote", توضیح_سرویس: "maintnote",
   due: "due", upcoming: "due", service_due: "due", سرویسها: "due", سرویس_ها: "due", موعد: "due",
   summary: "summary", report: "summary", stats: "summary", گزارش: "summary", خلاصه: "summary",
   config: "config", settings: "config", تنظیمات: "config",
@@ -680,6 +681,7 @@ async function processMessage(text, message, env, options = {}) {
     return { text: await recordServiceOrPart(raw || text, text.startsWith("/part") ? "part" : "service", getOccurredAt(text, fromDate), env), keyboard: true };
   }
   if (/^\/interval\b|^\/بازه\b/i.test(text)) return { text: await updateInterval(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/maintnote\b|^\/توضیح_نگهداری\b|^\/توضیح_سرویس\b/i.test(text)) return { text: await updateMaintenanceNote(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
   if (/^\/wash\b|^\/شستشو\b|^\/کارواش\b/i.test(text)) {
     const raw = text.replace(/^\/\S+/, "").trim();
     return { text: await saveEvent({ type: "wash", title: "شست‌وشوی خودرو", description: raw || "شست‌وشوی خودرو", costRial: extractMoneyRial(raw), odometerKm: extractOdometer(raw), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
@@ -799,6 +801,8 @@ function helpText() {
 /due — سرویس‌های نزدیک موعد یا عقب‌افتاده
 /config — تنظیمات و بازه‌های نگهداری
 /interval engine_oil 5000 180 — تنظیم فاصله سرویس
+/interval spark_plugs 20000 730 | توضیح: نوع شمع — تنظیم عمر قطعه یا سرویس
+/maintnote spark_plugs | توضیح برنامه — ثبت توضیح جداگانه برای کارت نگهداری
 
 📦 خروجی
 /export all — CSV همه عملیات
@@ -836,6 +840,8 @@ async function guideMessages(env) {
 /service oil cost=900000 toman km=430000
 /part air_filter cost=250000 toman km=430000
 /interval engine_oil 5000 180
+/interval spark_plugs 20000 730 | توضیح: توضیح مخصوص این قطعه
+/maintnote spark_plugs | توضیح ثابت در کارت نگهداری
 /fine 100000 toman سرعت غیرمجاز
 /fines — مجموع کل، پرداخت‌شده و پرداخت‌نشده
 /paid a1b2c3d4 — ثبت پرداخت جریمه
@@ -1593,23 +1599,98 @@ async function recordRepairJob(rawText, message, env, options = {}) {
 
 
 async function updateInterval(raw, env) {
-  const parts = raw.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return "نمونه: /interval oil 5000 یا /interval engine_oil 5000 180\nعدد اول کیلومتر و عدد دوم (اختیاری) تعداد روز است.";
+  const [mainRaw, ...noteParts] = String(raw || "").split(/\s+\|\s+/);
+  const main = normalizeDigits(mainRaw || "").trim();
+  const match = main.match(/^(.+?)\s+(\d[\d,._]*)(?:\s+(\d[\d,._]*))?\s*$/);
+  if (!match) return `⚙️ تنظیم بازه یا عمر قطعه/سرویس
+نمونه‌ها:
+<code>/interval engine_oil 5000 180</code>
+<code>/interval crankshaft_position_sensor 60000 1460</code>
+<code>/interval شمع موتور 20000 730 | توضیح: نوع شمع و شرایط رانندگی ملاک است</code>
+عدد اول فاصلهٔ کیلومتری و عدد دوم (اختیاری) روز است. برای قطعهٔ عمرمحور که بازهٔ ثابت ندارد از 0 0 استفاده کن.`;
   const config = await readConfig(env);
-  const key = detectServiceKey(parts.slice(0, -1).join(" "), config) || detectServiceKey(parts[0], config);
-  const numbers = parts.map(parseFirstNumber).filter(n => Number.isFinite(n) && n >= 0);
-  if (!key || !config.serviceIntervals?.[key] || numbers.length < 1) return "کلید سرویس یا عدد بازه شناخته نشد. /config را ببین. نمونه: /interval engine_oil 5000 180";
-  const intervalKm = Math.round(numbers[0]);
-  const intervalDays = numbers.length > 1 ? Math.round(numbers[1]) : config.serviceIntervals[key].intervalDays;
-  const updated = await mutateJsonFile(FILE_CONFIG, env, () => config, current => {
-    current.serviceIntervals ||= {};
-    current.serviceIntervals[key] ||= {};
-    current.serviceIntervals[key].intervalKm = intervalKm;
-    current.serviceIntervals[key].intervalDays = intervalDays;
-    current.serviceIntervals[key].updatedAt = nowTehran().iso;
-    return current;
-  });
-  return `✅ بازه «${updated.serviceIntervals[key].label || key}» ذخیره شد.\nهر ${intervalKm ? `${formatNum(intervalKm)} کیلومتر` : "بدون بازه کیلومتری"}${intervalDays ? ` یا ${formatNum(intervalDays)} روز` : ""}\nمقادیر قابل تغییرند و یادآور جایگزین دفترچه یا نظر متخصص نیست.`;
+  const query = match[1].trim();
+  const detected = detectServiceKey(query, config);
+  if (!detected) return `قطعه یا سرویس «${query}» در فرهنگ پروژه پیدا نشد. /catalog و /services را ببین یا ابتدا آن را به دیکشنری اضافه کن.`;
+  const key = String(detected).startsWith("serviceCatalog:") ? String(detected).slice("serviceCatalog:".length) : detected;
+  const numeric = value => Math.max(0, Math.round(Number(String(value || "0").replace(/[,_]/g, "")) || 0));
+  const intervalKm = numeric(match[2]);
+  const intervalDays = match[3] ? numeric(match[3]) : null;
+  const catalogItem = config.partCatalog?.items?.[key] || config.partCatalog?.services?.[key] || {};
+  const existing = config.serviceIntervals?.[key] || config.maintenanceOverrides?.[key] || catalogItem || {};
+  const noteText = noteParts.join(" | ").replace(/^(?:note|توضیح|یادداشت)\s*[:=：]?\s*/i, "").trim();
+  const saved = await mutateJsonFile(FILE_CONFIG, env,
+    () => ({ schemaVersion: 1, serviceIntervals: {}, maintenanceOverrides: {}, people: [] }),
+    current => {
+      current.serviceIntervals ||= {};
+      const existingCurrent = current.serviceIntervals[key] || current.maintenanceOverrides?.[key] || catalogItem || {};
+      current.serviceIntervals[key] = {
+        ...existingCurrent,
+        label: existingCurrent.label || catalogItem.label || key,
+        category: existingCurrent.category || catalogItem.category || "service",
+        icon: existingCurrent.icon || catalogItem.icon || "🧰",
+        intervalKm,
+        intervalDays: intervalDays === null ? (Number(existingCurrent.intervalDays) || 0) : intervalDays,
+        mode: intervalKm > 0 || (intervalDays !== null && intervalDays > 0) || (intervalDays === null && Number(existingCurrent.intervalDays) > 0) ? "periodic" : "condition",
+        note: noteText || existingCurrent.note || catalogItem.note || "",
+        updatedAt: nowTehran().iso
+      };
+      if (current.maintenanceOverrides?.[key]) delete current.maintenanceOverrides[key];
+      return current;
+    });
+  const savedItem = saved.serviceIntervals[key];
+  return `✅ بازهٔ نگهداری ذخیره شد
+
+🔧 مورد: <b>${savedItem.label || key}</b>
+🆔 کلید: <code>${key}</code>
+⌁ بازهٔ کیلومتری: <code>${intervalKm ? `${formatNum(intervalKm)} km` : "بدون بازهٔ کیلومتری"}</code>
+📅 بازهٔ زمانی: <code>${savedItem.intervalDays ? `${formatNum(savedItem.intervalDays)} روز` : "بدون بازهٔ زمانی"}</code>
+📝 توضیح: ${savedItem.note || "ثبت نشده"}
+
+از این پس در کارت نگهداری و گزارش موعد برای این قطعه/سرویس استفاده می‌شود. بازه‌ها یادآور قابل تنظیم‌اند؛ مشخصات سازنده و دفترچهٔ همان تیپ خودرو ملاک نهایی است.`;
+}
+
+async function updateMaintenanceNote(raw, env) {
+  const parts = String(raw || "").split(/\s+\|\s+/);
+  if (parts.length < 2 || !parts.slice(1).join(" | ").trim()) return `📝 افزودن توضیح به برنامهٔ نگهداری
+نمونه:
+<code>/maintnote spark_plugs | شمع نصب‌شده از نوع ایریدیوم؛ بعد از سرویس، وضعیت جرقه بررسی شود</code>
+از کلید قطعه/سرویس استفاده کن؛ توضیح با یادداشت هر عملیات جداگانه ذخیره می‌شود.`;
+  const config = await readConfig(env);
+  const query = parts[0].trim();
+  const detected = detectServiceKey(query, config);
+  if (!detected) return `قطعه یا سرویس «${query}» در فرهنگ پیدا نشد. از /catalog یا /services کلید دقیق را بردار.`;
+  const key = String(detected).startsWith("serviceCatalog:") ? String(detected).slice("serviceCatalog:".length) : detected;
+  const note = parts.slice(1).join(" | ").trim().slice(0, 1200);
+  const catalogItem = config.partCatalog?.items?.[key] || config.partCatalog?.services?.[key] || {};
+  const saved = await mutateJsonFile(FILE_CONFIG, env,
+    () => ({ schemaVersion: 1, serviceIntervals: {}, maintenanceOverrides: {}, people: [] }),
+    current => {
+      current.maintenanceOverrides ||= {};
+      const existing = current.serviceIntervals?.[key] || current.maintenanceOverrides[key] || catalogItem || {};
+      const updated = {
+        ...existing,
+        label: existing.label || catalogItem.label || key,
+        category: existing.category || catalogItem.category || "service",
+        icon: existing.icon || catalogItem.icon || "🧰",
+        intervalKm: Number(existing.intervalKm) || 0,
+        intervalDays: Number(existing.intervalDays) || 0,
+        mode: existing.mode || catalogItem.mode || "condition",
+        note,
+        updatedAt: nowTehran().iso
+      };
+      if (current.serviceIntervals?.[key]) current.serviceIntervals[key] = updated;
+      else current.maintenanceOverrides[key] = updated;
+      return current;
+    });
+  const savedPlan = saved.serviceIntervals?.[key] || saved.maintenanceOverrides?.[key] || {};
+  return `✅ توضیح برنامهٔ نگهداری ذخیره شد
+🔧 مورد: <b>${savedPlan.label || key}</b>
+🆔 کلید: <code>${key}</code>
+📝 توضیح:
+<blockquote>${note}</blockquote>
+
+این توضیح در کارت سرویس/قطعه نمایش داده می‌شود و یادداشت رویدادهای قبلی را تغییر نمی‌دهد.`;
 }
 
 async function saveEvent(input, env) {
@@ -2169,14 +2250,25 @@ async function dueReport(env) {
   return `🧰 وضعیت سرویس‌های پژو ۲۰۶\nکارکرد فعلی: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\n\n` + due.map(d => `${d.overdue ? "🔴 عقب‌افتاده" : "🟠 نزدیک موعد"} · ${d.label}\n${d.kmText}${d.daysText ? `\n${d.daysText}` : ""}`).join("\n\n") + "\n\nبازه‌ها پیش‌فرض و قابل تنظیم‌اند؛ مشخصات دفترچه/موتور خودت ملاک نهایی است.";
 }
 
+function isMaintenanceCompletionForKey(event, key) {
+  const matches = event.serviceKey === key || event.serviceCatalogKey === key || event.componentKey === key;
+  if (!matches) return false;
+  if (event.type === "service" || event.type === "repair" || event.type === "wash") return true;
+  if (event.type === "issue") return event.status === "fixed";
+  if (event.type === "part") return Boolean(event.componentReplaced);
+  return false;
+}
+
 function calculateDueItems(events, config, currentOdo, now) {
   const today = now.date;
   const items = [];
-  for (const [key, interval] of Object.entries(config.serviceIntervals || {})) {
-    const previous = events.filter(e =>
-      (e.type === "service" && e.serviceKey === key) ||
-      (e.type === "part" && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))
-    ).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)))[0];
+  const schedules = { ...(config.serviceIntervals || {}), ...(config.maintenanceOverrides || {}) };
+  for (const [key, interval] of Object.entries(schedules)) {
+    const kmIntervalConfigured = Number(interval.intervalKm) || 0;
+    const dayIntervalConfigured = Number(interval.intervalDays) || 0;
+    if (kmIntervalConfigured <= 0 && dayIntervalConfigured <= 0) continue;
+    const previous = events.filter(e => isMaintenanceCompletionForKey(e, key))
+      .sort((a, b) => String(b.occurredAt || b.createdAt || "").localeCompare(String(a.occurredAt || a.createdAt || "")))[0];
     if (!previous) continue;
     const kmInterval = Number(interval.intervalKm) || 0;
     const dayInterval = Number(interval.intervalDays) || 0;
@@ -2227,9 +2319,10 @@ async function runDueReminders(env) {
 
 async function configReport(env) {
   const config = await readConfig(env);
-  const rows = Object.entries(config.serviceIntervals || {}).map(([key, value]) => `${value.label || key} [${key}]\n${value.intervalKm ? `${formatNum(value.intervalKm)} km` : "بدون فاصله کیلومتری"}${value.intervalDays ? ` · ${formatNum(value.intervalDays)} روز` : ""}`);
+  const plans = { ...(config.maintenanceOverrides || {}), ...(config.serviceIntervals || {}) };
+  const rows = Object.entries(plans).map(([key, value]) => `${value.label || key} [${key}]\n${value.intervalKm ? `${formatNum(value.intervalKm)} km` : "بدون فاصله کیلومتری"}${value.intervalDays ? ` · ${formatNum(value.intervalDays)} روز` : ""}${value.note ? `\n📝 ${value.note}` : ""}`);
   const ownership = getOwnershipSettings(config);
-  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\nکیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km\nبرآورد پیمایش از خرید: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km\n\n${rows.join("\n\n")}\n\nتغییر بازه: /interval engine_oil 5000 180\nتغییر کیلومتر خرید: /purchasekm 428000 estimate=2400\nنام‌های کوتاه انگلیسی و فارسی پشتیبانی می‌شوند.`;
+  return `⚙️ بازه‌های نگهداری قابل ویرایش\nمدل: ${config.vehicle?.label || "Peugeot 206"}\nکیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km\nبرآورد پیمایش از خرید: ${formatNum(ownership.estimatedKmSincePurchaseKm)} km\n\n${rows.join("\n\n")}\n\nتغییر بازه: /interval spark_plugs 20000 730\nتوضیح برنامهٔ نگهداری: /maintnote spark_plugs | توضیح سفارشی\nتغییر کیلومتر خرید: /purchasekm 428000 estimate=2400\nنام‌های کوتاه انگلیسی و فارسی پشتیبانی می‌شوند.`;
 }
 
 async function summaryReport(text, env) {
@@ -2488,10 +2581,10 @@ function detectServiceKeys(text, config) {
   };
   const catalog = config.partCatalog || {};
   for (const [key, item] of Object.entries(catalog.items || {})) {
-    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "", 3);
+    addAliases(key, [key, key.replace(/_/g," "), item.label, ...(item.aliases || [])], "", 3);
   }
   for (const [key, item] of Object.entries(catalog.services || {})) {
-    addAliases(key, [key.replace(/_/g," "), item.label, ...(item.aliases || [])], "serviceCatalog:", 4);
+    addAliases(key, [key, key.replace(/_/g," "), item.label, ...(item.aliases || [])], "serviceCatalog:", 4);
   }
   for (const [key, aliases] of Object.entries(SERVICE_ALIASES)) {
     if (!config.serviceIntervals?.[key] && !catalog.items?.[key]) continue;

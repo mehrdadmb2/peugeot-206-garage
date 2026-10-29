@@ -184,67 +184,85 @@
     $('#statDueFoot').textContent = due.some(x => x.overdue) ? 'حداقل یک سرویس از موعد گذشته' : due.length ? 'سرویس نزدیک موعد را بررسی کن' : 'از داده‌های سرویس ثبت‌شده';
   }
 
+  function isMaintenanceCompletionForKey(event, key) {
+    const matches = event.serviceKey === key || event.serviceCatalogKey === key || event.componentKey === key;
+    if (!matches) return false;
+    if (event.type === 'service' || event.type === 'repair' || event.type === 'wash') return true;
+    if (event.type === 'issue') return event.status === 'fixed';
+    if (event.type === 'part') return Boolean(event.componentReplaced);
+    return false;
+  }
+
   function renderServices() {
     const config = state.config || {};
-    const services = Object.entries(config.serviceIntervals || {});
+    const schedules = { ...(config.serviceIntervals || {}), ...(config.maintenanceOverrides || {}) };
+    const services = Object.entries(schedules);
     const events = state.events;
-    if (!services.length) {
-      const installedCards = renderInstalledMaintenanceCards(config, events, calculateOdometer(events));
-      $('#serviceGrid').innerHTML = installedCards.length
-        ? installedCards.join('')
-        : '<div class="empty-state">فهرست سرویس‌ها در data/config.json پیدا نشد؛ پس از ثبت تعویض قطعه، کارت عمر نصب نیز در اینجا ظاهر می‌شود.</div>';
-      renderComponentCatalog(); renderInstalledComponents(); renderServiceCatalog(); return;
-    }
     const currentOdo = calculateOdometer(events);
-    const cards = services.map(([key, service]) => {
-      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || (e.type === 'part' && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
-      if (!latest) return serviceCard({ key, service, latest: null, status: 'بدون سابقه', statusClass: '', headline: 'ثبت نشده', subline: 'اولین سرویس را در تلگرام ثبت کن', progress: 0, foot: 'تا قبل از ثبت سرویس قبلی، موعد بعدی قابل محاسبه نیست.' });
+    const planCards = services.map(([key, service]) => {
+      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+      if (!latest) return serviceCard({ key, service, latest: null, status: 'بدون سابقه', statusClass: '', headline: 'ثبت نشده', subline: 'اولین سرویس را در تلگرام ثبت کن', progress: 0, foot: 'هنوز انجام/تعویضی ثبت نشده؛ بعد از ثبت، عمر کیلومتری و زمانی نمایش داده می‌شود.' });
       const intervalKm = Number(service.intervalKm) || 0;
       const intervalDays = Number(service.intervalDays) || 0;
-      const remainingKm = intervalKm > 0 && currentOdo != null && latest.odometerKm !== null && latest.odometerKm !== undefined && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) + intervalKm - currentOdo : null;
-      const dueDate = intervalDays > 0 ? addDays(latest.date || String(latest.occurredAt).slice(0, 10), intervalDays) : null;
-      const remainingDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
+      const kmSince = currentOdo != null && latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Math.max(0, currentOdo - Number(latest.odometerKm)) : null;
+      const daysSince = latest.date || latest.occurredAt ? Math.max(0, daysBetween(String(latest.date || latest.occurredAt).slice(0,10), localDateString(new Date()))) : null;
+      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
+      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
       const isOverdue = (remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0);
       const near = !isOverdue && ((remainingKm != null && remainingKm <= Math.max(500, intervalKm * .1)) || (remainingDays != null && remainingDays <= 14));
-      const status = isOverdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'در بازه مجاز';
+      const status = isOverdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : (intervalKm || intervalDays) ? 'در بازه مجاز' : 'آخرین انجام ثبت شده';
       const statusClass = isOverdue ? 'danger' : near ? 'warn' : 'ok';
-      const progress = intervalKm > 0 && remainingKm != null ? clamp((intervalKm - remainingKm) / intervalKm * 100, 0, 100) : (remainingDays != null ? clamp((intervalDays - remainingDays) / intervalDays * 100, 0, 100) : 0);
-      const headline = remainingKm == null ? (remainingDays == null ? 'نامشخص' : `${formatNumber(Math.abs(remainingDays))} روز`) : `${formatNumber(Math.max(0, remainingKm))} km`;
-      const subline = remainingKm != null ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} کیلومتر از موعد گذشته` : 'تا موعد کیلومتری بعدی') : (remainingDays != null ? (remainingDays <= 0 ? `${formatNumber(Math.abs(remainingDays))} روز از موعد گذشته` : 'تا موعد زمانی بعدی') : 'برای محاسبه، کارکرد لازم است');
+      const progress = intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100, 0, 100) : (intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100, 0, 100) : 0);
+      const headline = (intervalKm || intervalDays)
+        ? (remainingKm != null ? `${formatNumber(Math.max(0, remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0, remainingDays))} روز` : 'موعد نامشخص')
+        : (kmSince != null ? `${formatNumber(kmSince)} km` : `${formatNumber(daysSince || 0)} روز`);
+      const subline = (intervalKm || intervalDays)
+        ? (isOverdue ? 'از موعد نگهداری عبور کرده' : intervalKm && remainingKm != null ? 'تا موعد کیلومتری بعدی' : 'تا موعد زمانی بعدی')
+        : 'از آخرین انجام / تعویض';
       const footParts = [];
-      if (latest.odometerKm != null) footParts.push(`آخرین سرویس: ${formatNumber(latest.odometerKm)} km`);
-      footParts.push(`تاریخ: ${escapeHtml(latest.jalaliDate || latest.date || '—')}`);
-      return serviceCard({ key, service, latest, status, statusClass, headline, subline, progress, foot: footParts.join(' · '), remainingKm, remainingDays, currentOdo });
+      footParts.push(`آخرین انجام: ${latest.jalaliDate || latest.date || '—'}`);
+      if (latest.odometerKm != null) footParts.push(`کیلومتر انجام: ${formatNumber(latest.odometerKm)} km`);
+      if (kmSince != null) footParts.push(`از آن زمان ${formatNumber(kmSince)} km`);
+      if (daysSince != null) footParts.push(`${formatNumber(daysSince)} روز گذشته`);
+      if (latest.actor) footParts.push(`انجام‌دهنده: ${latest.actor}`);
+      if (latest.note) footParts.push(`توضیح: ${latest.note}`);
+      return serviceCard({ key, service, latest, status, statusClass, headline, subline, progress, foot: footParts.map(escapeHtml).join(' · '), remainingKm, remainingDays, currentOdo });
     });
-    cards.push(...renderInstalledMaintenanceCards(config, events, currentOdo));
-    $('#serviceGrid').innerHTML = cards.join('');
+    const dynamicCards = renderDynamicMaintenanceCards(config, events, currentOdo, schedules);
+    const installedCards = renderInstalledMaintenanceCards(config, events, currentOdo, schedules);
+    const planRows = services.map(([key], index) => {
+      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0] || null;
+      return { html: planCards[index], latest };
+    });
+    const plansWithHistory = planRows.filter(row => row.latest).sort((a,b)=>eventEpoch(b.latest)-eventEpoch(a.latest)).map(row=>row.html);
+    const plansWithoutHistory = planRows.filter(row => !row.latest).map(row=>row.html);
+    const cards = [...dynamicCards, ...installedCards.reverse(), ...plansWithHistory, ...plansWithoutHistory];
+    $('#serviceGrid').innerHTML = cards.length ? cards.join('') : '<div class="empty-state">هنوز برنامه یا سابقهٔ نگهداری ثبت نشده است. با /service، /part یا /repairjob یک مورد ثبت کن.</div>';
     renderComponentCatalog();
     renderInstalledComponents();
     renderServiceCatalog();
   }
 
-  function renderInstalledMaintenanceCards(config, events, currentOdo) {
+  function renderInstalledMaintenanceCards(config, events, currentOdo, scheduled = { ...(config?.serviceIntervals || {}), ...(config?.maintenanceOverrides || {}) }) {
     const items = config?.partCatalog?.items || {};
     const catalogCategories = config?.partCatalog?.categories || {};
-    const scheduled = config?.serviceIntervals || {};
+    scheduled = scheduled || {};
     const latestByKey = new Map();
     events.filter(event => event.componentKey && event.componentReplaced).sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event=>latestByKey.set(event.componentKey,event));
     const cards = [];
     for (const [key,event] of latestByKey) {
       const item = items[key];
       if (!item) continue;
-      // Consumables with a service-interval card already appear above; add every other
-      // installed component to the maintenance timeline so condition-based parts do not vanish.
-      if (event.serviceKey && scheduled[event.serviceKey]) continue;
-      if (key in scheduled) continue;
+      if ((event.serviceKey && scheduled[event.serviceKey]) || (key in scheduled)) continue;
       const category = catalogCategories[item.category] || { label:item.category || 'قطعه', icon:'🔩', theme:'#36c7e8' };
-      const kmSince = currentOdo != null && event.odometerKm != null ? currentOdo - Number(event.odometerKm) : null;
+      const plan = scheduled[key] || config?.maintenanceOverrides?.[key] || item;
+      const kmSince = currentOdo != null && event.odometerKm != null ? Math.max(0, currentOdo - Number(event.odometerKm)) : null;
       const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(new Date()))) : null;
-      const intervalKm = Number(item.intervalKm) || 0;
-      const intervalDays = Number(item.intervalDays) || 0;
+      const intervalKm = Number(plan.intervalKm) || 0;
+      const intervalDays = Number(plan.intervalDays) || 0;
+      const hasInterval = plan.mode !== 'condition' && (intervalKm > 0 || intervalDays > 0);
       const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
       const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
-      const hasInterval = item.mode === 'periodic' && (intervalKm > 0 || intervalDays > 0);
       const overdue = hasInterval && ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0));
       const near = hasInterval && !overdue && ((remainingKm != null && remainingKm <= Math.max(500,intervalKm*.1)) || (remainingDays != null && remainingDays <= 14));
       const status = hasInterval ? (overdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'در بازه مجاز') : 'پایش عمر / بازدید';
@@ -254,18 +272,73 @@
         : (daysSince != null ? `${formatNumber(daysSince)} روز` : 'عمر ثبت نشده');
       const subline = hasInterval
         ? (overdue ? 'از موعد تعویض عبور کرده' : 'تا بازهٔ نگهداری بعدی')
-        : `${kmSince != null && kmSince >= 0 ? `${formatNumber(kmSince)} km از نصب` : 'کیلومتر نصب موجود نیست'}`;
+        : `${kmSince != null ? `${formatNumber(kmSince)} km از نصب` : 'کیلومتر نصب موجود نیست'}`;
       const notes = [
         `آخرین نصب: ${event.jalaliDate || event.date || '—'}`,
         event.odometerKm != null ? `کیلومتر نصب: ${formatNumber(event.odometerKm)} km` : '',
+        daysSince != null ? `${formatNumber(daysSince)} روز از نصب` : '',
+        event.actor ? `انجام‌دهنده: ${event.actor}` : '',
         event.brand ? `برند: ${event.brand}` : '',
-        event.model ? `مدل: ${event.model}` : ''
+        event.model ? `مدل: ${event.model}` : '',
+        event.note ? `یادداشت: ${event.note}` : '',
+        plan.note ? `برنامه: ${plan.note}` : ''
       ].filter(Boolean).map(escapeHtml).join(' · ');
-      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '',intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'فاصلهٔ تعویض ثابت تنظیم نشده';
+      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '',intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'بازهٔ تعویض تعریف نشده';
       const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
-      cards.push(`<article class="service-card installed-lifetime-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(item.note || 'وضعیت و عمر قطعه را از روی سوابق نصب پایش کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ کاتالوگ قابل تنظیم' : 'عمر تا آخرین ثبت کیلومتر'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${notes} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div></article>`);
+      cards.push(`<article class="service-card installed-lifetime-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(plan.note || item.note || 'وضعیت و عمر قطعه را از روی سوابق نصب پایش کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ کاتالوگ قابل تنظیم' : 'عمر تا آخرین ثبت کیلومتر'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${notes} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div></article>`);
     }
     return cards;
+  }
+
+  function renderDynamicMaintenanceCards(config, events, currentOdo, scheduled) {
+    const catalog = config?.partCatalog || {};
+    const categoryLookup = catalog.categories || {};
+    const latestByKey = new Map();
+    const stableKey = event => {
+      if (event.componentKey) return `component:${event.componentKey}`;
+      if (event.serviceKey) return `schedule:${event.serviceKey}`;
+      if (event.serviceCatalogKey) return `catalog-service:${event.serviceCatalogKey}`;
+      if (event.type === 'wash') return 'activity:car-wash';
+      const label = String(event.componentName || event.serviceLabel || event.title || event.description || event.type).trim().toLowerCase();
+      return `${event.type || 'activity'}:${label}`;
+    };
+    const sourceEvents = events.filter(event => ['service','repair','wash','issue'].includes(event.type) || (event.type === 'part' && event.componentKey && event.componentReplaced));
+    sourceEvents.sort((a,b)=>eventEpoch(a)-eventEpoch(b)).forEach(event => {
+      const key = stableKey(event);
+      // Completed maintenance is rendered by the matching schedule card; unresolved issues stay visible.
+      if (event.type === 'part' && event.componentKey && event.componentReplaced && catalog.items?.[event.componentKey]) return;
+      const matchedSchedule = [event.serviceKey, event.serviceCatalogKey, event.componentKey].filter(Boolean).find(scheduleKey => scheduled[scheduleKey]);
+      if (matchedSchedule && isMaintenanceCompletionForKey(event, matchedSchedule)) return;
+      latestByKey.set(key, event);
+    });
+    return [...latestByKey.entries()].sort((a,b)=>eventEpoch(b[1])-eventEpoch(a[1])).map(([stable,event]) => {
+      let key = event.componentKey || event.serviceKey || event.serviceCatalogKey || stable;
+      const component = catalog.items?.[event.componentKey || event.serviceKey] || null;
+      const catalogService = catalog.services?.[event.serviceCatalogKey] || null;
+      const label = event.componentName || event.serviceLabel || component?.label || catalogService?.label || event.title || event.type;
+      const categoryKey = component?.category || catalogService?.category || event.componentCategory || (event.type === 'wash' ? 'body' : event.type === 'issue' ? 'diagnostics' : 'service');
+      const category = categoryLookup[categoryKey] || { label: categoryKey || 'نگهداری', icon: '🧰', theme: '#42e8b4' };
+      const plan = scheduled[key] || config?.maintenanceOverrides?.[key] || component || catalogService || {};
+      const intervalKm = Number(plan.intervalKm) || 0;
+      const intervalDays = Number(plan.intervalDays) || 0;
+      const kmSince = currentOdo != null && event.odometerKm != null && Number.isFinite(Number(event.odometerKm)) ? Math.max(0,currentOdo - Number(event.odometerKm)) : null;
+      const daysSince = event.date || event.occurredAt ? Math.max(0,daysBetween(String(event.date || event.occurredAt).slice(0,10),localDateString(new Date()))) : null;
+      const hasInterval = (intervalKm > 0 || intervalDays > 0) && plan.mode !== 'condition';
+      const remainingKm = intervalKm > 0 && kmSince != null ? intervalKm - kmSince : null;
+      const remainingDays = intervalDays > 0 && daysSince != null ? intervalDays - daysSince : null;
+      const overdue = hasInterval && ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0));
+      const near = hasInterval && !overdue && ((remainingKm != null && remainingKm <= Math.max(500,intervalKm*.1)) || (remainingDays != null && remainingDays <= 14));
+      let status = hasInterval ? (overdue ? 'عقب‌افتاده' : near ? 'نزدیک موعد' : 'برنامه‌ریزی‌شده') : 'ثبت‌شده / پایش عمر';
+      if (event.type === 'issue') status = event.status === 'fixed' ? 'رفع‌شده' : 'خرابی باز';
+      const statusClass = event.type === 'issue' && event.status !== 'fixed' ? 'danger' : hasInterval && overdue ? 'danger' : hasInterval && near ? 'warn' : 'ok';
+      const headline = hasInterval ? (remainingKm != null ? `${formatNumber(Math.max(0,remainingKm))} km` : remainingDays != null ? `${formatNumber(Math.max(0,remainingDays))} روز` : 'موعد نامشخص') : (kmSince != null ? `${formatNumber(kmSince)} km` : `${formatNumber(daysSince || 0)} روز`);
+      const subline = hasInterval ? (overdue ? 'از بازهٔ تنظیم‌شده عبور کرده' : 'تا موعد بعدی') : (kmSince != null ? 'پیمایش از آخرین انجام' : 'مدت از آخرین انجام');
+      const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '', intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'بدون بازهٔ ثابت';
+      const detail = [event.jalaliDate || event.date || 'تاریخ نامشخص', event.odometerKm != null ? `${formatNumber(event.odometerKm)} km هنگام ثبت` : '', daysSince != null ? `${formatNumber(daysSince)} روز گذشته` : '', event.actor ? `انجام‌دهنده: ${event.actor}` : '', event.costRial != null ? `${moneyText(Number(event.costRial)/10)} تومان` : '', event.note ? `توضیح: ${event.note}` : '', event.description && event.description !== label ? event.description : '', plan.note ? `برنامه: ${plan.note}` : ''].filter(Boolean).map(escapeHtml).join(' · ');
+      const icon = component?.icon || catalogService?.icon || (event.type === 'wash' ? '🫧' : event.type === 'issue' ? '⚠️' : event.type === 'repair' ? '🛠' : category.icon || '🧰');
+      const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
+      return `<article class="service-card installed-lifetime-card dynamic-maintenance-card" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#42e8b4')}"><div class="service-card-head"><span class="service-name">${escapeHtml(icon)} ${escapeHtml(label)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || categoryKey)} · ${escapeHtml(event.title || 'سابقهٔ نگهداری')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${hasInterval ? 'بازهٔ شخصی/کاتالوگ' : 'عمر و سابقه از آخرین ثبت'}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${detail} · شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code></div><div class="service-dynamic-actions">${(event.componentKey || event.serviceKey || event.serviceCatalogKey) ? `<button type="button" class="component-command-copy" data-component-command="/interval ${escapeAttr(String(event.componentKey || event.serviceKey || event.serviceCatalogKey))} ${intervalKm || 0} ${intervalDays || 0}">تنظیم بازه</button><button type="button" class="component-command-copy" data-component-command="/maintnote ${escapeAttr(String(event.componentKey || event.serviceKey || event.serviceCatalogKey))} | ">افزودن توضیح نگهداری</button>` : `<button type="button" class="component-command-copy" data-component-command="/annotate ${escapeAttr(String(event.id).slice(0,8))} ">افزودن توضیح به این رویداد</button>`}</div></article>`;
+    });
   }
 
   function renderComponentCatalog() {
@@ -284,15 +357,16 @@
     const filtered = selected === 'all' ? items : items.filter(([, item]) => item.category === selected);
     root.innerHTML = filtered.map(([key, item]) => {
       const category = categories[item.category] || { label: 'سایر', icon: '🔩', theme: '#36c7e8' };
-      const isPeriodic = item.mode === 'periodic';
-      const interval = [Number(item.intervalKm) > 0 ? `${formatNumber(item.intervalKm)} km` : '', Number(item.intervalDays) > 0 ? `${formatNumber(item.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || (isPeriodic ? 'بازه تنظیم نشده' : 'عمرمحور / شرط‌محور');
+      const plan = state.config?.serviceIntervals?.[key] || state.config?.maintenanceOverrides?.[key] || item;
+      const isPeriodic = plan.mode === 'periodic' || Number(plan.intervalKm) > 0 || Number(plan.intervalDays) > 0;
+      const interval = [Number(plan.intervalKm) > 0 ? `${formatNumber(plan.intervalKm)} km` : '', Number(plan.intervalDays) > 0 ? `${formatNumber(plan.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || (isPeriodic ? 'بازه تنظیم نشده' : 'عمرمحور / شرط‌محور');
       const latest = state.events.filter(event => event.componentKey === key && event.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
       const fitment = latest ? `آخرین نصب: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز در سوابق نصب ثبت نشده';
       const technical = [latest?.brand ? `برند ${latest.brand}` : '', latest?.model ? `مدل ${latest.model}` : '', latest?.partNumber ? `کد ${latest.partNumber}` : ''].filter(Boolean).join(' · ');
       const modeLabel = isPeriodic ? 'مصرفی / موعدمحور' : 'عمرمحور / بازدیدمحور';
       const latestDetails = latest && latest.odometerKm != null && calculateOdometer(state.events) != null ? Math.max(0, calculateOdometer(state.events) - Number(latest.odometerKm)) : null;
       const tracking = latest ? (isPeriodic ? `آخرین تعویض ثبت شده${latestDetails != null ? ` · ${formatNumber(latestDetails)} km پیموده‌شده` : ''}` : `مدت ثبت‌شده از نصب: ${formatNumber(daysBetween(latest.date || String(latest.occurredAt).slice(0,10), localDateString(new Date())))} روز${latestDetails != null ? ` · ${formatNumber(latestDetails)} km` : ''}`) : 'برای شروع پایش، نصب/تعویض را ثبت کن';
-      return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
+      return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(plan.note || item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
     }).join('');
   }
 
@@ -330,7 +404,12 @@
     root.innerHTML = services.map(([key,item]) => {
       const category = catalog.categories?.[item.category] || {label:item.category || 'سرویس',icon:'🧰',theme:'#4ade80'};
       const latest = state.events.filter(event => event.type === 'service' && event.serviceCatalogKey === key).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
-      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین ثبت: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز سابقه ثبت نشده'}</small></div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
+      const plan = state.config?.serviceIntervals?.[key] || state.config?.maintenanceOverrides?.[key] || item;
+      const currentOdo = calculateOdometer(state.events);
+      const kmSince = latest && currentOdo != null && latest.odometerKm != null ? Math.max(0,currentOdo-Number(latest.odometerKm)) : null;
+      const daysSince = latest ? Math.max(0,daysBetween(String(latest.date || latest.occurredAt).slice(0,10),localDateString(new Date()))) : null;
+      const interval = [Number(plan.intervalKm)>0?`${formatNumber(plan.intervalKm)} km`:'',Number(plan.intervalDays)>0?`${formatNumber(plan.intervalDays)} روز`:''].filter(Boolean).join(' · ');
+      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(plan.note || item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین انجام: ${escapeHtml(latest.jalaliDate || latest.date || '—')}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''} · ${daysSince == null ? '' : `${formatNumber(daysSince)} روز گذشته`}${kmSince == null ? '' : ` · ${formatNumber(kmSince)} km پیمایش`}${latest.actor ? ` · ${escapeHtml(latest.actor)}` : ''}` : 'هنوز سابقه ثبت نشده'}</small>${interval?`<small class="service-last-entry">بازهٔ تنظیم‌شده: ${escapeHtml(interval)}</small>`:''}</div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
     }).join('');
   }
 
@@ -344,8 +423,9 @@
 
   function calculateDue(events, config, currentOdo) {
     const result = [];
-    for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
-      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || (e.type === 'part' && e.componentReplaced && (e.serviceKey === key || e.componentKey === key))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
+    const schedules = { ...(config?.serviceIntervals || {}), ...(config?.maintenanceOverrides || {}) };
+    for (const [key, service] of Object.entries(schedules)) {
+      const latest = events.filter(e => isMaintenanceCompletionForKey(e, key)).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0];
       if (!latest) continue;
       const kmInterval = Number(service.intervalKm) || 0;
       const dayInterval = Number(service.intervalDays) || 0;
@@ -358,11 +438,12 @@
     }
     const catalog = config?.partCatalog || {};
     for (const [key, item] of Object.entries(catalog.items || {})) {
-      if (item.mode !== 'periodic' || config?.serviceIntervals?.[key]) continue;
+      if (item.mode !== 'periodic' || schedules[key]) continue;
+      const plan = config?.maintenanceOverrides?.[key] || item;
       const latest = events.filter(e => e.componentKey === key && e.componentReplaced).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
       if (!latest) continue;
-      const kmInterval = Number(item.intervalKm) || 0;
-      const dayInterval = Number(item.intervalDays) || 0;
+      const kmInterval = Number(plan.intervalKm) || 0;
+      const dayInterval = Number(plan.intervalDays) || 0;
       const leftKm = kmInterval > 0 && currentOdo != null && latest.odometerKm != null ? Number(latest.odometerKm) + kmInterval - currentOdo : null;
       const dueDate = dayInterval > 0 ? addDays(latest.date || String(latest.occurredAt).slice(0,10), dayInterval) : null;
       const leftDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
@@ -737,8 +818,9 @@
 
   function renderSettingsPage() {
     const config = state.config || {};
-    const entries = Object.entries(config.serviceIntervals || {});
-    $('#settingsServiceTable').innerHTML = entries.length ? `<div class="settings-service-head"><span>سرویس / قطعه</span><span>بازه</span></div>`+entries.map(([key,item])=>`<div class="settings-service-row"><div><b>${escapeHtml(item.label||key)}</b><small>${escapeHtml(key)}</small></div><span>${Number(item.intervalKm)?`${formatNumber(item.intervalKm)} km`:''}${Number(item.intervalDays)?` · ${formatNumber(item.intervalDays)} روز`:''}</span></div>`).join('') : '<div class="empty-state">فایل config.json بارگیری نشده است.</div>';
+    const maintenancePlans = { ...(config.maintenanceOverrides || {}), ...(config.serviceIntervals || {}) };
+    const entries = Object.entries(maintenancePlans);
+    $('#settingsServiceTable').innerHTML = entries.length ? `<div class="settings-service-head"><span>سرویس / قطعه</span><span>بازه و یادداشت</span></div>`+entries.map(([key,item])=>`<div class="settings-service-row"><div><b>${escapeHtml(item.label||key)}</b><small>${escapeHtml(key)}${item.note?` · ${escapeHtml(item.note)}`:''}</small></div><span>${Number(item.intervalKm)?`${formatNumber(item.intervalKm)} km`:''}${Number(item.intervalDays)?` · ${formatNumber(item.intervalDays)} روز`:''}${!Number(item.intervalKm)&&!Number(item.intervalDays)?'پایش عمر / شرط‌محور':''}</span></div>`).join('') : '<div class="empty-state">فایل config.json بارگیری نشده است.</div>';
     const people = Array.isArray(config.people) ? config.people : [];
     const peopleRoot = $('#settingsPeopleList');
     if (peopleRoot) peopleRoot.innerHTML = people.length ? people.map((person, index) => `<div class="person-settings-row"><span class="person-settings-index">${index + 1}</span><b>${escapeHtml(person)}</b><small>ACTOR</small></div>`).join('') : '<div class="empty-state">فهرست شخصی هنوز خالی است؛ از دستور /people add نام استفاده کن.</div>';

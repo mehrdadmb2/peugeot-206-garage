@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /no scheduled handler/);
- assert.equal(body.version, "3.6.0");
+ assert.equal(body.version, "3.7.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.6.0");
+ assert.equal(body.version, "3.7.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -548,6 +548,33 @@ test("replacement part counts as the latest maintenance event in the due report"
  }finally{globalThis.fetch=originalFetch;}
 });
 
+test("a completed repair for a scheduled component resets the maintenance countdown", async () => {
+ const token="r".repeat(64);
+ const files=new Map([
+  ["data/index.json",JSON.stringify({schemaVersion:1,updatedAt:null,months:["2026-10"]})],
+  ["data/config.json",JSON.stringify({schemaVersion:6,vehicle:{label:"206 SD"},people:[],serviceIntervals:{spark_plugs:{label:"شمع موتور",intervalKm:20000,intervalDays:730,mode:"periodic"}},maintenanceOverrides:{},partCatalog:{categories:{engine:{label:"موتور"}},items:{spark_plugs:{label:"شمع موتور",category:"engine",mode:"periodic",intervalKm:20000,intervalDays:730}},services:{}}})],
+  ["data/logs/2026-10.json",JSON.stringify({schemaVersion:1,month:"2026-10",events:[
+   {id:"odo-current-repair-01",type:"odometer",title:"کیلومتر فعلی",description:"قرائت",occurredAt:"2026-10-29T10:00:00+03:30",date:"2026-10-29",odometerKm:451500,createdAt:"2026-10-29T06:30:00.000Z"},
+   {id:"old-plugs-installed-01",type:"part",title:"تعویض شمع",description:"شمع قبلی",componentKey:"spark_plugs",componentReplaced:true,occurredAt:"2026-01-01T10:00:00+03:30",date:"2026-01-01",odometerKm:431462,createdAt:"2026-01-01T06:30:00.000Z"},
+   {id:"plugs-repaired-0001",type:"repair",title:"سرویس شمع",description:"بازدید و سرویس شمع",componentKey:"spark_plugs",occurredAt:"2026-10-27T10:00:00+03:30",date:"2026-10-27",odometerKm:451000,createdAt:"2026-10-27T06:30:00.000Z"}
+  ]})]
+ ]);
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{
+  const url=new URL(input);
+  if(!url.hostname.includes("api.github.com"))return new Response("unexpected upstream",{status:500});
+  const path=url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+  const content=files.get(path);if(content===undefined)return new Response("not found",{status:404});
+  return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}});
+ };
+ try{
+  const response=await worker.fetch(new Request("https://unit.test/api/v1/due",{headers:{authorization:`Bearer ${token}`}}),{API_ACCESS_TOKEN:token,GITHUB_TOKEN:"fake",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",GITHUB_BRANCH:"main"});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.ok(!body.dueItems.some(item=>item.key==="spark_plugs"),"the more recent completed repair must be used instead of the old installation");
+ }finally{globalThis.fetch=originalFetch;}
+});
+
 function mockContentsApi(files, timeline = [], telegramMessages = []) {
  const originalFetch = globalThis.fetch;
  globalThis.fetch = async (input, init = {}) => {
@@ -633,7 +660,7 @@ test("fuel report calculates full-to-full consumption from partial fills between
 
 test("/km 431503 تعمیر ماشین بابام preserves the driver and note instead of recording only the mileage", async () => {
  const token = "k".repeat(64);
- const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const previousDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
  const files = new Map([
@@ -678,7 +705,7 @@ test("/km 431503 تعمیر ماشین بابام preserves the driver and note 
 
 test("repairjob understands oils, crankshaft sensor and cable prices, labor, and an unresolved gearbox leak without false replacement cost", async () => {
  const token = "j".repeat(64);
- const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const priorDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
  const files = new Map([
@@ -728,7 +755,7 @@ test("repairjob understands oils, crankshaft sensor and cable prices, labor, and
 
 test("natural self car wash is recorded as a wash and keeps the default actor", async () => {
  const token = "w".repeat(64);
- const config = JSON.parse(readFileSync(new URL("../../data/config.json", import.meta.url), "utf8"));
+ const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
@@ -750,4 +777,57 @@ test("natural self car wash is recorded as a wash and keeps the default actor", 
   const log=JSON.parse(files.get(`data/logs/${month}.json`)); const wash=log.events.find(event=>event.type==="wash");
   assert.ok(wash); assert.equal(wash.actor,"من"); assert.equal(wash.odometerKm,431503); assert.equal(wash.odometerAutoAssigned,true);
  } finally {globalThis.fetch=originalFetch;}
+});
+
+
+test("/interval can set a per-component lifetime and a maintenance note, and due reports include catalog service entries", async () => {
+ const config = JSON.parse(readFileSync(new URL("./fixtures/config.fixture.json", import.meta.url), "utf8"));
+ const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+ const prior = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [month] })],
+  ["data/config.json", JSON.stringify(config)],
+  [`data/logs/${month}.json`, JSON.stringify({ schemaVersion: 1, month, events: [
+   { id: "service-key-test-0001", type: "service", title: "سرویس دیاگ", description: "دیاگ انجام شد", serviceCatalogKey: "engine_diagnostics", componentName: "دیاگ و عیب‌یابی موتور", occurredAt: `${prior}T10:00:00+03:30`, date: prior, time: "10:00", odometerKm: 431000, createdAt: `${prior}T06:30:00.000Z` },
+   { id: "service-key-test-0002", type: "odometer", title: "کیلومتری فعلی", description: "قرائت", occurredAt: new Date().toISOString(), date: month + "-28", odometerKm: 431600, createdAt: new Date().toISOString() }
+  ] })]
+ ]);
+ const timeline = [], restoreFetch = mockContentsApi(files, timeline, []);
+ const token = "i".repeat(64);
+ const env = { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ try {
+  let response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/interval شمع موتور 20000 730 | توضیح: شمع نصب‌شده را پس از بدکارکردن بازدید کن" }) }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.match(body.reply, /بازهٔ نگهداری ذخیره شد/);
+  let savedConfig = JSON.parse(files.get("data/config.json"));
+  assert.equal(savedConfig.serviceIntervals.spark_plugs.intervalKm, 20000);
+  assert.equal(savedConfig.serviceIntervals.spark_plugs.intervalDays, 730);
+  assert.match(savedConfig.serviceIntervals.spark_plugs.note, /بدکارکردن/);
+
+  response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/maintnote spark_plugs | توضیح شخصی: برای بررسی بعد از سرویس، شمارهٔ قطعه ثبت شود" }) }), env);
+  assert.equal(response.status, 200);
+  savedConfig = JSON.parse(files.get("data/config.json"));
+  assert.match(savedConfig.serviceIntervals.spark_plugs.note, /شمارهٔ قطعه ثبت شود/);
+
+  response = await worker.fetch(new Request("https://unit.test/api/v1/record", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ text: "/interval engine_diagnostics 5000 30" }) }), env);
+  assert.equal(response.status, 200);
+  savedConfig = JSON.parse(files.get("data/config.json"));
+  assert.equal(savedConfig.serviceIntervals.engine_diagnostics.intervalDays, 30);
+
+  response = await worker.fetch(new Request("https://unit.test/api/v1/due", { headers: { authorization: `Bearer ${token}` } }), env);
+  assert.equal(response.status, 200);
+  const due = await response.json();
+  assert.ok(Array.isArray(due.dueItems));
+  assert.ok(due.dueItems.some(item => item.key === "engine_diagnostics" && item.overdue), "custom intervals should attach to the most recent serviceCatalogKey and drive reminders");
+ } finally { restoreFetch(); }
+});
+
+test("maintenance page implementation supports dynamic cards for unconfigured service catalog entries and elapsed distance/day details", () => {
+ const app = readFileSync(new URL("../../assets/js/app.js", import.meta.url), "utf8");
+ assert.match(app, /function renderDynamicMaintenanceCards/);
+ assert.match(app, /serviceCatalogKey/);
+ assert.match(app, /روز گذشته/);
+ assert.match(app, /از آن زمان/);
+ assert.match(app, /maintenanceOverrides/);
 });
