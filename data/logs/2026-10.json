@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-10",
-  "updatedAt": "2026-10-27T21:30:00+03:30",
+  "updatedAt": "2026-10-29T15:20:00+03:30",
   "events": [
     {
       "id": "cec163a6-172a-4747-8c0d-83b7dc7e92c0",
@@ -1257,6 +1257,58 @@
       "previousOdometerKm": 431503,
       "distanceActor": "من",
       "deltaSincePreviousKm": 3
+    },
+    {
+      "id": "ad34fa63-7846-40c0-8698-5bff3cf4627f",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-10-29T11:50:31.240Z",
+      "occurredAt": "2026-10-29T15:20:00+03:30",
+      "date": "2026-10-29",
+      "time": "15:20",
+      "jalaliDate": "۱۴۰۵/۰۸/۰۷",
+      "odometerKm": 431521,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "b7f3f4440cffa9c90a652b36b0be8a014ce74039c5794951504d3fc0c3038134"
+      },
+      "previousOdometerKm": 431506,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 15
     }
   ]
 }
