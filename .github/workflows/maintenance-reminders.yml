@@ -1,0 +1,38 @@
+name: Scheduled maintenance reminders
+
+on:
+  schedule:
+    # 09:00 Asia/Tehran (UTC+03:30). GitHub may start scheduled jobs a little late.
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 206-garage-maintenance-reminders
+  cancel-in-progress: false
+
+jobs:
+  notify-due-maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate the schedule secret
+        env:
+          SCHEDULE_TRIGGER_SECRET: ${{ secrets.SCHEDULE_TRIGGER_SECRET }}
+        run: |
+          if [ -z "$SCHEDULE_TRIGGER_SECRET" ]; then
+            echo "Missing repository Actions secret: SCHEDULE_TRIGGER_SECRET" >&2
+            exit 1
+          fi
+      - name: Call the protected Cloudflare Worker endpoint
+        env:
+          SCHEDULE_TRIGGER_SECRET: ${{ secrets.SCHEDULE_TRIGGER_SECRET }}
+          WORKER_URL: https://peugeot-206-garage-bot.game-developer-mb.workers.dev/scheduled/reminders
+        run: |
+          curl --fail-with-body --show-error --silent \
+            --retry 3 --retry-delay 5 --max-time 90 \
+            -X POST "$WORKER_URL" \
+            -H "X-Schedule-Secret: $SCHEDULE_TRIGGER_SECRET" \
+            -H "Accept: application/json"
