@@ -830,12 +830,14 @@
       "officialCurrentAmountRial": null,
       "paidAmountRial": null,
       "paymentReference": null,
-      "status": "open",
+      "status": "fixed",
       "metadata": {
         "source": "telegram-or-api",
         "messageFingerprint": "a80091c307c520d8afe30d07565f2337613b227d4c073f490527afa702bed072"
       },
-      "odometerAutoAssigned": true
+      "odometerAutoAssigned": true,
+      "resolvedAt": "2026-10-29T22:40:00+03:30",
+      "repairDescription": ""
     },
     {
       "id": "72ed932f-dd37-4b7c-a091-186b6809b6c8",
