@@ -10,7 +10,7 @@
     <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/Version-3.9.0-8b5cf6?style=flat-square" alt="Version 3.9.0">
+    <img src="https://img.shields.io/badge/Version-3.9.1-8b5cf6?style=flat-square" alt="Version 3.9.1">
     <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
     <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
@@ -21,9 +21,11 @@
   <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
 </p>
 
-> **نسخهٔ پروژه:** Garage OS 3.9.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+> **نسخهٔ پروژه:** Garage OS 3.9.1 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
 >
-> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است و نسخهٔ 3.9.0 بر ثبت خرابی بدون کیلومتر، مصرف سوخت باک‌به‌باک و تحلیل پیمایش به تفکیک شخص تمرکز دارد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است. نسخهٔ **3.9.1** شامل اصلاح صفحهٔ لودینگ GitHub Pages است: صفحه دیگر پشت لودینگ نامحدود گیر نمی‌کند، درخواست‌های JSON مهلت پایان دارند، و خطای بارگیری با پیام قابل‌بستن و دکمهٔ بارگذاری مجدد نمایش داده می‌شود. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+
+> **رفع گیرکردن صفحهٔ لودینگ:** اگر داده‌های GitHub Pages در دسترس نباشند، پس از ۱۲ ثانیه لایهٔ لودینگ خودکار کنار می‌رود تا کل صفحه مسدود نماند. این به معنی تضمین دسترسی به داده‌ها نیست؛ پیام خطا مسیر بررسی `data/index.json` و `data/config.json` را نشان می‌دهد. فایل‌های CSS/JS نیز با نسخهٔ جدید بارگیری می‌شوند تا کش قدیمی مرورگر کمتر مشکل‌ساز شود.
 
 ---
 

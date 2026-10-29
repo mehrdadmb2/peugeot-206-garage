@@ -143,3 +143,11 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 
 /* v3.9 maintenance priority states */
 .service-status.critical{color:#fff;background:linear-gradient(135deg,rgba(255,45,77,.34),rgba(255,109,131,.12));border-color:rgba(255,76,104,.62);box-shadow:0 0 18px rgba(255,68,94,.18)}.service-status.due{color:#fff0be;background:rgba(255,175,68,.15);border-color:rgba(255,175,68,.45)}.service-card.maintenance-critical{border-color:rgba(255,76,104,.44);box-shadow:0 18px 48px rgba(0,0,0,.28),0 0 27px rgba(255,76,104,.08)}.service-card.maintenance-overdue{border-color:rgba(255,109,131,.30)}.dynamic-maintenance-section{margin-top:26px;padding:20px;border:1px solid rgba(93,230,176,.14);border-radius:22px;background:linear-gradient(140deg,rgba(11,25,32,.58),rgba(13,21,32,.42));box-shadow:0 20px 50px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.035)}.dynamic-maintenance-section .section-heading{margin-bottom:16px}.dynamic-maintenance-section h3{margin:7px 0;font-size:18px}.dynamic-maintenance-section .section-note{max-width:730px;color:var(--muted);font-size:10px;line-height:1.8}
+
+/* v3.9.1 — startup failsafe notice; always keep the dashboard reachable. */
+.boot-failsafe-notice{position:fixed;z-index:1200;inset:auto 16px 16px 16px;max-width:760px;margin-inline:auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid rgba(255,177,89,.35);border-radius:18px;background:linear-gradient(135deg,rgba(17,29,45,.96),rgba(9,17,28,.94));box-shadow:0 24px 70px rgba(0,0,0,.48),0 0 30px rgba(255,157,66,.09);backdrop-filter:blur(24px) saturate(145%);color:#edf7ff;direction:rtl}
+.boot-failsafe-copy{margin:0;max-width:60ch;font-size:12px;line-height:1.9;color:#d5e4f3}
+.boot-failsafe-actions{display:flex;align-items:center;gap:8px;flex:none}
+.boot-failsafe-close{width:34px;height:34px;border:1px solid rgba(190,210,230,.2);border-radius:10px;color:#e2edf7;background:rgba(255,255,255,.04);font-size:22px;line-height:1;cursor:pointer}
+.boot-failsafe-close:hover{border-color:rgba(255,177,89,.4);background:rgba(255,177,89,.1)}
+@media(max-width:620px){.boot-failsafe-notice{inset:auto 10px 10px 10px;padding:12px;align-items:flex-start;flex-direction:column;gap:10px;border-radius:15px}.boot-failsafe-copy{font-size:11px}.boot-failsafe-actions{width:100%;justify-content:flex-start}}

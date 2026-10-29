@@ -16,6 +16,28 @@
     brake_fluid: ['روغن ترمز', 'brake fluid'], brake_inspection: ['بازدید ترمز', 'لنت', 'brake'], tyre_inspection: ['لاستیک', 'فشار باد', 'tyre'], battery_check: ['باتری', 'باطری', 'battery']
   };
   let toastTimer = null;
+  const DASHBOARD_FETCH_TIMEOUT_MS = 9000;
+
+  async function fetchJsonWithTimeout(url, label) {
+    const controller = new AbortController();
+    let timer = null;
+    try {
+      const response = await Promise.race([
+        fetch(url, { cache: 'no-store', signal: controller.signal }),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => { controller.abort(); reject(new Error(`مهلت بارگذاری ${label} تمام شد (بیش از ${DASHBOARD_FETCH_TIMEOUT_MS / 1000} ثانیه).`)); }, DASHBOARD_FETCH_TIMEOUT_MS);
+        })
+      ]);
+      if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`);
+      try { return await response.json(); }
+      catch { throw new Error(`فایل ${label} JSON معتبر نیست.`); }
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error(`بارگذاری ${label} متوقف شد؛ ارتباط را بررسی و دوباره تلاش کن.`);
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', event => {
@@ -82,22 +104,22 @@
     refreshButton.classList.add('is-loading');
     try {
       const stamp = Date.now();
-      const [indexResponse, configResponse] = await Promise.all([
-        fetch(`data/index.json?v=${stamp}`, { cache: 'no-store' }),
-        fetch(`data/config.json?v=${stamp}`, { cache: 'no-store' })
+      const [index, config] = await Promise.all([
+        fetchJsonWithTimeout(`./data/index.json?v=${stamp}`, 'data/index.json'),
+        fetchJsonWithTimeout(`./data/config.json?v=${stamp}`, 'data/config.json')
       ]);
-      if (!indexResponse.ok) throw new Error(`index.json: HTTP ${indexResponse.status}`);
-      if (!configResponse.ok) throw new Error(`config.json: HTTP ${configResponse.status}`);
-      const [index, config] = await Promise.all([indexResponse.json(), configResponse.json()]);
       state.config = config;
       state.months = (Array.isArray(index.months) ? index.months : []).filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
+      const failedMonths = [];
       const monthResults = await Promise.all(state.months.map(async month => {
         try {
-          const response = await fetch(`data/logs/${month}.json?v=${stamp}`, { cache: 'no-store' });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const json = await response.json();
+          const json = await fetchJsonWithTimeout(`./data/logs/${month}.json?v=${stamp}`, `لاگ ${month}`);
           return Array.isArray(json.events) ? json.events : [];
-        } catch (error) { console.warn(`Could not load ${month}`, error); return []; }
+        } catch (error) {
+          failedMonths.push(month);
+          console.warn(`Could not load ${month}`, error);
+          return [];
+        }
       }));
       const seen = new Set();
       state.events = monthResults.flat().filter(event => {
@@ -105,24 +127,33 @@
         seen.add(event.id); return true;
       }).sort((a, b) => String(a.occurredAt || '').localeCompare(String(b.occurredAt || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
       state.refreshedAt = new Date();
+      state.failedMonths = failedMonths.sort();
       populateMonthFilter();
       populateActorFilter();
       renderAll();
       setConnection('connected');
       const idxDate = index.updatedAt ? formatDateTime(index.updatedAt) : 'هنوز ثبت اولیه انجام نشده';
       $('#lastUpdated').textContent = state.events.length ? `آخرین به‌روزرسانی دفتر: ${idxDate}` : 'آماده دریافت اولین رویداد از تلگرام';
-      $('#journalBottomNote').textContent = `آخرین بررسی مرورگر: ${formatTime(state.refreshedAt)} · برای تازه‌سازی از دکمه بالا استفاده کن.`;
-      if (userInitiated) showToast('اطلاعات GitHub دوباره بارگیری شد.');
+      $('#journalBottomNote').textContent = failedMonths.length
+        ? `هشدار: ${formatNumber(failedMonths.length)} فایل ماهانه بارگیری نشد (${failedMonths.join('، ')}). داده‌های در دسترس نمایش داده شده‌اند؛ دوباره تازه‌سازی کن.`
+        : `آخرین بررسی مرورگر: ${formatTime(state.refreshedAt)} · برای تازه‌سازی از دکمه بالا استفاده کن.`;
+      if (window.__garageBootScreen?.success) window.__garageBootScreen.success();
+      if (userInitiated) showToast(failedMonths.length ? 'بعضی لاگ‌های ماهانه بارگیری نشدند؛ جزئیات در پایین دفتر وقایع است.' : 'اطلاعات GitHub دوباره بارگیری شد.');
     } catch (error) {
       console.error(error);
       setConnection('error');
-      $('#lastUpdated').textContent = 'داده‌ها بارگیری نشدند؛ مخزن و GitHub Pages را بررسی کن.';
-      $('#eventList').innerHTML = `<div class="empty-state">اتصال به فایل‌های داده برقرار نشد.<br><small>${escapeHtml(error.message || 'Unknown error')}</small><br>آدرس GitHub Pages، فایل data/index.json و وضعیت انتشار را بررسی کن.</div>`;
-      if (userInitiated) showToast('بارگیری ناموفق بود؛ اتصال یا مسیر فایل‌های JSON را بررسی کن.');
+      const reason = String(error?.message || 'خطای نامشخص');
+      $('#lastUpdated').textContent = 'داده‌ها بارگیری نشدند؛ خود داشبورد باز است و می‌توانی دوباره تلاش کنی.';
+      $('#eventList').innerHTML = `<div class="empty-state"><b>داده‌ها در دسترس نیستند.</b><br><small>${escapeHtml(reason)}</small><br>آدرس GitHub Pages، فایل‌های data/index.json و data/config.json و وضعیت انتشار را بررسی کن.</div>`;
+      if (window.__garageBootScreen?.fail) window.__garageBootScreen.fail(`بارگذاری داده‌ها ناموفق بود: ${reason} صفحه از حالت انتظار خارج شده است؛ از دکمهٔ بارگذاری مجدد استفاده کن.`);
+      if (userInitiated) showToast('بارگیری ناموفق بود؛ جزئیات در دفتر وقایع نمایش داده شده است.');
     } finally {
       refreshButton.classList.remove('is-loading');
-      const boot = $('#bootScreen');
-      if (boot) { boot.classList.add('boot-screen-hidden'); setTimeout(() => boot.remove(), 700); }
+      if (window.__garageBootScreen?.release) window.__garageBootScreen.release();
+      else {
+        const boot = $('#bootScreen');
+        if (boot) { boot.classList.add('boot-screen-hidden'); boot.style.display = 'none'; setTimeout(() => boot.remove(), 50); }
+      }
     }
   }
 

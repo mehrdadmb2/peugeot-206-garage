@@ -7,8 +7,8 @@
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="assets/css/style.css">
-  <script defer src="assets/js/app.js"></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=3.9.1-loader-fix">
+  <script defer src="assets/js/app.js?v=3.9.1-loader-fix"></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -49,6 +49,63 @@
     <h1>در حال اتصال به دفتر خودرو</h1><p>خواندن رویدادها از GitHub · محاسبه‌ی کارکرد و موعد سرویس‌ها</p>
     <div class="boot-progress"><span></span></div><small class="boot-status">SECURE DATA PIPELINE / ASIA-TEHRAN</small>
   </div>
+  <script>
+    // Independent failsafe: the app must never remain blocked behind the splash screen.
+    (function () {
+      let watchdog = 0;
+      const hideSplash = function () {
+        const boot = document.getElementById('bootScreen');
+        if (!boot) return;
+        boot.classList.add('boot-screen-hidden');
+        boot.style.opacity = '0';
+        boot.style.visibility = 'hidden';
+        boot.style.pointerEvents = 'none';
+        window.setTimeout(function () { if (boot.isConnected) boot.remove(); }, 750);
+      };
+      const removeNotice = function () {
+        const old = document.getElementById('bootFailsafeNotice');
+        if (old) old.remove();
+      };
+      const showNotice = function (message) {
+        hideSplash();
+        let notice = document.getElementById('bootFailsafeNotice');
+        if (!notice) {
+          notice = document.createElement('aside');
+          notice.id = 'bootFailsafeNotice';
+          notice.className = 'boot-failsafe-notice';
+          const copy = document.createElement('p');
+          copy.className = 'boot-failsafe-copy';
+          const actions = document.createElement('div');
+          actions.className = 'boot-failsafe-actions';
+          const retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'secondary-button small';
+          retry.textContent = 'بارگذاری مجدد';
+          retry.addEventListener('click', function () { window.location.reload(); });
+          const close = document.createElement('button');
+          close.type = 'button';
+          close.className = 'boot-failsafe-close';
+          close.textContent = '×';
+          close.setAttribute('aria-label', 'بستن پیام');
+          close.addEventListener('click', function () { notice.remove(); });
+          actions.append(retry, close);
+          notice.append(copy, actions);
+          document.body.appendChild(notice);
+        }
+        const copyNode = notice.querySelector('.boot-failsafe-copy');
+        if (copyNode) copyNode.textContent = message;
+      };
+      const clearWatchdog = function () { if (watchdog) window.clearTimeout(watchdog); watchdog = 0; };
+      window.__garageBootScreen = {
+        release: function () { clearWatchdog(); hideSplash(); },
+        success: function () { clearWatchdog(); hideSplash(); removeNotice(); },
+        fail: function (message) { clearWatchdog(); showNotice(message || 'بارگذاری داده‌ها کامل نشد. اتصال را بررسی کن و دوباره تلاش کن.'); }
+      };
+      watchdog = window.setTimeout(function () {
+        showNotice('بارگذاری بیش از حد طول کشید؛ صفحه از حالت انتظار خارج شد. از «بارگذاری مجدد» استفاده کن یا فایل‌های data/index.json و data/config.json را بررسی کن.');
+      }, 12000);
+    })();
+  </script>
   <main id="top" class="container dashboard-main">
     <div class="view-pane active" data-view-pane="overview" id="page-overview">
 <section class="hero panel" id="overview">

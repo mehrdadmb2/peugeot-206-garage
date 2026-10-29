@@ -1,0 +1,18 @@
+206 Garage OS v3.9.1 — Local validation report
+Date: 2026-10-29
+
+Checks:
+- node --check assets/js/app.js: PASS
+- node --check worker/src/index.js: PASS
+- npm test: 32 passed, 0 failed
+- npm run check: PASS
+- Safe-patch content check: PASS (no data/ folder included)
+- Safe-patch archive integrity: PASS
+
+New regression tests:
+1. HTML has standalone splash failsafe and cache-busted assets.
+2. Dashboard JSON fetches use AbortController and an explicit timeout.
+3. Failed monthly logs lead to visible partial-load warning.
+4. Failsafe notice has responsive styling and sits above the dashboard.
+
+Browser GUI end-to-end test could not be run in this sandbox because the environment blocks Chromium navigation. The fix was checked by source-level regression tests and Node syntax checks. After deployment, verify in the actual GitHub Pages browser and use Ctrl+F5.
