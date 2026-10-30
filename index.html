@@ -304,7 +304,14 @@
     <div class="section-heading"><div><span class="section-kicker">OWNER AUTHENTICATION</span><h2>بازکردن مدارک خصوصی</h2><p class="section-note">توکن دسترسی مدارک را که در Cloudflare Worker Secret ثبت کرده‌ای وارد کن.</p></div><span class="mini-heading-icon">🔐</span></div>
     <form id="docsUnlockForm" class="docs-unlock-form">
       <label for="docsAccessToken">توکن دسترسی مدارک</label>
-      <input id="docsAccessToken" type="password" required minlength="32" autocomplete="current-password" placeholder="DOCUMENTS_ACCESS_TOKEN" spellcheck="false">
+      <input
+  id="docsAccessToken"
+  type="password"
+  required
+  autocomplete="current-password"
+  placeholder="DOCUMENTS_ACCESS_TOKEN"
+  spellcheck="false"
+>
       <button type="submit" class="primary-button" id="docsUnlockButton">🔓 بازکردن گاوصندوق</button>
     </form>
     <p class="docs-auth-note" id="docsAuthStatus" role="status" aria-live="polite">توکن فقط در حافظهٔ همین صفحه استفاده می‌شود و در localStorage یا گزارش عیب‌یابی ذخیره نمی‌شود.</p>
