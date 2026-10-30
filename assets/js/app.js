@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
+  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
     expense: 'هزینه', fine: 'جریمه', wash: 'کارواش', issue: 'خرابی', repair: 'تعمیر', note: 'یادداشت'
@@ -23,7 +23,7 @@
     let timer = null;
     try {
       const response = await Promise.race([
-        fetch(url, { cache: 'no-store', signal: controller.signal }),
+        fetch(url, { cache: 'no-cache', signal: controller.signal }),
         new Promise((_, reject) => {
           timer = setTimeout(() => { controller.abort(); reject(new Error(`مهلت بارگذاری ${label} تمام شد (بیش از ${DASHBOARD_FETCH_TIMEOUT_MS / 1000} ثانیه).`)); }, DASHBOARD_FETCH_TIMEOUT_MS);
         })
@@ -103,48 +103,101 @@
     const refreshButton = $('#refreshButton');
     refreshButton.classList.add('is-loading');
     try {
-      const stamp = Date.now();
-      const [index, config] = await Promise.all([
-        fetchJsonWithTimeout(`./data/index.json?v=${stamp}`, 'data/index.json'),
-        fetchJsonWithTimeout(`./data/config.json?v=${stamp}`, 'data/config.json')
-      ]);
-      state.config = config;
-      state.months = (Array.isArray(index.months) ? index.months : []).filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
-      const failedMonths = [];
-      const monthResults = await Promise.all(state.months.map(async month => {
-        try {
-          const json = await fetchJsonWithTimeout(`./data/logs/${month}.json?v=${stamp}`, `لاگ ${month}`);
-          return Array.isArray(json.events) ? json.events : [];
-        } catch (error) {
-          failedMonths.push(month);
-          console.warn(`Could not load ${month}`, error);
-          return [];
+      let index = null;
+      let snapshotLoaded = false;
+      let failedMonths = [];
+      try {
+        const snapshot = await fetchJsonWithTimeout('./data/dashboard.json', 'تصویر آماده داشبورد');
+        if (!snapshot || snapshot.schemaVersion !== 1 || !snapshot.config || !Array.isArray(snapshot.events) || !Array.isArray(snapshot.months)) {
+          throw new Error('ساختار data/dashboard.json معتبر نیست؛ فایل محاسبات باید دوباره ساخته شود.');
         }
-      }));
-      const seen = new Set();
-      state.events = monthResults.flat().filter(event => {
-        if (!event || !event.id || event.deletedAt || seen.has(event.id)) return false;
-        seen.add(event.id); return true;
-      }).sort((a, b) => String(a.occurredAt || '').localeCompare(String(b.occurredAt || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+        if (!Object.keys(snapshot.config.serviceIntervals || {}).length ||
+            !Object.keys(snapshot.config.partCatalog?.categories || {}).length ||
+            !Object.keys(snapshot.config.partCatalog?.items || {}).length ||
+            !Object.keys(snapshot.config.partCatalog?.services || {}).length) {
+          throw new Error('فایل محاسبات ناقص است؛ فهرست سرویس‌ها، دسته‌بندی‌ها، قطعات یا خدمات خالی است.');
+        }
+        if (!snapshot.computed || typeof snapshot.computed !== 'object' ||
+            Number(snapshot.computed.eventCount) !== snapshot.events.length ||
+            !Array.isArray(snapshot.computed.dueItems) ||
+            !Array.isArray(snapshot.computed.distanceEntries)) {
+          throw new Error('محاسبات فایل آماده ناقص یا ناسازگار است؛ خروجی GitHub Actions را دوباره بساز.');
+        }
+        if (snapshot.months.length && !snapshot.events.length) {
+          throw new Error('فایل محاسبات ماه ثبت‌شده دارد اما هیچ رویدادی در آن نیست؛ از انتشار دادهٔ خالی جلوگیری شد.');
+        }
+        state.config = snapshot.config;
+        state.events = snapshot.events.filter(event => event && event.id && !event.deletedAt);
+        state.months = snapshot.months.filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
+        state.precomputed = snapshot.computed && typeof snapshot.computed === 'object' ? snapshot.computed : null;
+        state.snapshotGeneratedAt = snapshot.generatedAt || null;
+        index = { updatedAt: snapshot.sourceUpdatedAt || snapshot.generatedAt || null, months: snapshot.months };
+        snapshotLoaded = true;
+      } catch (snapshotError) {
+        // A 404 means the new Action has not generated its first snapshot yet.
+        // In that one case only, keep the previous three-file loader as a safe migration path.
+        if (!/HTTP 404/.test(String(snapshotError?.message || ''))) throw snapshotError;
+        console.warn('Precomputed dashboard snapshot is not available yet; using legacy data files.', snapshotError);
+      }
+
+      if (!snapshotLoaded) {
+        state.precomputed = null;
+        state.snapshotGeneratedAt = null;
+        const [legacyIndex, config] = await Promise.all([
+          fetchJsonWithTimeout('./data/index.json', 'data/index.json'),
+          fetchJsonWithTimeout('./data/config.json', 'data/config.json')
+        ]);
+        index = legacyIndex;
+        state.config = config;
+        state.months = (Array.isArray(index.months) ? index.months : []).filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
+        const monthResults = await Promise.all(state.months.map(async month => {
+          try {
+            const json = await fetchJsonWithTimeout(`./data/logs/${month}.json`, `لاگ ${month}`);
+            return Array.isArray(json.events) ? json.events : [];
+          } catch (error) {
+            failedMonths.push(month);
+            console.warn(`Could not load ${month}`, error);
+            return [];
+          }
+        }));
+        const seen = new Set();
+        state.events = monthResults.flat().filter(event => {
+          if (!event || !event.id || event.deletedAt || seen.has(event.id)) return false;
+          seen.add(event.id); return true;
+        }).sort((a, b) => String(a.occurredAt || '').localeCompare(String(b.occurredAt || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+      }
+
+      // Detect a broken publication instead of displaying a convincing dashboard full of zeros.
+      if (!state.config || !Object.keys(state.config.serviceIntervals || {}).length || !Object.keys(state.config.partCatalog?.items || {}).length) {
+        throw new Error('دادهٔ تنظیمات ناقص است؛ config.json باید شامل سرویس‌ها و فهرست قطعات باشد.');
+      }
+      if (!snapshotLoaded && state.months.length && !state.events.length) {
+        throw new Error('ماه در index.json ثبت شده اما هیچ رویدادی از فایل‌های ماهانه دریافت نشد. مسیر انتشار GitHub Pages را بررسی کن.');
+      }
+
       state.refreshedAt = new Date();
       state.failedMonths = failedMonths.sort();
       populateMonthFilter();
       populateActorFilter();
       renderAll();
       setConnection('connected');
-      const idxDate = index.updatedAt ? formatDateTime(index.updatedAt) : 'هنوز ثبت اولیه انجام نشده';
-      $('#lastUpdated').textContent = state.events.length ? `آخرین به‌روزرسانی دفتر: ${idxDate}` : 'آماده دریافت اولین رویداد از تلگرام';
+      const idxDate = index?.updatedAt ? formatDateTime(index.updatedAt) : 'هنوز ثبت اولیه انجام نشده';
+      $('#lastUpdated').textContent = state.events.length
+        ? `آخرین به‌روزرسانی دفتر: ${idxDate}${snapshotLoaded ? ' · محاسبات آماده' : ' · حالت سازگاری'}`
+        : 'دادهٔ معتبر موجود است؛ آماده دریافت اولین رویداد از تلگرام';
       $('#journalBottomNote').textContent = failedMonths.length
         ? `هشدار: ${formatNumber(failedMonths.length)} فایل ماهانه بارگیری نشد (${failedMonths.join('، ')}). داده‌های در دسترس نمایش داده شده‌اند؛ دوباره تازه‌سازی کن.`
-        : `آخرین بررسی مرورگر: ${formatTime(state.refreshedAt)} · برای تازه‌سازی از دکمه بالا استفاده کن.`;
+        : snapshotLoaded
+          ? `نسخهٔ محاسبات: ${state.snapshotGeneratedAt ? formatDateTime(state.snapshotGeneratedAt) : 'نامشخص'} · ${formatNumber(state.events.length)} رویداد از ${formatNumber(state.months.length)} ماه · برای تازه‌سازی از دکمه بالا استفاده کن.`
+          : `آخرین بررسی مرورگر: ${formatTime(state.refreshedAt)} · برای تازه‌سازی از دکمه بالا استفاده کن.`;
       if (window.__garageBootScreen?.success) window.__garageBootScreen.success();
-      if (userInitiated) showToast(failedMonths.length ? 'بعضی لاگ‌های ماهانه بارگیری نشدند؛ جزئیات در پایین دفتر وقایع است.' : 'اطلاعات GitHub دوباره بارگیری شد.');
+      if (userInitiated) showToast(failedMonths.length ? 'بعضی لاگ‌های ماهانه بارگیری نشدند؛ جزئیات در پایین دفتر وقایع است.' : snapshotLoaded ? 'تصویر آماده محاسبات بارگیری شد.' : 'اطلاعات GitHub بارگیری شد.');
     } catch (error) {
       console.error(error);
       setConnection('error');
       const reason = String(error?.message || 'خطای نامشخص');
-      $('#lastUpdated').textContent = 'داده‌ها بارگیری نشدند؛ خود داشبورد باز است و می‌توانی دوباره تلاش کنی.';
-      $('#eventList').innerHTML = `<div class="empty-state"><b>داده‌ها در دسترس نیستند.</b><br><small>${escapeHtml(reason)}</small><br>آدرس GitHub Pages، فایل‌های data/index.json و data/config.json و وضعیت انتشار را بررسی کن.</div>`;
+      $('#lastUpdated').textContent = 'داده‌ها بارگیری نشدند؛ داشبورد از نمایش اعداد ساختگی خودداری کرد.';
+      $('#eventList').innerHTML = `<div class="empty-state"><b>داده‌ها در دسترس نیستند.</b><br><small>${escapeHtml(reason)}</small><br>وضعیت انتشار GitHub Pages و فایل data/dashboard.json را بررسی کن.</div>`;
       if (window.__garageBootScreen?.fail) window.__garageBootScreen.fail(`بارگذاری داده‌ها ناموفق بود: ${reason} صفحه از حالت انتظار خارج شده است؛ از دکمهٔ بارگذاری مجدد استفاده کن.`);
       if (userInitiated) showToast('بارگیری ناموفق بود؛ جزئیات در دفتر وقایع نمایش داده شده است.');
     } finally {
@@ -202,9 +255,10 @@
     const monthEvents = all.filter(event => String(event.date || event.occurredAt || '').slice(0, 7) === monthKey);
     const currentOdo = calculateOdometer(all);
     const monthFuel = monthEvents.filter(e => e.type === 'fuel');
-    const totalLiters = sum(monthFuel, e => e.liters);
+    const cached = state.precomputed?.currentMonth === monthKey ? state.precomputed : null;
+    const totalLiters = cached ? Number(cached.currentMonthFuelLiters) || 0 : sum(monthFuel, e => e.liters);
     const due = calculateDue(all, state.config, currentOdo);
-    const cost = sum(all.filter(e => isActualExpense(e) && expenseDate(e).slice(0, 7) === monthKey), e => e.costRial);
+    const cost = cached ? Number(cached.currentMonthCostRial) || 0 : sum(all.filter(e => isActualExpense(e) && expenseDate(e).slice(0, 7) === monthKey), e => e.costRial);
     $('#statOdometer').textContent = currentOdo == null ? '—' : formatNumber(currentOdo);
     $('#statOdometerFoot').textContent = currentOdo == null ? 'ابتدا /km را در تلگرام ثبت کن' : `بر پایه ${countOdometerSources(all)} ثبت کیلومتر/مسافت`;
     $('#statCost').textContent = currentOdo == null && !monthEvents.length ? '—' : compactMoney(cost / 10);
@@ -450,6 +504,7 @@
   }
 
   function calculateDue(events, config, currentOdo) {
+    if (events === state.events && config === state.config && Array.isArray(state.precomputed?.dueItems)) return state.precomputed.dueItems;
     const result = [];
     const ownership = config?.ownership || {};
     const purchaseKm = Number(ownership.purchaseOdometerKm ?? 428000);
@@ -606,6 +661,7 @@
     return String(event.occurredAt || event.date || event.createdAt || '').slice(0,10);
   }
   function calculateOdometer(events) {
+    if (events === state.events && state.precomputed?.currentOdometerKm != null && Number.isFinite(Number(state.precomputed.currentOdometerKm))) return Number(state.precomputed.currentOdometerKm);
     let current = null;
     const timeline = events.filter(e=>e.type==='odometer'||e.type==='trip').sort((a,b)=>eventEpoch(a)-eventEpoch(b));
     for (const event of timeline) {
@@ -616,6 +672,7 @@
   }
 
   function calculateDistanceEntries(events, ownershipConfig = null) {
+    if (events === state.events && Array.isArray(state.precomputed?.distanceEntries)) return state.precomputed.distanceEntries;
     const allOdometers = events.filter(e=>e.type==='odometer' && e.odometerKm!==null && e.odometerKm!==undefined && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
     let correctionIndex = 0;
     for (let i=1;i<allOdometers.length;i++) if (Number(allOdometers[i].odometerKm)<Number(allOdometers[i-1].odometerKm)) correctionIndex=i;

@@ -44,7 +44,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.9.0",
+        version: "3.10.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -68,16 +68,17 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.9.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.10.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN)
-      }, scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required", scheduledReminders: Boolean(env.SCHEDULE_TRIGGER_SECRET) });
+      }, scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required", scheduledReminders: String(env.SCHEDULE_TRIGGER_SECRET || "").length >= 32 });
     }
     if (url.pathname === "/scheduled/reminders" && request.method === "POST") {
       const expected = String(env.SCHEDULE_TRIGGER_SECRET || "");
       const supplied = String(request.headers.get("X-Schedule-Secret") || "");
-      if (expected.length < 32 || !constantTimeEqual(supplied, expected)) return json({ ok: false, error: "forbidden" }, 403);
+      if (expected.length < 32) return json({ ok: false, error: "schedule_secret_not_configured", message: "Set SCHEDULE_TRIGGER_SECRET in Cloudflare Worker secrets. It must contain at least 32 characters." }, 503);
+      if (!constantTimeEqual(supplied, expected)) return json({ ok: false, error: "forbidden", reason: "schedule_secret_mismatch", message: "The GitHub Actions SCHEDULE_TRIGGER_SECRET must exactly match the Cloudflare Worker SCHEDULE_TRIGGER_SECRET." }, 403);
       try {
         const result = await runDueReminders(env);
         return json({ ok: true, trigger: "github-actions", time: nowTehran().iso, ...result });

@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.9.0");
+ assert.equal(body.version, "3.10.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.9.0");
+ assert.equal(body.version, "3.10.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -779,10 +779,17 @@ test("scheduled reminders endpoint requires its shared secret and safely complet
   return new Response("unexpected method", { status: 500 });
  };
  try {
+  const notConfigured = await worker.fetch(new Request("https://unit.test/scheduled/reminders", { method: "POST" }), {
+   GITHUB_TOKEN: "fake", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage"
+  });
+  assert.equal(notConfigured.status, 503);
+  assert.equal((await notConfigured.json()).error, "schedule_secret_not_configured");
   const denied = await worker.fetch(new Request("https://unit.test/scheduled/reminders", { method: "POST" }), {
    SCHEDULE_TRIGGER_SECRET: "s".repeat(48), GITHUB_TOKEN: "fake", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage"
   });
   assert.equal(denied.status, 403);
+  const deniedBody = await denied.json();
+  assert.equal(deniedBody.reason, "schedule_secret_mismatch");
   const accepted = await worker.fetch(new Request("https://unit.test/scheduled/reminders", {
    method: "POST", headers: { "X-Schedule-Secret": "s".repeat(48) }
   }), {

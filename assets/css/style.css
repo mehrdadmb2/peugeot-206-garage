@@ -151,3 +151,14 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 .boot-failsafe-close{width:34px;height:34px;border:1px solid rgba(190,210,230,.2);border-radius:10px;color:#e2edf7;background:rgba(255,255,255,.04);font-size:22px;line-height:1;cursor:pointer}
 .boot-failsafe-close:hover{border-color:rgba(255,177,89,.4);background:rgba(255,177,89,.1)}
 @media(max-width:620px){.boot-failsafe-notice{inset:auto 10px 10px 10px;padding:12px;align-items:flex-start;flex-direction:column;gap:10px;border-radius:15px}.boot-failsafe-copy{font-size:11px}.boot-failsafe-actions{width:100%;justify-content:flex-start}}
+
+
+/* v3.10 — compact bot identity chip + snapshot-ready dashboard polish */
+.hero-bot-pill{display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:6px 11px;border:1px solid rgba(56,210,178,.28);border-radius:15px;background:linear-gradient(135deg,rgba(27,203,172,.13),rgba(44,116,173,.12));box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 9px 25px rgba(0,0,0,.16);color:#eafdf8;text-decoration:none;transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;backdrop-filter:blur(14px) saturate(135%)}
+.hero-bot-pill:hover{transform:translateY(-2px);border-color:rgba(70,235,197,.58);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 13px 32px rgba(0,0,0,.24),0 0 22px rgba(40,218,180,.11)}
+.hero-bot-icon{display:grid;place-items:center;width:29px;height:29px;flex:none;border-radius:10px;background:linear-gradient(145deg,rgba(40,225,190,.25),rgba(61,129,210,.2));color:#79f5dc;font-size:15px}
+.hero-bot-copy{display:grid;gap:1px;direction:ltr;text-align:left;line-height:1.25}
+.hero-bot-copy small{font-size:8px;letter-spacing:.13em;color:#82cfc2;font-weight:800}
+.hero-bot-copy strong{font-size:10px;letter-spacing:.01em;color:#f0fffb;font-weight:800;white-space:nowrap}
+.hero-bot-arrow{margin-inline-start:2px;color:#8cebd5;font-size:13px}
+@media(max-width:620px){.hero-bot-pill{min-height:40px;padding:5px 9px}.hero-bot-copy strong{font-size:9px}}
