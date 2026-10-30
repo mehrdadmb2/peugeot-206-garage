@@ -1,0 +1,28 @@
+Peugeot 206 Garage OS v3.10.3 — Local verification
+Date: 2026-10-30
+
+Syntax checks:
+- assets/js/app.js: PASS
+- assets/js/data-loader.js: PASS
+- worker/src/index.js: PASS
+- worker/tests/dashboard-loader.test.mjs: PASS
+
+Automated test suite:
+- Node test runner: 43 tests
+- Passed: 43
+- Failed: 0
+- Skipped: 0
+
+Resilience scenarios covered:
+- Valid/fresh snapshot uses the fast path without loading monthly logs.
+- HTTP 403 on the snapshot triggers raw-data fallback.
+- An outdated snapshot triggers direct raw-data loading and browser-side calculations.
+- Partial monthly log availability preserves loaded events and marks missing months.
+- Total online-source outage recovers the last valid browser-local cache and recalculates without precomputed values.
+- GitHub Pages, GitHub Raw, and jsDelivr source candidates are configured.
+- JSON body parsing is covered by the same timeout/abort race as the HTTP request.
+- The splash screen has soft-fallback and terminal-failure states.
+- Existing Worker, Telegram, maintenance, mileage, fuel, fine, duplicate, and repair tests remain passing.
+
+Scope note:
+These are local automated tests using the repository's uploaded data and mocked network responses. A real GitHub Pages deployment, browser-network test from the user's network, and Cloudflare Worker live status are not claimed as verified here.

@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
+  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
     expense: 'هزینه', fine: 'جریمه', wash: 'کارواش', issue: 'خرابی', repair: 'تعمیر', note: 'یادداشت'
@@ -16,28 +16,6 @@
     brake_fluid: ['روغن ترمز', 'brake fluid'], brake_inspection: ['بازدید ترمز', 'لنت', 'brake'], tyre_inspection: ['لاستیک', 'فشار باد', 'tyre'], battery_check: ['باتری', 'باطری', 'battery']
   };
   let toastTimer = null;
-  const DASHBOARD_FETCH_TIMEOUT_MS = 9000;
-
-  async function fetchJsonWithTimeout(url, label) {
-    const controller = new AbortController();
-    let timer = null;
-    try {
-      const response = await Promise.race([
-        fetch(url, { cache: 'no-cache', signal: controller.signal }),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => { controller.abort(); reject(new Error(`مهلت بارگذاری ${label} تمام شد (بیش از ${DASHBOARD_FETCH_TIMEOUT_MS / 1000} ثانیه).`)); }, DASHBOARD_FETCH_TIMEOUT_MS);
-        })
-      ]);
-      if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`);
-      try { return await response.json(); }
-      catch { throw new Error(`فایل ${label} JSON معتبر نیست.`); }
-    } catch (error) {
-      if (error?.name === 'AbortError') throw new Error(`بارگذاری ${label} متوقف شد؛ ارتباط را بررسی و دوباره تلاش کن.`);
-      throw error;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
 
   document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', event => {
@@ -103,103 +81,70 @@
     const refreshButton = $('#refreshButton');
     refreshButton.classList.add('is-loading');
     try {
-      let index = null;
-      let snapshotLoaded = false;
-      let failedMonths = [];
-      try {
-        const snapshot = await fetchJsonWithTimeout('./data/dashboard.json', 'تصویر آماده داشبورد');
-        if (!snapshot || snapshot.schemaVersion !== 1 || !snapshot.config || !Array.isArray(snapshot.events) || !Array.isArray(snapshot.months)) {
-          throw new Error('ساختار data/dashboard.json معتبر نیست؛ فایل محاسبات باید دوباره ساخته شود.');
-        }
-        if (!Object.keys(snapshot.config.serviceIntervals || {}).length ||
-            !Object.keys(snapshot.config.partCatalog?.categories || {}).length ||
-            !Object.keys(snapshot.config.partCatalog?.items || {}).length ||
-            !Object.keys(snapshot.config.partCatalog?.services || {}).length) {
-          throw new Error('فایل محاسبات ناقص است؛ فهرست سرویس‌ها، دسته‌بندی‌ها، قطعات یا خدمات خالی است.');
-        }
-        if (!snapshot.computed || typeof snapshot.computed !== 'object' ||
-            Number(snapshot.computed.eventCount) !== snapshot.events.length ||
-            !Array.isArray(snapshot.computed.dueItems) ||
-            !Array.isArray(snapshot.computed.distanceEntries)) {
-          throw new Error('محاسبات فایل آماده ناقص یا ناسازگار است؛ خروجی GitHub Actions را دوباره بساز.');
-        }
-        if (snapshot.months.length && !snapshot.events.length) {
-          throw new Error('فایل محاسبات ماه ثبت‌شده دارد اما هیچ رویدادی در آن نیست؛ از انتشار دادهٔ خالی جلوگیری شد.');
-        }
-        state.config = snapshot.config;
-        state.events = snapshot.events.filter(event => event && event.id && !event.deletedAt);
-        state.months = snapshot.months.filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
-        state.precomputed = snapshot.computed && typeof snapshot.computed === 'object' ? snapshot.computed : null;
-        state.snapshotGeneratedAt = snapshot.generatedAt || null;
-        index = { updatedAt: snapshot.sourceUpdatedAt || snapshot.generatedAt || null, months: snapshot.months };
-        snapshotLoaded = true;
-      } catch (snapshotError) {
-        // A 404 means the new Action has not generated its first snapshot yet.
-        // In that one case only, keep the previous three-file loader as a safe migration path.
-        if (!/HTTP 404/.test(String(snapshotError?.message || ''))) throw snapshotError;
-        console.warn('Precomputed dashboard snapshot is not available yet; using legacy data files.', snapshotError);
+      if (!window.GarageDataLoader || typeof window.GarageDataLoader.load !== 'function') {
+        throw new Error('موتور بارگذاری مستقل assets/js/data-loader.js پیدا نشد؛ مطمئن شو فایل جدید و نسخهٔ index.html هم‌زمان منتشر شده‌اند.');
       }
 
-      if (!snapshotLoaded) {
-        state.precomputed = null;
-        state.snapshotGeneratedAt = null;
-        const [legacyIndex, config] = await Promise.all([
-          fetchJsonWithTimeout('./data/index.json', 'data/index.json'),
-          fetchJsonWithTimeout('./data/config.json', 'data/config.json')
-        ]);
-        index = legacyIndex;
-        state.config = config;
-        state.months = (Array.isArray(index.months) ? index.months : []).filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
-        const monthResults = await Promise.all(state.months.map(async month => {
-          try {
-            const json = await fetchJsonWithTimeout(`./data/logs/${month}.json`, `لاگ ${month}`);
-            return Array.isArray(json.events) ? json.events : [];
-          } catch (error) {
-            failedMonths.push(month);
-            console.warn(`Could not load ${month}`, error);
-            return [];
-          }
-        }));
-        const seen = new Set();
-        state.events = monthResults.flat().filter(event => {
-          if (!event || !event.id || event.deletedAt || seen.has(event.id)) return false;
-          seen.add(event.id); return true;
-        }).sort((a, b) => String(a.occurredAt || '').localeCompare(String(b.occurredAt || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+      const dataset = await window.GarageDataLoader.load();
+      if (!dataset || !dataset.config || !Array.isArray(dataset.events) || !Array.isArray(dataset.months)) {
+        throw new Error('منبع داده پاسخ کامل و قابل‌استفاده برنگرداند.');
       }
 
-      // Detect a broken publication instead of displaying a convincing dashboard full of zeros.
-      if (!state.config || !Object.keys(state.config.serviceIntervals || {}).length || !Object.keys(state.config.partCatalog?.items || {}).length) {
-        throw new Error('دادهٔ تنظیمات ناقص است؛ config.json باید شامل سرویس‌ها و فهرست قطعات باشد.');
-      }
-      if (!snapshotLoaded && state.months.length && !state.events.length) {
-        throw new Error('ماه در index.json ثبت شده اما هیچ رویدادی از فایل‌های ماهانه دریافت نشد. مسیر انتشار GitHub Pages را بررسی کن.');
-      }
-
+      state.config = dataset.config;
+      state.events = dataset.events.filter(event => event && event.id && !event.deletedAt);
+      state.months = dataset.months.filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
+      state.precomputed = dataset.precomputed && typeof dataset.precomputed === 'object' ? dataset.precomputed : null;
+      state.snapshotGeneratedAt = dataset.generatedAt || null;
+      state.dataMode = dataset.mode || 'unknown';
+      state.dataWarnings = Array.isArray(dataset.warnings) ? dataset.warnings : [];
+      state.failedMonths = Array.isArray(dataset.failedMonths) ? dataset.failedMonths : [];
       state.refreshedAt = new Date();
-      state.failedMonths = failedMonths.sort();
+
       populateMonthFilter();
       populateActorFilter();
       renderAll();
-      setConnection('connected');
-      const idxDate = index?.updatedAt ? formatDateTime(index.updatedAt) : 'هنوز ثبت اولیه انجام نشده';
-      $('#lastUpdated').textContent = state.events.length
-        ? `آخرین به‌روزرسانی دفتر: ${idxDate}${snapshotLoaded ? ' · محاسبات آماده' : ' · حالت سازگاری'}`
-        : 'دادهٔ معتبر موجود است؛ آماده دریافت اولین رویداد از تلگرام';
-      $('#journalBottomNote').textContent = failedMonths.length
-        ? `هشدار: ${formatNumber(failedMonths.length)} فایل ماهانه بارگیری نشد (${failedMonths.join('، ')}). داده‌های در دسترس نمایش داده شده‌اند؛ دوباره تازه‌سازی کن.`
-        : snapshotLoaded
-          ? `نسخهٔ محاسبات: ${state.snapshotGeneratedAt ? formatDateTime(state.snapshotGeneratedAt) : 'نامشخص'} · ${formatNumber(state.events.length)} رویداد از ${formatNumber(state.months.length)} ماه · برای تازه‌سازی از دکمه بالا استفاده کن.`
-          : `آخرین بررسی مرورگر: ${formatTime(state.refreshedAt)} · برای تازه‌سازی از دکمه بالا استفاده کن.`;
+      setConnection('connected', state.dataMode);
+
+      const idxDate = dataset.updatedAt ? formatDateTime(dataset.updatedAt) : 'زمان ثبت منبع نامشخص';
+      const countLabel = `${formatNumber(state.events.length)} رویداد از ${formatNumber(state.months.length)} ماه`;
+      const modeLabel = state.dataMode === 'snapshot' ? 'محاسبات آماده' :
+        state.dataMode === 'snapshot-recalculated' ? 'بازمحاسبهٔ محلی از آخرین دادهٔ سالم' :
+        state.dataMode === 'offline-cache' ? 'حافظهٔ آفلاین مرورگر' :
+        state.dataMode === 'direct-partial' ? 'محاسبهٔ مستقیم · دادهٔ ناقص' : 'محاسبهٔ مستقیم مرورگر';
+      $('#lastUpdated').textContent = `آخرین به‌روزرسانی منبع: ${idxDate} · ${modeLabel}`;
+
+      const notes = [];
+      if (state.dataMode === 'snapshot') {
+        notes.push(`Snapshot معتبر: ${state.snapshotGeneratedAt ? formatDateTime(state.snapshotGeneratedAt) : 'زمان تولید نامشخص'}.`);
+      } else if (state.dataMode === 'offline-cache') {
+        notes.push('اتصال آنلاین برقرار نشد؛ آخرین نسخهٔ ذخیره‌شده در همین مرورگر با محاسبات مستقیم استفاده شده است.');
+      } else {
+        notes.push('داده‌های اصلی مستقیماً خوانده شدند؛ محاسبات در مرورگر انجام می‌شود و به GitHub Actions وابسته نیست.');
+      }
+      if (state.failedMonths.length) notes.push(`فایل‌های ماهانهٔ ناموفق: ${state.failedMonths.join('، ')}.`);
+      notes.push(...state.dataWarnings);
+      $('#journalBottomNote').textContent = `${countLabel} · ${notes.join(' ')}`;
+
       if (window.__garageBootScreen?.success) window.__garageBootScreen.success();
-      if (userInitiated) showToast(failedMonths.length ? 'بعضی لاگ‌های ماهانه بارگیری نشدند؛ جزئیات در پایین دفتر وقایع است.' : snapshotLoaded ? 'تصویر آماده محاسبات بارگیری شد.' : 'اطلاعات GitHub بارگیری شد.');
+      if (userInitiated) {
+        showToast(state.dataMode === 'snapshot'
+          ? 'فایل محاسبات آماده با موفقیت بارگیری شد.'
+          : state.dataMode === 'offline-cache'
+            ? 'اتصال برقرار نشد؛ آخرین دادهٔ ذخیره‌شده به‌صورت آفلاین نمایش داده شد.'
+            : state.failedMonths.length
+            ? 'داده‌ها با محاسبهٔ مستقیم بارگیری شدند، اما بعضی ماه‌ها ناقص‌اند.'
+            : 'فایل محاسبات آماده نبود؛ سایت داده‌های خام را خواند و محاسبه کرد.');
+      }
     } catch (error) {
-      console.error(error);
+      console.error('[206 Garage] dashboard load failed:', error);
+      state.dataMode = 'error';
       setConnection('error');
       const reason = String(error?.message || 'خطای نامشخص');
-      $('#lastUpdated').textContent = 'داده‌ها بارگیری نشدند؛ داشبورد از نمایش اعداد ساختگی خودداری کرد.';
-      $('#eventList').innerHTML = `<div class="empty-state"><b>داده‌ها در دسترس نیستند.</b><br><small>${escapeHtml(reason)}</small><br>وضعیت انتشار GitHub Pages و فایل data/dashboard.json را بررسی کن.</div>`;
-      if (window.__garageBootScreen?.fail) window.__garageBootScreen.fail(`بارگذاری داده‌ها ناموفق بود: ${reason} صفحه از حالت انتظار خارج شده است؛ از دکمهٔ بارگذاری مجدد استفاده کن.`);
-      if (userInitiated) showToast('بارگیری ناموفق بود؛ جزئیات در دفتر وقایع نمایش داده شده است.');
+      $('#lastUpdated').textContent = 'هیچ منبع دادهٔ قابل‌اعتمادی در دسترس نبود؛ اعداد ساختگی نمایش داده نمی‌شوند.';
+      $('#eventList').innerHTML = `<div class="empty-state"><b>داده‌ها از هیچ‌یک از منابع دریافت نشدند.</b><br><small>${escapeHtml(reason)}</small><br>سایت مستقل از ربات و GitHub Actions است؛ برای بازیابی داده، اتصال GitHub Pages، GitHub Raw یا jsDelivr را بررسی کن.</div>`;
+      $('#journalBottomNote').textContent = `خطای دریافت داده: ${reason}`;
+      if (window.__garageBootScreen?.fail) window.__garageBootScreen.fail(`بارگذاری مستقیم و فایل محاسبات آماده هر دو ناموفق شدند: ${reason}`);
+      if (userInitiated) showToast('دریافت داده ناموفق بود؛ جزئیات در دفتر وقایع ثبت شد.');
     } finally {
       refreshButton.classList.remove('is-loading');
       if (window.__garageBootScreen?.release) window.__garageBootScreen.release();
@@ -238,14 +183,30 @@
     if (target === 'analytics') requestAnimationFrame(renderAnalytics);
   }
 
-  function setConnection(status) {
+  function setConnection(status, mode = '') {
     const badge = $('#connectionBadge');
-    badge.classList.remove('connected', 'error');
+    badge.classList.remove('connected', 'error', 'fallback', 'partial', 'offline');
     if (status === 'connected') {
-      badge.classList.add('connected'); badge.innerHTML = '<i></i> داده‌ها بارگیری شد';
+      if (mode === 'snapshot') {
+        badge.classList.add('connected'); badge.innerHTML = '<i></i> داده‌ها آماده';
+        badge.title = 'فایل محاسبات آماده و معتبر است.';
+      } else if (mode === 'direct-partial') {
+        badge.classList.add('partial'); badge.innerHTML = '<i></i> محاسبه مستقیم · ناقص';
+        badge.title = 'بعضی فایل‌های ماهانه در دسترس نبودند؛ جزئیات در دفتر وقایع است.';
+      } else if (mode === 'offline-cache') {
+        badge.classList.add('offline'); badge.innerHTML = '<i></i> حافظه آفلاین';
+        badge.title = 'منابع آنلاین در دسترس نبودند؛ آخرین دادهٔ ذخیره‌شده در این مرورگر نمایش داده شده است.';
+      } else {
+        badge.classList.add('fallback'); badge.innerHTML = '<i></i> محاسبه مستقیم';
+        badge.title = 'داده‌ها مستقیم خوانده و در مرورگر محاسبه شده‌اند؛ GitHub Actions ضروری نیست.';
+      }
     } else if (status === 'error') {
-      badge.classList.add('error'); badge.innerHTML = '<i></i> خطای بارگیری';
-    } else badge.innerHTML = '<i></i> در حال اتصال';
+      badge.classList.add('error'); badge.innerHTML = '<i></i> خطای دریافت داده';
+      badge.title = 'تمام منابع داده ناموفق بودند.';
+    } else {
+      badge.innerHTML = '<i></i> در حال دریافت داده';
+      badge.title = 'در حال بررسی Snapshot و منابع خام جایگزین.';
+    }
   }
 
   function renderStats() {

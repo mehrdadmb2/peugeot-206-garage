@@ -10,7 +10,7 @@
     <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/Version-3.9.1-8b5cf6?style=flat-square" alt="Version 3.9.1">
+    <img src="https://img.shields.io/badge/Version-3.10.3-8b5cf6?style=flat-square" alt="Version 3.10.3">
     <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
     <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
@@ -21,11 +21,22 @@
   <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
 </p>
 
-> **نسخهٔ پروژه:** Garage OS 3.9.1 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+> **نسخهٔ پروژه:** Garage OS 3.10.3 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
 >
-> این پروژه برای ثبت شخصی سابقهٔ خودرو طراحی شده است. نسخهٔ **3.9.1** شامل اصلاح صفحهٔ لودینگ GitHub Pages است: صفحه دیگر پشت لودینگ نامحدود گیر نمی‌کند، درخواست‌های JSON مهلت پایان دارند، و خطای بارگیری با پیام قابل‌بستن و دکمهٔ بارگذاری مجدد نمایش داده می‌شود. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+> نسخهٔ **3.10.3** مسیر بارگذاری داشبورد را مستقل از GitHub Actions و Cloudflare Worker می‌کند. Snapshot آماده فقط در صورت سلامت و تازگی مصرف می‌شود؛ در غیر این صورت مرورگر `index.json`، `config.json` و لاگ‌های ماهانه را از GitHub Pages، GitHub Raw یا jsDelivr می‌خواند و محاسبات را خودش انجام می‌دهد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
 
-> **رفع گیرکردن صفحهٔ لودینگ:** اگر داده‌های GitHub Pages در دسترس نباشند، پس از ۱۲ ثانیه لایهٔ لودینگ خودکار کنار می‌رود تا کل صفحه مسدود نماند. این به معنی تضمین دسترسی به داده‌ها نیست؛ پیام خطا مسیر بررسی `data/index.json` و `data/config.json` را نشان می‌دهد. فایل‌های CSS/JS نیز با نسخهٔ جدید بارگیری می‌شوند تا کش قدیمی مرورگر کمتر مشکل‌ساز شود.
+> **بازیابی خودکار:** خطای 403، 404، Timeout، JSON خراب، Snapshot ناقص/قدیمی و خرابی بخشی از لاگ‌ها جداگانه شناسایی می‌شوند. دادهٔ ناقص با هشدار مشخص می‌شود؛ اگر هیچ منبع معتبری در دسترس نباشد، سایت به‌جای نمایش صفرهای گمراه‌کننده خطای واضح نشان می‌دهد.
+
+### نسخهٔ 3.10.3 — بازیابی مستقل داشبورد
+
+- `assets/js/data-loader.js` به‌عنوان لایهٔ مستقل دریافت داده اضافه شد.
+- Snapshot قبل از استفاده از نظر ساختار، تعداد رویداد، شناسه‌های تکراری، کاتالوگ قطعه/سرویس، تاریخ تولید و تازگی نسبت به `index.json` اعتبارسنجی می‌شود.
+- برای خطاهای 403/404، Timeout، پاسخ خالی، JSON خراب یا Snapshot قدیمی، سایت به فایل‌های اصلی رجوع می‌کند.
+- فایل‌های خام از سه مسیر GitHub Pages، GitHub Raw و jsDelivr دریافت می‌شوند؛ درخواست‌های موازیِ زمان‌بندی‌شده با AbortController و Timeout کاملِ دریافت بدنهٔ JSON کنترل می‌شوند.
+- در حالت پشتیبان، کیلومتر، موعد سرویس، مسافت رانندگان و آمار با منطق خود داشبورد محاسبه می‌شود؛ GitHub Actions برای نمایش سایت الزامی نیست.
+- خرابی تعدادی از لاگ‌های ماهانه به‌صورت وضعیت ناقص نمایش داده می‌شود؛ خرابی کامل منابع نیز به‌جای صفرسازی، خطای مشخص می‌دهد.
+- آخرین دادهٔ معتبر در حافظهٔ محلی همان مرورگر نگهداری می‌شود تا در قطعی کامل منابع آنلاین نیز آخرین نسخه با برچسب آفلاین قابل مشاهده و محاسبه باشد؛ هیچ Secret یا توکنی در کش ذخیره نمی‌شود.
+- مسیر وب‌سایت به Cloudflare Worker وابسته نیست و ربات نیز برای پاسخ‌دهی و ثبت رویداد به بارگذاری سایت وابستگی ندارد؛ هر دو فقط مخزن GitHub را به‌عنوان منبع مشترک داده استفاده می‌کنند.
 
 ---
 
@@ -70,14 +81,22 @@
 ## 🔁 سامانه چگونه کار می‌کند؟
 
 ```mermaid
-flowchart LR
+flowchart TD
     T[Telegram Bot] --> W[Cloudflare Worker]
     A[Authorized API Client] --> W
-    W -->|validate and process| G[GitHub Contents API]
+    W -->|validate and persist| G[GitHub Contents API]
     G --> D[data/logs/YYYY-MM.json]
     G --> I[data/index.json]
-    D --> P[GitHub Pages Dashboard]
+    G --> C[data/config.json]
+    G --> P[GitHub Pages Dashboard]
+    ACT[Optional GitHub Actions] --> S[data/dashboard.json]
+    D --> P
     I --> P
+    C --> P
+    S -->|only if valid and fresh| P
+    P -->|snapshot unavailable / stale / invalid| R[GitHub Raw / jsDelivr]
+    R --> P
+    P -->|direct browser calculations| UI[Dashboard Cards and Charts]
 ```
 
 - **تلگرام:** [@Peugeot206GarageBot](https://t.me/Peugeot206GarageBot)
@@ -230,7 +249,7 @@ flowchart LR
 2. در GitHub مسیر **Settings → Pages** را باز کن.
 3. گزینهٔ **Deploy from a branch**، شاخهٔ `main` و پوشهٔ `/(root)` را انتخاب کن.
 4. پس از تکمیل deployment این آدرس را باز کن: [داشبورد زنده](https://mehrdadmb2.github.io/peugeot-206-garage/).
-5. اگر صفحه قدیمی بود، `Ctrl+F5` بزن و در Actions وضعیت deployment را بررسی کن.
+5. اگر صفحه قدیمی بود، `Ctrl+F5` بزن. برای مسیر پشتیبان، `data-loader.js` در مرورگر فایل‌های خام را از GitHub Raw و jsDelivr نیز بررسی می‌کند؛ اجرای Workflow محاسبات برای کارکرد داشبورد اجباری نیست.
 
 ### ⚠️ هنگام ارتقا این داده‌ها را حفظ کن
 
@@ -427,10 +446,10 @@ npm run check
 | ربات پاسخی نمی‌دهد | `getWebhookInfo`، شناسهٔ مجاز، secret وب‌هوک و Worker Logs را بررسی کن. |
 | وب‌هوک 403 می‌دهد | مقدار `TELEGRAM_WEBHOOK_SECRET` باید دقیقاً با `secret_token` وب‌هوک تطبیق کند. |
 | ثبت در GitHub انجام نمی‌شود | انقضای توکن، مجوز Contents و شاخهٔ `main` را بررسی کن. |
-| داشبورد داده نمی‌خواند | انتشار Pages و دسترسی به `data/index.json` و `data/config.json` را بررسی کن. |
+| داشبورد داده نمی‌خواند | وضعیت badge را بررسی کن؛ `محاسبه مستقیم` یعنی Snapshot آماده کنار گذاشته شده و مرورگر فایل‌های خام را می‌خواند. در حالت خطا، دسترسی به Pages، GitHub Raw و jsDelivr و وجود فایل‌های `index.json`، `config.json` و لاگ‌ها را بررسی کن. |
 | نمودار تصویر نمی‌آید | گزارش متنی را بررسی کن؛ برای PNG لازم است دسترسی سرویس تصویر و پاسخ API آن فعال باشد. |
 | عدد پیمایش اختلاف دارد | کیلومتر و تاریخ واقعی ثبت‌های مجاور را کنترل کن؛ مقدار واقعی کیلومترشمار را بدون بررسی اصلاح نکن. |
-| تغییر روی سایت دیده نمی‌شود | وضعیت GitHub Actions/Pages را بررسی و سپس `Ctrl+F5` اجرا کن. |
+| تغییر روی سایت دیده نمی‌شود | `data/index.json` و لاگ ماه جاری را بررسی کن؛ سپس وضعیت GitHub Pages و دسترسی به منابع جایگزین را کنترل و `Ctrl+F5` اجرا کن. خرابی GitHub Actions به‌تنهایی نباید سایت را متوقف کند. |
 
 
 ## 🧹 جلوگیری از تکراری‌شدن و بررسی سوابق

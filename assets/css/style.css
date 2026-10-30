@@ -162,3 +162,7 @@ body{background-image:radial-gradient(ellipse at 15% 7%,rgba(27,105,153,.18),tra
 .hero-bot-copy strong{font-size:10px;letter-spacing:.01em;color:#f0fffb;font-weight:800;white-space:nowrap}
 .hero-bot-arrow{margin-inline-start:2px;color:#8cebd5;font-size:13px}
 @media(max-width:620px){.hero-bot-pill{min-height:40px;padding:5px 9px}.hero-bot-copy strong{font-size:9px}}
+
+/* v3.10.3 resilient data-source states */
+.status-badge.fallback{color:#8fe7ff;border-color:rgba(64,229,244,.28);background:rgba(64,229,244,.055)}.status-badge.fallback i{background:var(--cyan);box-shadow:0 0 0 3px rgba(64,229,244,.12),0 0 12px rgba(64,229,244,.5)}.status-badge.partial{color:#ffd19b;border-color:rgba(255,175,104,.3);background:rgba(255,175,104,.055)}.status-badge.partial i{background:var(--orange);box-shadow:0 0 0 3px rgba(255,175,104,.12),0 0 12px rgba(255,175,104,.45)}
+.status-badge.offline{color:#d0c2ff;border-color:rgba(154,133,255,.32);background:rgba(154,133,255,.07)}.status-badge.offline i{background:var(--violet);box-shadow:0 0 0 3px rgba(154,133,255,.12),0 0 12px rgba(154,133,255,.5)}

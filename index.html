@@ -7,8 +7,9 @@
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="assets/css/style.css?v=3.10.0-snapshot">
-  <script defer src="assets/js/app.js?v=3.10.0-snapshot"></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=3.10.3-resilience">
+  <script defer src="assets/js/data-loader.js?v=3.10.3-resilience"></script>
+  <script defer src="assets/js/app.js?v=3.10.3-resilience"></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -46,13 +47,15 @@
   <div id="bootScreen" class="boot-screen" role="status" aria-live="polite">
     <div class="boot-brand"><span class="boot-logo">206</span><span><b>GARAGE OS</b><small>VEHICLE DATA SYSTEM</small></span></div>
     <div class="boot-rotor"><i></i><i></i><i></i><span>206</span></div>
-    <h1>در حال اتصال به دفتر خودرو</h1><p>خواندن رویدادها از GitHub · محاسبه‌ی کارکرد و موعد سرویس‌ها</p>
-    <div class="boot-progress"><span></span></div><small class="boot-status">SECURE DATA PIPELINE / ASIA-TEHRAN</small>
+    <h1>در حال اتصال به دفتر خودرو</h1><p>بررسی Snapshot · دریافت مستقیم در صورت نیاز · محاسبهٔ مستقل مرورگر</p>
+    <div class="boot-progress"><span></span></div><small class="boot-status">MULTI-SOURCE DATA RECOVERY / ASIA-TEHRAN</small>
   </div>
   <script>
     // Independent failsafe: the app must never remain blocked behind the splash screen.
     (function () {
       let watchdog = 0;
+      let terminalWatchdog = 0;
+      let completed = false;
       const hideSplash = function () {
         const boot = document.getElementById('bootScreen');
         if (!boot) return;
@@ -95,15 +98,31 @@
         const copyNode = notice.querySelector('.boot-failsafe-copy');
         if (copyNode) copyNode.textContent = message;
       };
-      const clearWatchdog = function () { if (watchdog) window.clearTimeout(watchdog); watchdog = 0; };
+      const clearWatchdog = function () {
+        if (watchdog) window.clearTimeout(watchdog);
+        if (terminalWatchdog) window.clearTimeout(terminalWatchdog);
+        watchdog = 0; terminalWatchdog = 0;
+      };
       window.__garageBootScreen = {
-        release: function () { clearWatchdog(); hideSplash(); },
-        success: function () { clearWatchdog(); hideSplash(); removeNotice(); },
-        fail: function (message) { clearWatchdog(); showNotice(message || 'بارگذاری داده‌ها کامل نشد. اتصال را بررسی کن و دوباره تلاش کن.'); }
+        release: function () { completed = true; clearWatchdog(); hideSplash(); },
+        success: function () { completed = true; clearWatchdog(); hideSplash(); removeNotice(); },
+        fail: function (message) { completed = true; clearWatchdog(); showNotice(message || 'بارگذاری داده‌ها کامل نشد. اتصال را بررسی کن و دوباره تلاش کن.'); }
       };
       watchdog = window.setTimeout(function () {
-        showNotice('بارگذاری بیش از حد طول کشید؛ صفحه از حالت انتظار خارج شد. از «بارگذاری مجدد» استفاده کن یا فایل‌های data/index.json و data/config.json را بررسی کن.');
-      }, 12000);
+        const badge = document.getElementById('connectionBadge');
+        if (badge) { badge.classList.remove('connected'); badge.classList.add('fallback'); badge.innerHTML = '<i></i> تلاش برای منبع جایگزین'; }
+        const updated = document.getElementById('lastUpdated');
+        if (updated) updated.textContent = 'منبع اصلی کند است؛ دریافت مستقیم فایل‌های داده از GitHub Raw و jsDelivr در حال تلاش است.';
+        showNotice('دریافت منبع اصلی طول کشیده است. سایت به‌صورت خودکار فایل‌های خام را از منابع جایگزین می‌خواند و محاسبات را در مرورگر انجام می‌دهد؛ نیازی به اجرای GitHub Actions نیست.');
+        terminalWatchdog = window.setTimeout(function () {
+          if (completed) return;
+          const terminalBadge = document.getElementById('connectionBadge');
+          if (terminalBadge) { terminalBadge.classList.remove('fallback', 'connected'); terminalBadge.classList.add('error'); terminalBadge.innerHTML = '<i></i> بارگذاری متوقف شد'; }
+          const terminalText = document.getElementById('lastUpdated');
+          if (terminalText) terminalText.textContent = 'اسکریپت داشبورد یا همهٔ مسیرهای داده پاسخ نداده‌اند؛ بارگذاری خودکار متوقف شد.';
+          showNotice('بارگذاری خودکار پس از چند تلاش ناموفق متوقف شد. ارتباط GitHub Pages، GitHub Raw و jsDelivr را بررسی و سپس دوباره تلاش کن.');
+        }, 12000);
+      }, 10500);
     })();
   </script>
   <main id="top" class="container dashboard-main">
