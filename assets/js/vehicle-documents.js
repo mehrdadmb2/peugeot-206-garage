@@ -54,7 +54,14 @@
   function kvRows(items){return items.map(([k,v])=>`<div class="docs-kv"><span>${esc(k)}</span><b>${esc(v||'—')}</b></div>`).join('');}
   function render(d){
     documents=d||{};
-    const v=d.vehicle||{},p=d.plate||{},r=d.registration||{},l=d.driverLicense||{},t=d.technicalInspection||{},ins=d.insurance||{};
+    const v = d.vehicle || {};
+
+const p = {
+  ...(d.plate || {}),
+  letter: 'ی'
+};
+
+const r = d.registration || {};l=d.driverLicense||{},t=d.technicalInspection||{},ins=d.insurance||{};
     $('docsPlateVisual').innerHTML=`<span>${esc(p.leftDigits||'••')}</span><b>${esc(p.letter||'•')}</b><span>${esc(p.middleDigits||'•••')}</span><strong>ایران<br><em>${esc(p.regionalCode||'••')}</em></strong>`;
     $('docsPlateCaption').textContent=p.displayFull||'پلاک خودرو';
     $('docsRegistrationCard').innerHTML=`<div class="docs-card-brand"><span>🇮🇷 سند مالکیت وسیله نقلیه</span><small>VEHICLE REGISTRATION</small></div><h3>مشخصات خودرو</h3><div class="docs-registration-model">PEUGEOT <b>206 · SD</b></div><div class="docs-kv-grid">${kvRows([['نام مالک',r.ownerName],['کد ملی مالک',r.ownerNationalId],['نوع کاربری',v.bodyType],['تیپ درج‌شده',v.trimOnCard],['سال ساخت',v.modelYearJalali],['ظرفیت',`${v.seats||'—'} نفر`],['نوع سوخت',v.fuel],['رنگ',v.color],['شماره موتور',r.engineNumber],['شماره شاسی',r.chassisNumber],['VIN',r.vin],['سریال کارت',r.cardSerial]])}</div><div class="docs-card-footer"><span>IRAN · VEHICLE ID</span><b>${esc(p.display||'—')} / ${esc(p.regionalCode||'—')}</b></div>`;
