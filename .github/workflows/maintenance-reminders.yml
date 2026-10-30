@@ -26,6 +26,10 @@ jobs:
             echo "Missing repository Actions secret: SCHEDULE_TRIGGER_SECRET" >&2
             exit 1
           fi
+          if [ "${#SCHEDULE_TRIGGER_SECRET}" -lt 32 ]; then
+            echo "SCHEDULE_TRIGGER_SECRET must be at least 32 characters." >&2
+            exit 1
+          fi
       - name: Call the protected Cloudflare Worker endpoint
         env:
           SCHEDULE_TRIGGER_SECRET: ${{ secrets.SCHEDULE_TRIGGER_SECRET }}

@@ -1,0 +1,68 @@
+name: Build precomputed garage dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/config.json'
+      - 'data/index.json'
+      - 'data/logs/**'
+      - 'scripts/build-dashboard.mjs'
+      - '.github/workflows/build-dashboard.yml'
+  schedule:
+    # Refresh date-based service statuses every day at 09:15 Asia/Tehran.
+    - cron: '45 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: 206-garage-dashboard-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout latest main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Wait for the Worker data batch to settle
+        run: sleep 5
+
+      - name: Sync to the latest data commits
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Validate and calculate the complete dashboard snapshot
+        run: node scripts/build-dashboard.mjs
+
+      - name: Verify generated JSON and run regression tests
+        run: |
+          node --check assets/js/app.js
+          node --check worker/src/index.js
+          node --test worker/tests/*.test.mjs scripts/*.test.mjs
+          node -e "const d=require('./data/dashboard.json'); if(!Array.isArray(d.events)||!d.config?.partCatalog?.items||!d.computed) process.exit(1); console.log('Snapshot validated:', d.events.length, 'events;', Object.keys(d.config.partCatalog.items).length, 'parts')"
+
+      - name: Publish the snapshot to GitHub Pages
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/dashboard.json
+          if git diff --cached --quiet; then
+            echo 'Dashboard snapshot is already up to date.'
+            exit 0
+          fi
+          git commit -m 'chore: rebuild precomputed dashboard snapshot'
+          git push origin HEAD:main
