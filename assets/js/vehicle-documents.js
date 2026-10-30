@@ -74,8 +74,12 @@
   }
   async function unlock(event){
     event.preventDefault();
-    const token=$('docsAccessToken').value.trim();
-    if(token.length<32){setStatus('توکن باید حداقل ۳۲ کاراکتر باشد.',true);return;}
+    const token = $('docsAccessToken').value;
+
+if (token.length === 0) {
+  setStatus('لطفاً رمز دسترسی را وارد کن.', true);
+  return;
+}
     accessToken=token;$('docsAccessToken').value='';$('docsUnlockButton').disabled=true;$('docsUnlockButton').textContent='در حال دریافت مدارک…';
     try{const result=await api('/api/private/documents');if(!result.documents)throw new Error('پاسخ Worker شامل مدارک معتبر نیست.');render(result.documents);renewPrivateSession();setStatus('مدارک خصوصی با موفقیت دریافت شدند.');log('info','دسترسی خصوصی مدارک برقرار شد.',{documentTypes:['registration','driverLicense','technicalInspection','insurance']});}
     catch(error){accessToken='';$('docsAccessToken').value='';setStatus(`دریافت مدارک ناموفق بود: ${error.message}`,true);log('warn','دسترسی به گاوصندوق مدارک ناموفق بود.',{message:error.message});}
