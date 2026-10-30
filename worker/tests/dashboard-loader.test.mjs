@@ -43,10 +43,10 @@ function payloadFor(url) {
 }
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
-  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.12\.0-persian-months/);
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.12\.0-persian-months/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.12\.0-persian-months/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.12\.0-persian-months/);
+  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.13\.0-private-documents/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.13\.0-private-documents/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.13\.0-private-documents/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.13\.0-private-documents/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
@@ -56,6 +56,22 @@ test('HTML loads a cache-busted independent browser data loader before the app',
   assert.match(html, /completed = true/);
 });
 
+
+test('private documents UI is separately loaded, token-gated and contains no document numbers in public HTML', () => {
+  const docs = readFileSync(resolve(root, 'assets/js/vehicle-documents.js'), 'utf8');
+  assert.match(html, /data-view-pane="documents"/);
+  assert.match(html, /assets\/js\/vehicle-documents\.js\?v=3\.13\.0-private-documents/);
+  assert.ok(html.indexOf('assets/js/vehicle-documents.js') > html.indexOf('assets/js/app.js'));
+  assert.match(html, /docsAccessToken/);
+  assert.match(docs, /Authorization.*Bearer/);
+  assert.match(docs, /15\*60\*1000/);
+  assert.doesNotMatch(docs, /localStorage|sessionStorage/);
+  assert.doesNotMatch(html, /(?<!\d)\d{10,12}(?!\d)/);
+  assert.doesNotMatch(docs, /(?<!\d)\d{10,12}(?!\d)/);
+  assert.doesNotMatch(html, /[A-Z]{3}\d{9,14}/);
+  assert.doesNotMatch(docs, /[A-Z]{3}\d{9,14}/);
+  assert.doesNotMatch(html, /<div class="docs-plate-main"[^>]*>\s*<span>۶۸/);
+});
 
 test('browser data loader can recover from a GitHub Pages outage through GitHub Raw', async () => {
   const loader = createLoader(async url => {
@@ -87,7 +103,7 @@ test('browser data loader validates snapshots and falls back to raw JSON when th
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 31);
+  assert.equal(result.events.length, 32);
   assert.equal(Object.keys(result.config.partCatalog.items).length, 62);
   assert.equal(Object.keys(result.config.partCatalog.services).length, 17);
   assert.ok(result.warnings.some(warning => warning.includes('محاسبهٔ مستقیم')));
@@ -103,7 +119,7 @@ test('browser data loader ignores a stale Action snapshot and recalculates curre
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 31);
+  assert.equal(result.events.length, 32);
   assert.ok(result.warnings.some(warning => warning.includes('محاسبات')));
 });
 
@@ -118,7 +134,7 @@ test('browser data loader rejects an old calculator snapshot and recalculates ra
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 31);
+  assert.equal(result.events.length, 32);
 });
 
 test('browser data loader keeps available data and clearly reports missing monthly files', async () => {
@@ -135,7 +151,7 @@ test('browser data loader keeps available data and clearly reports missing month
   });
   const result = await loader.load();
   assert.equal(result.mode, 'direct-partial');
-  assert.equal(result.events.length, 31);
+  assert.equal(result.events.length, 32);
   assert.deepEqual(Array.from(result.failedMonths), ['2026-09']);
   assert.ok(result.warnings.some(warning => warning.includes('بارگذاری')));
 });
@@ -149,7 +165,7 @@ test('browser data loader uses a valid fresh snapshot without loading every mont
   const result = await loader.load();
   assert.equal(result.mode, 'snapshot');
   assert.equal(result.precomputed.eventCount, result.events.length);
-  assert.equal(result.events.length, 31);
+  assert.equal(result.events.length, 32);
   assert.equal(calls.some(path => /data\/logs\//.test(path)), false);
 });
 
@@ -165,7 +181,7 @@ test('browser data loader serves the last valid local cache when all online sour
   const cached = await offline.load();
   assert.equal(cached.mode, 'offline-cache');
   assert.equal(cached.precomputed, null);
-  assert.equal(cached.events.length, 31);
+  assert.equal(cached.events.length, 32);
   assert.ok(cached.warnings.some(warning => warning.includes('آخرین دادهٔ ذخیره‌شده')));
 });
 

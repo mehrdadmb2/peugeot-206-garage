@@ -109,11 +109,11 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelOnlyChart')?.innerHTML || '', /۳۵/);
   assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
   assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۵۸۴ km/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۱۲۲ km از تعویض/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۸۷۸ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۶۱۶ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۴۱۶ km مانده/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۶۶۱ km/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۱۹۹ km از تعویض/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۸۰۱ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۵۳۹ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۳۳۹ km مانده/);
   assert.doesNotMatch(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۴۱۶ km عبور از موعد/);
   assert.ok((elements.get('#componentCatalog')?.innerHTML || '').length > 1000, 'part catalog should be populated');
   assert.ok((elements.get('#serviceCatalogGrid')?.innerHTML || '').length > 500, 'service catalog should be populated');
@@ -121,6 +121,6 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#costChart')?.innerHTML || '').length > 100, 'analytics chart should be rendered');
   assert.ok((elements.get('#fuelEventList')?.innerHTML || '').length > 100, 'fuel page should render');
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
-  assert.equal(dataset.events.length, 31);
+  assert.equal(dataset.events.length, 32);
   assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);
 });

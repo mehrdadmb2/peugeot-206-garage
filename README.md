@@ -594,3 +594,8 @@ npm run check
 ```
 
 برای پاک‌سازی امن کلیدهای برآورد قدیمی از **`scripts/upgrade-config-v3.9.mjs`** استفاده کن. این اسکریپت پیش از تغییر، از `data/config.json` نسخهٔ پشتیبان می‌گیرد، فقط فیلدهای تخمینی پیمایش را حذف می‌کند و به لاگ‌های ماهانه، اشخاص، بازه‌های سرویس یا تنظیمات سفارشی دست نمی‌زند. اگر آن فیلدها قبلاً حذف شده باشند، پیکربندی را بدون تغییر می‌گذارد. اجرای آن اختیاری است، اما برای حذف اثر پیکربندی قدیمی توصیه می‌شود.
+
+
+## Private Vehicle Documents (v3.13.0)
+
+Vehicle registration, driving-license, plate, insurance and technical-inspection data are served from a private Cloudflare KV namespace. Do not add raw ID photos, national IDs, engine/chassis numbers, policy numbers or the private seed JSON to this public repository. Set `DOCUMENTS_ACCESS_TOKEN` and `VEHICLE_DOCUMENTS_JSON` as Worker secrets and bind `GARAGE_PRIVATE_KV`. The dashboard asks for the access token and does not persist it in localStorage. Telegram `/documents` and `/insurance` are restricted by `ALLOWED_TELEGRAM_USER_ID` and only return sensitive details in a private one-to-one chat; group chats receive no document data. The license categories and the historical plate printed on the technical-inspection report are kept as separate source fields. The insurance photo was not present in the supplied archive, so policy details remain blank until entered from the actual policy.

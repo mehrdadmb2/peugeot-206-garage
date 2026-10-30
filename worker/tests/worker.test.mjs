@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.10.0");
+ assert.equal(body.version, "3.13.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.10.0");
+ assert.equal(body.version, "3.13.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -921,4 +921,139 @@ test("scheduled reminders notify once per maintenance stage and stay quiet on re
   assert.equal(secondBody.ok, true); assert.equal(secondBody.sent, 0);
   assert.equal(telegramMessages.length, 1, "same stage must not repeat the Telegram reminder");
  } finally { globalThis.fetch = originalFetch; }
+});
+
+
+test("private vehicle documents endpoint rejects unauthenticated access", async () => {
+ const token = "d".repeat(48);
+ const response = await worker.fetch(new Request("https://unit.test/api/private/documents"), {
+  DOCUMENTS_ACCESS_TOKEN: token,
+  GARAGE_PRIVATE_KV: { get: async()=>null, put: async()=>{} }
+ });
+ assert.equal(response.status, 401);
+ assert.equal((await response.json()).error, "documents_unauthorized");
+});
+
+test("private vehicle documents are seeded into KV and returned only with the dedicated token", async () => {
+ const token="d".repeat(48); const store=new Map();
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const seed={schemaVersion:1,vehicle:{model:"206 SD"},plate:{display:"68 S 127"},registration:{ownerName:"Owner"},driverLicense:{holderName:"Driver"},technicalInspection:{expiryDateJalali:"1405/10/24"},insurance:{status:"missing"}};
+ const response=await worker.fetch(new Request("https://unit.test/api/private/documents",{headers:{authorization:`Bearer ${token}`}}),{DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(response.status,200);
+ const body=await response.json();assert.equal(body.documents.registration.ownerName,"Owner");
+ assert.ok(store.has("vehicle-documents:v1"));
+});
+
+test("private insurance endpoint validates dates and persists the policy in KV", async () => {
+ const token="d".repeat(48); const store=new Map();
+ const seed={schemaVersion:1,vehicle:{model:"206 SD"},plate:{display:"68 S 127"},registration:{},driverLicense:{},technicalInspection:{},insurance:{status:"missing"}};
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const response=await worker.fetch(new Request("https://unit.test/api/private/documents/insurance",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({provider:"Example",policyNumber:"P-123",issueDateJalali:"۱۴۰۵/۰۱/۰۱",expiryDateJalali:"۱۴۰۶/۰۱/۰۱"})}),{DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(response.status,200);const body=await response.json();assert.equal(body.documents.insurance.provider,"Example");assert.equal(body.documents.insurance.expiryDateJalali,"1406/01/01");
+ const invalid=await worker.fetch(new Request("https://unit.test/api/private/documents/insurance",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({issueDateJalali:"1406/01/01",expiryDateJalali:"1405/01/01"})}),{DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(invalid.status,400);
+});
+
+test("private documents API returns 503 when KV binding is missing without leaking seed data", async () => {
+ const token="d".repeat(48);
+ const response=await worker.fetch(new Request("https://unit.test/api/private/documents",{headers:{authorization:`Bearer ${token}`}}),{DOCUMENTS_ACCESS_TOKEN:token,VEHICLE_DOCUMENTS_JSON:JSON.stringify({schemaVersion:1,vehicle:{},plate:{}})});
+ assert.equal(response.status,503);
+});
+
+
+test("private Jalali date parsing normalizes short dates and rejects impossible Esfand 30", async () => {
+ const token="d".repeat(48); const store=new Map();
+ const seed={schemaVersion:1,vehicle:{model:"206 SD"},plate:{display:"68 S 127"},registration:{},driverLicense:{},technicalInspection:{},insurance:{status:"missing"}};
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const valid=await worker.fetch(new Request("https://unit.test/api/private/documents/insurance",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({issueDateJalali:"1405/2/1",expiryDateJalali:"1406/2/1"})}),{DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(valid.status,200);
+ const body=await valid.json(); assert.equal(body.documents.insurance.issueDateJalali,"1405/02/01");
+ const impossible=await worker.fetch(new Request("https://unit.test/api/private/documents/insurance",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({issueDateJalali:"1405/12/30",expiryDateJalali:"1406/01/01"})}),{DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(impossible.status,400);
+});
+
+
+test("Telegram /documents command resolves through aliases and returns private document details only to the allowlisted user", async () => {
+ const token="d".repeat(48); const store=new Map(); const sent=[];
+ const seed={schemaVersion:1,vehicle:{make:"Peugeot",model:"206 SD",modelYearJalali:1387,color:"سفید روغنی"},plate:{display:"۰۰ الف ۰۰۰",displayFull:"۰۰ الف ۰۰۰ · ایران ۰۰",regionalCode:"۰۰"},registration:{ownerName:"مالک تست",ownerNationalId:"0000000000",engineNumber:"ENGINE-1",chassisNumber:"CHASSIS-1",vin:"VIN-1"},driverLicense:{holderName:"راننده تست",nationalId:"1111111111",issueDateJalali:"1403/07/17",expiryDateJalali:"1413/07/17",validityYears:10,expiryDerived:true,categories:[{type:"پایه سوم · خودروهای سواری",firstIssueDateJalali:"1399/05/15",status:"مجاز"}]},technicalInspection:{certificateNumber:"TECH-1",issueDateJalali:"1404/10/24",expiryDateJalali:"1405/10/24",center:"شیراز",plateAtInspection:"ایران ۰۰ الف ۰۰۰",testTime:"15:13"},insurance:{status:"missing"}};
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{
+  const url=new URL(input);
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sent.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sent.length}}),{status:200,headers:{"content-type":"application/json"}});}
+  return new Response("unexpected upstream",{status:500});
+ };
+ try {
+  const env={TELEGRAM_WEBHOOK_SECRET:"webhook-secret",TELEGRAM_BOT_TOKEN:"fake-bot-token",ALLOWED_TELEGRAM_USER_ID:"42",DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)};
+  const response=await worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"webhook-secret"},body:JSON.stringify({message:{from:{id:42},chat:{id:42},date:1793380000,text:"/documents"}})}),env);
+  assert.equal(response.status,200);assert.equal(sent.length,1);
+  assert.match(sent[0].text,/مالک تست/);assert.match(sent[0].text,/راننده تست/);assert.match(sent[0].text,/معاینه فنی/);assert.match(sent[0].text,/پایه سوم/);assert.match(sent[0].text,/پلاک درج‌شده هنگام معاینه/);
+  assert.ok(store.has("vehicle-documents:v1"));
+ } finally { globalThis.fetch=originalFetch; }
+});
+
+test("Telegram /insurance alias reports missing policy and accepts Jalali set dates", async () => {
+ const token="d".repeat(48); const store=new Map(); const sent=[];
+ const seed={schemaVersion:1,vehicle:{model:"206 SD"},plate:{display:"68"},registration:{},driverLicense:{},technicalInspection:{},insurance:{status:"missing"}};
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{const url=new URL(input);if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sent.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sent.length}}),{status:200,headers:{"content-type":"application/json"}});}return new Response("unexpected upstream",{status:500});};
+ try {
+  const env={TELEGRAM_WEBHOOK_SECRET:"webhook-secret",TELEGRAM_BOT_TOKEN:"fake-bot-token",ALLOWED_TELEGRAM_USER_ID:"42",GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)};
+  const invoke=async text=>worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"webhook-secret"},body:JSON.stringify({message:{from:{id:42},chat:{id:42},date:1793380000,text}})}),env);
+  await invoke("/insurance");assert.match(sent[0].text,/بیمه‌نامه هنوز ثبت نشده/);
+  await invoke("/insurance set 1405/2/1 1406/2/1");assert.match(sent[1].text,/در فضای خصوصی ذخیره شد/);
+  const saved=JSON.parse(store.get("vehicle-documents:v1"));assert.equal(saved.insurance.issueDateJalali,"1405/02/01");assert.equal(saved.insurance.expiryDateJalali,"1406/02/01");
+ } finally {globalThis.fetch=originalFetch;}
+});
+
+test("private document commands never publish identity details in Telegram groups", async () => {
+ const sent=[]; const originalFetch=globalThis.fetch;
+ globalThis.fetch=async(input,init={})=>{const url=new URL(input);if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sent.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sent.length}}),{status:200,headers:{"content-type":"application/json"}});}return new Response("unexpected upstream",{status:500});};
+ try {
+  const env={TELEGRAM_WEBHOOK_SECRET:"webhook-secret",TELEGRAM_BOT_TOKEN:"fake-bot-token",ALLOWED_TELEGRAM_USER_ID:"42"};
+  for (const [idx,text] of ["/documents","/insurance"].entries()) {
+   const response=await worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"webhook-secret"},body:JSON.stringify({message:{from:{id:42},chat:{id:-100987654,type:"supergroup"},date:1793380000,message_id:90+idx,text}})}),env);
+   assert.equal(response.status,200);
+  }
+  assert.equal(sent.length,2);
+  for(const message of sent){assert.match(message.text,/فقط در گفت‌وگوی خصوصی/);assert.doesNotMatch(message.text,/کد ملی|شماره موتور|VIN|پلاک/);}
+ } finally {globalThis.fetch=originalFetch;}
+});
+
+test("scheduled private-document expiry reminders notify once per 30/14/7-day stage", async () => {
+ const toJalali = (date) => {
+  const parts = new Intl.DateTimeFormat("en-US-u-ca-persian", { timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const v = Object.fromEntries(parts.filter(x => x.type !== "literal").map(x => [x.type, x.value]));
+  return `${v.year}/${String(v.month).padStart(2,"0")}/${String(v.day).padStart(2,"0")}`;
+ };
+ const plusDays = days => toJalali(new Date(Date.now() + days * 86400000));
+ const store = new Map();
+ const seed = { schemaVersion: 1, vehicle: { model: "206 SD" }, plate: { display: "68" }, registration: {}, driverLicense: {}, technicalInspection: { expiryDateJalali: plusDays(20) }, insurance: { status: "configured", expiryDateJalali: plusDays(6) } };
+ const kv = { get: async key => store.get(key) || null, put: async (key, value) => { store.set(key, value); } };
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], ownership: { purchaseOdometerKm: 428000 }, serviceIntervals: {} })]
+ ]);
+ const sent = []; const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname.includes("api.github.com")) {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   const method = (init.method || "GET").toUpperCase();
+   if (method === "GET") { const content=files.get(path); if(content===undefined)return new Response("not found",{status:404}); return new Response(JSON.stringify({sha:`sha-${path}`,content:Buffer.from(content,"utf8").toString("base64")}),{status:200,headers:{"content-type":"application/json"}}); }
+   if (method === "PUT") { const body=JSON.parse(init.body); files.set(path,Buffer.from(body.content,"base64").toString("utf8")); return new Response(JSON.stringify({content:{path}}),{status:201,headers:{"content-type":"application/json"}}); }
+  }
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sent.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sent.length}}),{status:200,headers:{"content-type":"application/json"}});}
+  return new Response("unexpected upstream",{status:500});
+ };
+ try {
+  const env={SCHEDULE_TRIGGER_SECRET:"r".repeat(48),GITHUB_TOKEN:"fake-github-token",GITHUB_OWNER:"mehrdadmb2",GITHUB_REPO:"peugeot-206-garage",ALLOWED_TELEGRAM_USER_ID:"42",TELEGRAM_BOT_TOKEN:"fake-telegram-token",GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)};
+  const call=()=>worker.fetch(new Request("https://unit.test/scheduled/reminders",{method:"POST",headers:{"X-Schedule-Secret":"r".repeat(48)}}),env);
+  const first=await call(); const firstBody=await first.json();
+  assert.equal(firstBody.ok,true); assert.equal(firstBody.documentSent,2); assert.equal(sent.length,1);
+  assert.match(sent[0].text,/بیمه شخص ثالث/); assert.match(sent[0].text,/معاینه فنی/);
+  const second=await call(); const secondBody=await second.json();
+  assert.equal(secondBody.ok,true); assert.equal(secondBody.documentSent,0); assert.equal(sent.length,1);
+ } finally { globalThis.fetch=originalFetch; }
 });

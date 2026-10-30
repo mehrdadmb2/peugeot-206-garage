@@ -7,6 +7,8 @@ const FILE_DELETED_EVENTS = "data/deleted-events.json";
 const FILE_PENDING_DUPLICATES = "data/pending-duplicates.json";
 const FILE_PENDING_REVIEWS = "data/pending-reviews.json";
 const FILE_PENDING_ANOMALIES = "data/pending-anomaly-reviews.json";
+const PRIVATE_VEHICLE_DOCS_KEY = "vehicle-documents:v1";
+const PRIVATE_DOC_REMINDER_KEY = "vehicle-document-expiry-reminders:v1";
 const DEFAULT_PURCHASE_ODOMETER_KM = 428000;
 const QUICKCHART_URL = "https://quickchart.io/chart";
 const SITE_URL = "https://mehrdadmb2.github.io/peugeot-206-garage/";
@@ -44,7 +46,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.10.0",
+        version: "3.13.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -63,15 +65,17 @@ export default {
           scheduledReminders: "POST /scheduled/reminders (X-Schedule-Secret; called by GitHub Actions once daily)",
           analysis: "Telegram /analysis hour|day|week|month sends PNG charts and a detailed report",
           updateEvent: "POST /api/v1/event/update (authorized JSON {id, patch})",
-          deleteEvent: "DELETE /api/v1/event?id=<event-id> (authorized; archived before removal)"
+          deleteEvent: "DELETE /api/v1/event?id=<event-id> (authorized; archived before removal)",
+          privateDocuments: "GET /api/private/documents (Authorization: Bearer <DOCUMENTS_ACCESS_TOKEN>); POST /api/private/documents/insurance (private vehicle document vault)"
         }
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.10.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.13.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
-        externalApi: Boolean(env.API_ACCESS_TOKEN)
+        externalApi: Boolean(env.API_ACCESS_TOKEN),
+        privateDocuments: Boolean(env.DOCUMENTS_ACCESS_TOKEN && env.GARAGE_PRIVATE_KV)
       }, scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required", scheduledReminders: String(env.SCHEDULE_TRIGGER_SECRET || "").length >= 32 });
     }
     if (url.pathname === "/scheduled/reminders" && request.method === "POST") {
@@ -102,6 +106,43 @@ export default {
       }
       await processTelegramWebhook(update, env);
       return json({ ok: true, accepted: true, processing: "complete" });
+    }
+    if (url.pathname === "/api/private/documents" || url.pathname === "/api/private/documents/insurance") {
+      if (!isPrivateDocumentsAuthorized(request, env)) return corsResponse(json({ ok: false, error: "documents_unauthorized", message: "برای دسترسی به مدارک، DOCUMENTS_ACCESS_TOKEN را وارد کن." }, 401));
+      try {
+        if (!env.GARAGE_PRIVATE_KV) return corsResponse(json({ ok: false, error: "private_kv_not_configured", message: "فضای خصوصی Cloudflare KV با binding به نام GARAGE_PRIVATE_KV هنوز تنظیم نشده است." }, 503));
+        if (request.method === "GET" && url.pathname === "/api/private/documents") {
+          const documents = await loadPrivateVehicleDocuments(env);
+          return corsResponse(json({ ok: true, documents, storage: "cloudflare-kv-private", cache: "no-store" }));
+        }
+        if (request.method === "POST" && url.pathname === "/api/private/documents/insurance") {
+          let payload;
+          try { payload = await request.json(); } catch { return corsResponse(json({ ok: false, error: "invalid_json" }, 400)); }
+          const issueDateJalali = normalizeJalaliInput(payload?.issueDateJalali);
+          const expiryDateJalali = normalizeJalaliInput(payload?.expiryDateJalali);
+          if (!isValidJalaliDate(issueDateJalali) || !isValidJalaliDate(expiryDateJalali)) return corsResponse(json({ ok: false, error: "invalid_insurance_dates", message: "تاریخ‌ها باید با قالب سال/ماه/روز شمسی معتبر وارد شوند؛ نمونه: ۱۴۰۵/۰۱/۰۱." }, 400));
+          const issueParts = issueDateJalali.split("/").map(Number);
+          const expiryParts = expiryDateJalali.split("/").map(Number);
+          const issue = jalaliToGregorian(...issueParts);
+          const expiry = jalaliToGregorian(...expiryParts);
+          if (Date.UTC(...[expiry[0], expiry[1]-1, expiry[2]]) < Date.UTC(...[issue[0], issue[1]-1, issue[2]])) return corsResponse(json({ ok: false, error: "insurance_expiry_before_issue", message: "تاریخ انقضا نمی‌تواند قبل از تاریخ صدور باشد." }, 400));
+          const documents = await loadPrivateVehicleDocuments(env);
+          documents.insurance = {
+            ...(documents.insurance || {}), status: "configured", policyType: "شخص ثالث",
+            provider: cleanPrivateField(payload.provider, 100), policyNumber: cleanPrivateField(payload.policyNumber, 100),
+            insuredName: cleanPrivateField(payload.insuredName, 120), issueDateJalali, expiryDateJalali,
+            thirdPartyCoverage: cleanPrivateField(payload.thirdPartyCoverage, 100), bodyCoverage: cleanPrivateField(payload.bodyCoverage, 100),
+            updatedAt: nowTehran().iso
+          };
+          documents.updatedAt = nowTehran().iso;
+          await savePrivateVehicleDocuments(env, documents);
+          return corsResponse(json({ ok: true, documents, savedTo: "cloudflare-kv-private", reminders: { thresholdsDays: [30, 14, 7, 0] } }));
+        }
+        return corsResponse(json({ ok: false, error: "method_not_allowed" }, 405));
+      } catch (error) {
+        console.error("private vehicle documents request failed", error?.stack || error);
+        return corsResponse(json({ ok: false, error: "private_documents_failed", message: safePublicError(error) }, 500));
+      }
     }
     if (url.pathname.startsWith("/api/v1/")) {
       if (!isApiAuthorized(request, env)) return corsResponse(json({ ok: false, error: "unauthorized", message: "Set the API_ACCESS_TOKEN Worker secret and send it as Authorization: Bearer <token>." }, 401));
@@ -235,7 +276,7 @@ async function handleExternalApi(request, url, env) {
     if (reply?.document) return json({ ok: false, error: "use_csv_endpoint", message: "برای دریافت CSV از GET /api/v1/export?month=YYYY-MM استفاده کن." }, 400);
     return json({ ok: true, persisted, source: "github", reply: replyText, filename: reply?.filename || null, note: "در رویدادهای تغییردهنده، پاسخ موفق پس از پایان commitهای GitHub ارسال می‌شود؛ گزارش‌ها فقط داده‌های ذخیره‌شده را می‌خوانند." });
   }
-  return json({ ok: false, error: "not_found", allowed: ["GET /api/v1/overview","GET /api/v1/events","GET /api/v1/due","GET /api/v1/config","GET /api/v1/export","POST /api/v1/record","POST /api/v1/event/update","DELETE /api/v1/event?id=EVENT_ID"] }, 404);
+  return json({ ok: false, error: "not_found", allowed: ["GET /api/v1/overview","GET /api/v1/events","GET /api/v1/due","GET /api/v1/config","GET /api/v1/export","GET /api/private/documents","POST /api/private/documents/insurance","POST /api/v1/record","POST /api/v1/event/update","DELETE /api/v1/event?id=EVENT_ID"] }, 404);
 }
 
 function accountingDateForApi(event) {
@@ -685,6 +726,8 @@ function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*
 
 const COMMAND_ALIASES = {
   catalog: "catalog", parts: "catalog", قطعات: "catalog", کاتالوگ: "catalog",
+  documents: "documents", vehicle_documents: "documents", vehicledocuments: "documents", مدارک: "documents", مدارک_خودرو: "documents",
+  insurance: "insurance", bime: "insurance", بیمه: "insurance",
   components: "components", installed: "components", قطعات_نصب: "components",
   issues: "issues", openissues: "issues", open_issues: "issues", خرابی: "issues", خرابیها: "issues", خرابی_ها: "issues",
   services: "services", servicecatalog: "services", فهرست_سرویس: "services",
@@ -781,12 +824,18 @@ async function processMessage(text, message, env, options = {}) {
   text = parsedCommand.text;
   if (parsedCommand.unknown) return { text: `دستور «/${parsedCommand.command}» شناخته نشد. راهنمای کامل و نمونه‌های ثبت را پایین ببین:\n\n${helpText()}`, keyboard: true };
   const lower = normalizeIntentText(text);
+  const isPrivateDocumentCommand = /^\/(?:documents|vehicle-documents|مدارک|مدارک_خودرو|insurance|bime|بیمه)(?:@\w+)?(?:\s|$)/i.test(text);
+  if (isPrivateDocumentCommand && message.chat?.type && message.chat.type !== "private") {
+    return { text: "🔐 برای حفظ حریم خصوصی مدارک، دستورهای /documents و /insurance فقط در گفت‌وگوی خصوصی با ربات پاسخ داده می‌شوند. به @Peugeot206GarageBot پیام خصوصی بده.", keyboard: false };
+  }
   const fromDate = new Date((message.date || Math.floor(Date.now() / 1000)) * 1000);
   const deepLinkEvent = text.match(/^\/start(?:@\w+)?\s+e_([a-f0-9-]{6,36})/i);
   if (deepLinkEvent) {
     const event = await findEventByPrefix(deepLinkEvent[1], env);
     return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد موردنظر پیدا نشد یا حذف شده است. /latest را بررسی کن.", keyboard: false };
   }
+  if (/^\/(documents|vehicle-documents|مدارک|مدارک_خودرو)(?:@\w+)?\b/i.test(text)) return { text: await privateDocumentsReport(env), keyboard: false };
+  if (/^\/(insurance|bime|بیمه)(?:@\w+)?\b/i.test(text)) return { text: await insuranceCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
   if (/^\/catalog\b|^\/parts\b|^\/قطعات\b|^\/کاتالوگ\b/i.test(text)) return { messages: await catalogGuideMessages(env), keyboard: false };
@@ -969,6 +1018,7 @@ function helpText() {
 📚 راهنمای کامل در چند پیام: /guide
 🔩 فرهنگ قطعات: /catalog · قطعات نصب‌شده و عمرشان: /components
 🧰 فهرست خدمات: /services
+▣ مدارک خصوصی خودرو: /documents · وضعیت/ثبت بیمه: /insurance
 🛠 ثبت یک مراجعه با چند قطعه/سرویس: /repairjob
 🚦 جزئیات جریمه: /fineinfo شناسه
 📈 گزارش تصویری با چهار نمودار: /analysis month (هزینه، سوخت، مسافت و سهم راننده)
@@ -2429,10 +2479,154 @@ async function runDueReminders(env) {
     if (!activeCycles.has(key)) delete state.sent[key];
   }
   await mutateJsonFile(FILE_REMINDERS, env, () => ({ sent: {} }), current => ({ ...current, sent: state.sent, updatedAt: now.iso }));
-  if (alertLines.length) {
-    await sendText(env, env.ALLOWED_TELEGRAM_USER_ID, `🚘 <b>یادآور نگهداری پژو ۲۰۶</b>\nکارکرد فعلی: ${currentOdo === null ? 'ثبت نشده' : `${formatNum(currentOdo)} km`}\n\n${alertLines.join('\n\n')}\n\nاین پیام فقط هنگام ورود به یک مرحلهٔ جدید (نزدیک موعد، موعد رسیده، عقب‌افتاده یا بحرانی) ارسال می‌شود؛ هشدار یک مرحله در هر چرخه تکرار نمی‌شود.\n\nجزئیات: /due · سرویس‌های باز: /issues`, false);
+  const documentAlerts = await collectPrivateDocumentExpiryAlerts(env, now);
+  const allAlertLines = [...alertLines, ...documentAlerts.lines];
+  if (allAlertLines.length) {
+    await sendText(env, env.ALLOWED_TELEGRAM_USER_ID, `🚘 <b>یادآور نگهداری و مدارک پژو ۲۰۶</b>\nکارکرد فعلی: ${currentOdo === null ? 'ثبت نشده' : `${formatNum(currentOdo)} km`}\n\n${allAlertLines.join('\n\n')}\n\nاین پیام فقط هنگام ورود به یک مرحلهٔ جدید (نزدیک موعد، موعد رسیده، عقب‌افتاده یا بحرانی) ارسال می‌شود؛ هشدار یک مرحله در هر چرخه تکرار نمی‌شود.\n\nجزئیات: /due · سرویس‌های باز: /issues`, false);
   }
-  return { sent: alertLines.length, checked: due.length, time: now.iso, currentOdometerKm: currentOdo, stages: alertLines.length ? 'transition-notifications' : 'no-stage-transition' };
+  return { sent: alertLines.length + documentAlerts.lines.length, maintenanceSent: alertLines.length, documentSent: documentAlerts.lines.length, checked: due.length, time: now.iso, currentOdometerKm: currentOdo, stages: (alertLines.length + documentAlerts.lines.length) ? 'transition-notifications' : 'no-stage-transition' };
+}
+
+function isPrivateDocumentsAuthorized(request, env) {
+  const expected = String(env.DOCUMENTS_ACCESS_TOKEN || "");
+  const authorization = String(request.headers.get("Authorization") || "");
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  return expected.length >= 32 && constantTimeEqual(token, expected);
+}
+function normalizeJalaliInput(value) {
+  const raw = normalizeDigits(String(value || "").trim()).replace(/-/g, "/").replace(/\s+/g, "");
+  const match = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  return match ? `${match[1]}/${match[2].padStart(2,"0")}/${match[3].padStart(2,"0")}` : raw;
+}
+function isValidJalaliDate(value) {
+  const m = String(value || "").match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!m) return false;
+  const year=Number(m[1]), month=Number(m[2]), day=Number(m[3]);
+  if (year < 1300 || year > 1500 || month < 1 || month > 12 || day < 1) return false;
+  const start = jalaliToGregorian(year, month, 1);
+  const next = month === 12 ? jalaliToGregorian(year + 1, 1, 1) : jalaliToGregorian(year, month + 1, 1);
+  const maxDay = Math.round((Date.UTC(next[0],next[1]-1,next[2])-Date.UTC(start[0],start[1]-1,start[2]))/86400000);
+  return day <= maxDay;
+}
+function cleanPrivateField(value, maxLength=120) { return String(value || "").replace(/[<>\u0000-\u001f]/g, " ").trim().slice(0,maxLength); }
+async function loadPrivateVehicleDocuments(env) {
+  if (!env.GARAGE_PRIVATE_KV) throw new Error("GARAGE_PRIVATE_KV binding is not configured.");
+  const stored = await env.GARAGE_PRIVATE_KV.get(PRIVATE_VEHICLE_DOCS_KEY);
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    if (!parsed || parsed.schemaVersion !== 1 || !parsed.vehicle || !parsed.plate) throw new Error("Private vehicle documents in KV have an invalid schema.");
+    return parsed;
+  }
+  const seed = String(env.VEHICLE_DOCUMENTS_JSON || "").trim();
+  if (!seed) throw new Error("Private vehicle documents are not initialized; set VEHICLE_DOCUMENTS_JSON once.");
+  const parsed = JSON.parse(seed);
+  if (!parsed || parsed.schemaVersion !== 1 || !parsed.vehicle || !parsed.plate) throw new Error("VEHICLE_DOCUMENTS_JSON has an invalid schema.");
+  parsed.updatedAt = parsed.updatedAt || nowTehran().iso;
+  await env.GARAGE_PRIVATE_KV.put(PRIVATE_VEHICLE_DOCS_KEY, JSON.stringify(parsed));
+  return parsed;
+}
+async function savePrivateVehicleDocuments(env, documents) {
+  if (!env.GARAGE_PRIVATE_KV) throw new Error("GARAGE_PRIVATE_KV binding is not configured.");
+  await env.GARAGE_PRIVATE_KV.put(PRIVATE_VEHICLE_DOCS_KEY, JSON.stringify(documents));
+}
+function formatPrivateDocumentsReport(documents) {
+  const v=documents.vehicle||{}, p=documents.plate||{}, r=documents.registration||{}, l=documents.driverLicense||{}, t=documents.technicalInspection||{}, i=documents.insurance||{};
+  const safe=(value)=>escapeTelegramText(value || "ثبت نشده");
+  const lines = [
+    "▣ <b>گاوصندوق خصوصی مدارک پژو ۲۰۶</b>",
+    `🚘 <b>پلاک:</b> <code>${safe(p.displayFull || `${p.display || "—"} · ایران ${p.regionalCode || "—"}`)}</code>`,
+    `🚗 <b>خودرو:</b> ${safe(v.make)} ${safe(v.model)} · مدل ${safe(v.modelYearJalali)} · ${safe(v.color)}`,
+    `👤 <b>مالک کارت:</b> ${safe(r.ownerName)} · کد ملی <code>${safe(r.ownerNationalId)}</code>`,
+    `🔧 <b>موتور:</b> <code>${safe(r.engineNumber)}</code>`,
+    `🔩 <b>شاسی:</b> <code>${safe(r.chassisNumber)}</code>`,
+    `🧬 <b>VIN:</b> <code>${safe(r.vin)}</code>`,
+    "",
+    "🪪 <b>گواهینامه رانندگی</b>",
+    `دارنده: ${safe(l.holderName)} · کد ملی <code>${safe(l.nationalId)}</code>`,
+    `شماره گواهینامه: <code>${safe(l.licenseNumber)}</code> · سریال <code>${safe(l.cardSerial)}</code>`,
+    `تولد: ${safe(l.birthDateJalali)} · صدور: ${safe(l.issueDateJalali)}`,
+    `اعتبار: ${safe(l.validityYears)} سال · انقضا: ${safe(l.expiryDateJalali)}${l.expiryDerived ? " (محاسبه‌شده)" : ""}`,
+    ...(Array.isArray(l.categories) && l.categories.length ? ["دسته‌های درج‌شده در پشت کارت:", ...l.categories.map(item => `• ${safe(item.type)} · ${safe(item.status)} · اولین صدور: ${safe(item.firstIssueDateJalali)}`)] : []),
+    "",
+    "🛠 <b>معاینه فنی</b>",
+    `شماره گواهی: <code>${safe(t.certificateNumber)}</code> · مرکز: ${safe(t.center)}`,
+    `صدور: ${safe(t.issueDateJalali)} · اعتبار تا: ${safe(t.expiryDateJalali)} · ساعت: ${safe(t.testTime)}`,
+    `تعداد مراجعه: ${safe(t.visitCount)} · سوخت: ${safe(t.fuel)} · مدل: ${safe(t.inspectionModel)}`,
+    ...(t.plateAtInspection ? [`پلاک درج‌شده هنگام معاینه: <code>${safe(t.plateAtInspection)}</code>`, `⚠️ ${safe(t.plateAtInspectionNote || "پلاک برگهٔ معاینه را با پلاک فعلی کارت خودرو یکسان فرض نکن.")}`] : []),
+    "",
+    "🛡 <b>بیمه</b>",
+    i?.expiryDateJalali ? `شرکت: ${safe(i.provider)} · بیمه‌گذار: ${safe(i.insuredName)}\nشماره: <code>${safe(i.policyNumber)}</code>\nصدور: ${safe(i.issueDateJalali)} · انقضا: ${safe(i.expiryDateJalali)}` : "اطلاعات بیمه‌نامه هنوز ثبت نشده است؛ تصویر بیمه در آرشیو فعلی پیدا نشد."
+  ];
+  return lines.join("\n");
+}
+async function privateDocumentsReport(env) {
+  try { return formatPrivateDocumentsReport(await loadPrivateVehicleDocuments(env)); }
+  catch (error) { return `🔐 گاوصندوق مدارک هنوز راه‌اندازی نشده است.\n${escapeTelegramText(error.message)}\n\nپس از تنظیم GARAGE_PRIVATE_KV و VEHICLE_DOCUMENTS_JSON دوباره /documents را بفرست.`; }
+}
+async function insuranceCommand(raw, env) {
+  const args = String(raw || "").trim();
+  const dates = args.match(/\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/g) || [];
+  if (/^set\b|^ثبت\b/i.test(args)) {
+    if (dates.length < 2) return "قالب ثبت بیمه: <code>/insurance set ۱۴۰۵/۰۱/۰۱ ۱۴۰۶/۰۱/۰۱</code>\nتاریخ اول صدور و تاریخ دوم انقضاست. جزئیات کامل‌تر را می‌توانی در تب مدارک داشبورد وارد کنی.";
+    const issueDateJalali=normalizeJalaliInput(dates[0]), expiryDateJalali=normalizeJalaliInput(dates[1]);
+    if(!isValidJalaliDate(issueDateJalali)||!isValidJalaliDate(expiryDateJalali)) return "❌ تاریخ شمسی معتبر نیست. نمونه: <code>/insurance set ۱۴۰۵/۰۱/۰۱ ۱۴۰۶/۰۱/۰۱</code>";
+    const issue=jalaliToGregorian(...issueDateJalali.split("/").map(Number)); const expiry=jalaliToGregorian(...expiryDateJalali.split("/").map(Number));
+    if(Date.UTC(expiry[0],expiry[1]-1,expiry[2])<Date.UTC(issue[0],issue[1]-1,issue[2])) return "❌ تاریخ انقضا قبل از تاریخ صدور است.";
+    try {
+      const documents=await loadPrivateVehicleDocuments(env);
+      documents.insurance={...(documents.insurance||{}),status:"configured",policyType:"شخص ثالث",issueDateJalali,expiryDateJalali,updatedAt:nowTehran().iso};
+      documents.updatedAt=nowTehran().iso; await savePrivateVehicleDocuments(env,documents);
+      return `✅ تاریخ‌های بیمه در فضای خصوصی ذخیره شد.\nصدور: <b>${issueDateJalali}</b>\nانقضا: <b>${expiryDateJalali}</b>\nیادآورهای ۳۰، ۱۴ و ۷ روز مانده فعال شدند.`;
+    } catch(error) { return `⚠️ ذخیره بیمه انجام نشد: ${escapeTelegramText(error.message)}`; }
+  }
+  try {
+    const docs=await loadPrivateVehicleDocuments(env), ins=docs.insurance||{};
+    if(!ins.expiryDateJalali) return "🛡 اطلاعات بیمه‌نامه هنوز ثبت نشده است. تصویر بیمه در فایل ارسالی نبود.\nبرای ثبت تاریخ‌ها: <code>/insurance set ۱۴۰۵/۰۱/۰۱ ۱۴۰۶/۰۱/۰۱</code>\nیا از تب «مدارک خودرو» در داشبورد استفاده کن.";
+    const days=daysUntilJalaliDate(ins.expiryDateJalali,nowTehran().date);
+    return `🛡 <b>وضعیت بیمه شخص ثالث</b>\nشرکت: ${escapeTelegramText(ins.provider||"ثبت نشده")}\nشماره: <code>${escapeTelegramText(ins.policyNumber||"ثبت نشده")}</code>\nصدور: <b>${ins.issueDateJalali||"—"}</b>\nانقضا: <b>${ins.expiryDateJalali}</b>\n${days<0?`🔴 ${formatNum(Math.abs(days))} روز از انقضا گذشته`:days===0?"🟠 امروز آخرین روز اعتبار است":`🟢 ${formatNum(days)} روز تا انقضا`}\nیادآوری روزانه از طریق GitHub Actions انجام می‌شود.`;
+  } catch(error) { return `⚠️ اطلاعات بیمه در دسترس نیست: ${escapeTelegramText(error.message)}`; }
+}
+function daysUntilJalaliDate(value, todayGregorian) {
+  const date=normalizeJalaliInput(value); if(!isValidJalaliDate(date)) return null;
+  const [gy,gm,gd]=jalaliToGregorian(...date.split("/").map(Number));
+  const [ty,tm,td]=String(todayGregorian||nowTehran().date).slice(0,10).split("-").map(Number);
+  return Math.round((Date.UTC(gy,gm-1,gd)-Date.UTC(ty,tm-1,td))/86400000);
+}
+async function collectPrivateDocumentExpiryAlerts(env, now) {
+  const empty={lines:[]};
+  try {
+    if(!env.GARAGE_PRIVATE_KV) return empty;
+    const docs=await loadPrivateVehicleDocuments(env);
+    const raw=await env.GARAGE_PRIVATE_KV.get(PRIVATE_DOC_REMINDER_KEY);
+    const state=raw?JSON.parse(raw):{};
+    const entries=[
+      {key:"insurance",label:"بیمه شخص ثالث",date:docs.insurance?.expiryDateJalali},
+      {key:"technicalInspection",label:"معاینه فنی",date:docs.technicalInspection?.expiryDateJalali},
+      {key:"driverLicense",label:"گواهینامه رانندگی",date:docs.driverLicense?.expiryDateJalali}
+    ];
+    const rank={ok:0,month:1,fortnight:2,week:3,today:4,expired:5};
+    const lines=[];
+    for(const entry of entries){
+      if(!entry.date || !isValidJalaliDate(normalizeJalaliInput(entry.date))) continue;
+      const days=daysUntilJalaliDate(entry.date,now.date);
+      const stage=days<0?"expired":days===0?"today":days<=7?"week":days<=14?"fortnight":days<=30?"month":"ok";
+      const cycle=`${entry.key}:${entry.date}`;
+      const previous=state[cycle]||"ok";
+      if(rank[stage]>rank[previous] && stage!=="ok"){
+        const lead=days<0?`🔴 ${formatNum(Math.abs(days))} روز از تاریخ انقضا گذشته است.`:days===0?"🟠 امروز آخرین روز اعتبار است.":`🟡 ${formatNum(days)} روز تا انقضا باقی مانده است.`;
+        lines.push(`🛡 <b>${escapeTelegramText(entry.label)}</b>\n${lead}\nتاریخ انقضا: <code>${escapeTelegramText(entry.date)}</code>\nبرای مشاهده همه مدارک: /documents`);
+      }
+      state[cycle]=stage;
+    }
+    // Remove entries belonging to replaced dates so a renewed policy starts a fresh reminder cycle.
+    const active=new Set(entries.filter(x=>x.date).map(x=>`${x.key}:${x.date}`));
+    for(const key of Object.keys(state)) if(!active.has(key)) delete state[key];
+    await env.GARAGE_PRIVATE_KV.put(PRIVATE_DOC_REMINDER_KEY,JSON.stringify(state));
+    return {lines};
+  } catch(error) {
+    console.warn("private document expiry reminder check skipped",error?.stack||error);
+    return empty;
+  }
 }
 
 async function configReport(env) {

@@ -7,3 +7,9 @@ workers_dev = true
 GITHUB_OWNER = "mehrdadmb2"
 GITHUB_REPO = "peugeot-206-garage"
 GITHUB_BRANCH = "main"
+
+# Private document storage (create with: npx wrangler kv namespace create GARAGE_PRIVATE_KV)
+# Then add the returned namespace ID: 
+# [[kv_namespaces]]
+# binding = "GARAGE_PRIVATE_KV"
+# id = "YOUR_CREATED_NAMESPACE_ID"

@@ -1,0 +1,18 @@
+Peugeot 206 Garage v3.13.0 — Verification Report
+
+Worker/dashboard automated tests: 65 passed, 0 failed.
+Worker smoke test: PASS.
+Node syntax checks: PASS (Worker, dashboard app, private documents UI, dashboard builder).
+
+New coverage in this build:
+- Private documents endpoint requires the dedicated bearer token.
+- Documents seed into Cloudflare KV and are not exposed without authorization.
+- Insurance issue/expiry Jalali dates are validated and persisted.
+- Missing KV fails closed with HTTP 503.
+- Impossible Jalali dates are rejected.
+- Telegram /documents and /insurance work for the allowlisted user.
+- Private document commands return no document details in group/supergroup chats.
+- Scheduled private-document expiry reminders notify on stage transitions and do not repeat the same stage on subsequent daily checks.
+- UI includes separate license categories and distinguishes the historical plate on the technical-inspection report from the current vehicle plate.
+
+The tests are local automated tests using mocked Telegram/GitHub/Cloudflare KV interfaces. This does not certify that the Worker has been deployed to the user's Cloudflare account or that live credentials/KV bindings are configured.

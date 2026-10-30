@@ -212,7 +212,7 @@
   }
 
   function activateTab(name, scroll = true) {
-    const valid = ['overview','maintenance','fuel','analytics','expenses','traffic','journal','settings'];
+    const valid = ['overview','maintenance','fuel','analytics','expenses','traffic','journal','documents','settings'];
     const target = valid.includes(name) ? name : 'overview';
     $$('[data-view-pane]').forEach(pane => pane.classList.toggle('active', pane.dataset.viewPane === target));
     $$('[data-tab]').forEach(item => {

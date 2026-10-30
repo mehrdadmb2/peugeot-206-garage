@@ -7,10 +7,11 @@
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="assets/css/style.css?v=3.12.0-persian-months">
-  <script defer src="assets/js/diagnostics.js?v=3.12.0-persian-months"></script>
-  <script defer src="assets/js/data-loader.js?v=3.12.0-persian-months"></script>
-  <script defer src="assets/js/app.js?v=3.12.0-persian-months"></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=3.13.0-private-documents-r1">
+  <script defer src="assets/js/diagnostics.js?v=3.13.0-private-documents-r1"></script>
+  <script defer src="assets/js/data-loader.js?v=3.13.0-private-documents-r1"></script>
+  <script defer src="assets/js/app.js?v=3.13.0-private-documents-r1"></script>
+  <script defer src="assets/js/vehicle-documents.js?v=3.13.0-private-documents-r1"></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -24,7 +25,7 @@
       <span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>PERSONAL VEHICLE OS</small></span>
     </a>
     <nav class="top-nav" aria-label="ناوبری سریع">
-      <a href="#overview" data-tab="overview" class="active">نمای کلی</a><a href="#maintenance" data-tab="maintenance">نگهداری</a><a href="#analytics" data-tab="analytics">تحلیل</a><a href="#activity" data-tab="journal">دفتر وقایع</a>
+      <a href="#overview" data-tab="overview" class="active">نمای کلی</a><a href="#maintenance" data-tab="maintenance">نگهداری</a><a href="#analytics" data-tab="analytics">تحلیل</a><a href="#activity" data-tab="journal">دفتر وقایع</a><a href="#page-documents" data-tab="documents">مدارک</a>
     </nav>
     <div class="top-actions">
       <a class="header-link telegram-header-link" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer" aria-label="بازکردن ربات تلگرام">✈ <span>ربات</span></a>
@@ -43,6 +44,7 @@
     <button type="button" class="app-tab" data-tab="expenses" aria-selected="false"><span>◉</span><b>هزینه‌ها</b><small>Expenses</small></button>
     <button type="button" class="app-tab" data-tab="traffic" aria-selected="false"><span>⚑</span><b>جریمه و خرابی</b><small>Traffic & Repairs</small></button>
     <button type="button" class="app-tab" data-tab="journal" aria-selected="false"><span>▤</span><b>دفتر وقایع</b><small>Journal</small></button>
+    <button type="button" class="app-tab" data-tab="documents" aria-selected="false"><span>▣</span><b>مدارک خودرو</b><small>Documents</small></button>
     <button type="button" class="app-tab" data-tab="settings" aria-selected="false"><span>⌘</span><b>راهنما و API</b><small>Settings</small></button>
   </nav>
   <div id="bootScreen" class="boot-screen" role="status" aria-live="polite">
@@ -288,7 +290,59 @@
     </section>
       <section class="section-block"><article class="panel journal-export-panel"><div><span class="section-kicker">PORTABLE DATA / EXPORT</span><h2>نسخه‌ی قابل انتقال از سوابق</h2><p>CSV برای Excel و JSON برای پشتیبان/پردازش برنامه‌نویسی مناسب است.</p></div><div class="export-actions"><button id="exportCsvAll" class="secondary-button small" type="button">CSV کامل ↓</button><button id="exportJsonAll" class="secondary-button small" type="button">JSON کامل ↓</button></div></article></section>
     </div>
-    <div class="view-pane" data-view-pane="settings" id="page-settings">
+    <div class="view-pane" data-view-pane="documents" id="page-documents">
+  <section class="page-intro panel docs-page-intro">
+    <div><span class="section-kicker">PRIVATE VEHICLE VAULT / 09</span><h1>مدارک و شناسنامهٔ خودرو</h1><p>نمایش کارت خودرو، پلاک، گواهینامه و معاینه فنی با ظاهر اختصاصی هر مدرک؛ اطلاعات کامل فقط پس از احراز هویت از Worker خصوصی دریافت می‌شود.</p></div>
+    <span class="intro-emblem">▣</span>
+  </section>
+  <section class="section-block docs-security-panel panel">
+    <div class="docs-security-icon">♢</div>
+    <div class="docs-security-copy"><b>گاوصندوق خصوصی مدارک</b><p>این ریپو عمومی است. شماره‌های هویتی، شماره موتور، شاسی و اطلاعات بیمه در GitHub Pages منتشر نمی‌شوند؛ آن‌ها از فضای خصوصی Cloudflare KV دریافت می‌شوند.</p></div>
+    <span class="docs-lock-state" id="docsLockState">قفل است</span>
+  </section>
+  <section class="section-block panel docs-unlock-panel" id="docsLockedPanel">
+    <div class="section-heading"><div><span class="section-kicker">OWNER AUTHENTICATION</span><h2>بازکردن مدارک خصوصی</h2><p class="section-note">توکن دسترسی مدارک را که در Cloudflare Worker Secret ثبت کرده‌ای وارد کن.</p></div><span class="mini-heading-icon">🔐</span></div>
+    <form id="docsUnlockForm" class="docs-unlock-form">
+      <label for="docsAccessToken">توکن دسترسی مدارک</label>
+      <input id="docsAccessToken" type="password" required minlength="32" autocomplete="current-password" placeholder="DOCUMENTS_ACCESS_TOKEN" spellcheck="false">
+      <button type="submit" class="primary-button" id="docsUnlockButton">🔓 بازکردن گاوصندوق</button>
+    </form>
+    <p class="docs-auth-note" id="docsAuthStatus" role="status" aria-live="polite">توکن فقط در حافظهٔ همین صفحه استفاده می‌شود و در localStorage یا گزارش عیب‌یابی ذخیره نمی‌شود.</p>
+  </section>
+  <section class="section-block docs-content" id="docsContent" hidden>
+    <div class="docs-toolbar"><div><span class="section-kicker">SECURE SESSION</span><b>مدارک رمزگشایی‌شده در نشست فعلی</b><small id="docsUpdatedAt">—</small></div><button type="button" class="secondary-button small" id="docsLockButton">🔒 قفل‌کردن</button></div>
+    <div id="docsExpiryAlerts" class="docs-expiry-alerts" aria-live="polite"></div>
+    <article class="docs-plate-card">
+      <div class="docs-plate-top"><span>🇮🇷 I.R. IRAN</span><span>پلاک ملی خودرو</span></div>
+      <div class="docs-plate-main" id="docsPlateVisual"><span>••</span><b>•</b><span>•••</span><strong>ایران<br><em>••</em></strong></div>
+      <div class="docs-plate-bottom"><span>PEUGEOT 206 SD</span><span id="docsPlateCaption">—</span></div>
+    </article>
+    <div class="docs-card-grid">
+      <article class="docs-id-card docs-green-card" id="docsRegistrationCard"></article>
+      <article class="docs-id-card docs-license-card" id="docsLicenseCard"></article>
+      <article class="docs-id-card docs-inspection-card" id="docsInspectionCard"></article>
+      <article class="docs-id-card docs-insurance-card" id="docsInsuranceCard"></article>
+    </div>
+    <article class="mini-panel panel docs-insurance-editor">
+      <div class="mini-panel-heading"><div><span class="section-kicker">INSURANCE RENEWAL TRACKER</span><h2>اطلاعات بیمه و تمدید</h2></div><span class="mini-heading-icon">🛡</span></div>
+      <p class="api-intro">تصویر بیمه‌نامه در فایل فعلی نبود. بعد از دریافت مدرک، اطلاعات را از روی آن وارد کن یا تاریخ‌ها را اینجا ثبت کن. هشدارهای ۳۰، ۱۴ و ۷ روز مانده و روز انقضا از طریق ربات ارسال می‌شوند.</p>
+      <form id="docsInsuranceForm" class="docs-insurance-form">
+        <label>شرکت بیمه<input name="provider" type="text" maxlength="100" placeholder="نام شرکت بیمه"></label>
+        <label>شماره بیمه‌نامه<input name="policyNumber" type="text" maxlength="100" placeholder="شماره بیمه‌نامه"></label>
+        <label>نام بیمه‌گذار<input name="insuredName" type="text" maxlength="120" placeholder="نام بیمه‌گذار"></label>
+        <label>تاریخ صدور<input name="issueDateJalali" type="text" inputmode="numeric" placeholder="۱۴۰۵/۰۱/۰۱" pattern="[۰-۹0-9]{4}/[۰-۹0-9]{2}/[۰-۹0-9]{2}" required></label>
+        <label>تاریخ انقضا<input name="expiryDateJalali" type="text" inputmode="numeric" placeholder="۱۴۰۶/۰۱/۰۱" pattern="[۰-۹0-9]{4}/[۰-۹0-9]{2}/[۰-۹0-9]{2}" required></label>
+        <label>تعهد مالی شخص ثالث<input name="thirdPartyCoverage" type="text" maxlength="100" placeholder="اختیاری"></label>
+        <label>پوشش بدنه<input name="bodyCoverage" type="text" maxlength="100" placeholder="اختیاری"></label>
+        <button type="submit" class="primary-button" id="docsInsuranceSave">💾 ذخیره امن اطلاعات بیمه</button>
+      </form>
+      <p class="docs-auth-note" id="docsInsuranceStatus" role="status" aria-live="polite">اطلاعات فقط در Cloudflare KV خصوصی ذخیره می‌شوند و وارد مخزن عمومی GitHub نمی‌شوند.</p>
+    </article>
+    <p class="docs-private-footer">🔐 نشست خصوصی است؛ با بستن صفحه یا زدن «قفل‌کردن»، اطلاعات از حافظهٔ رابط کاربری پاک می‌شوند.</p>
+  </section>
+</div>
+
+<div class="view-pane" data-view-pane="settings" id="page-settings">
       <section class="page-intro panel"><div><span class="section-kicker">SYSTEM CONTROL / 08</span><h1>راهنما، تنظیمات و API</h1><p>این صفحه راهنمای استفاده از ربات و اتصال برنامه‌های دیگر به Worker است. هیچ توکن محرمانه‌ای در سایت قرار نمی‌گیرد.</p></div><span class="intro-emblem">⌘</span></section>
       <section class="section-block settings-grid">
         <article class="mini-panel panel"><div class="mini-panel-heading"><div><span class="section-kicker">SERVICE CONFIGURATION</span><h2>بازه‌های نگهداری فعلی</h2></div><span class="mini-heading-icon">⚙</span></div><div id="settingsServiceTable" class="settings-service-table"><div class="empty-state">در حال خواندن config.json…</div></div><div class="mini-panel-foot"><span>منبع: data/config.json</span><span class="tag-outline">EDIT VIA BOT</span></div></article>
@@ -347,9 +401,12 @@
           <article class="command-card guide-card" data-search="wash کارواش شستشو هزینه"><span>🫧 WASH</span><code>/wash 180000 toman</code><p>ثبت کارواش، هزینه، کیلومتر و توضیح.</p></article>
           <article class="command-card guide-card" data-search="expense هزینه متفرقه پارکینگ"><span>💳 EXPENSE</span><code>/expense 250000 toman پارکینگ</code><p>ثبت هزینه‌های غیرسرویس مثل پارکینگ، عوارض و خرید متفرقه.</p></article>
           <article class="command-card guide-card" data-search="خرابی issue repair تعمیر شرح"><span>🛠️ REPAIR / ISSUE</span><code>خرابی: صدای جلوبندی</code><p>ثبت ایراد و سپس ثبت رفع خرابی با دستور تعمیر. شرح و هزینهٔ تعمیر را جداگانه ثبت کن.</p></article>
+          <article class="command-card guide-card" data-search="مدارک خودرو کارت ماشین گواهینامه پلاک معاینه فنی documents"><span>▣ VEHICLE DOCUMENTS</span><code>/documents</code><p>نمایش خصوصی پلاک، مشخصات کارت خودرو، گواهینامه و معاینه فنی؛ فقط در گفت‌وگوی خصوصی ربات و برای حساب مجاز.</p></article>
+          <article class="command-card guide-card" data-search="بیمه شخص ثالث تاریخ صدور انقضا تمدید insurance"><span>🛡 INSURANCE & EXPIRY</span><code>/insurance · /insurance set 1405/01/01 1406/01/01</code><p>نمایش وضعیت بیمه و ثبت تاریخ‌های صدور/انقضا؛ هشدارهای تمدید از طریق یادآور روزانه.</p></article>
           <article class="command-card guide-card" data-search="یادداشت note اطلاعات یادآوری"><span>📝 NOTE</span><code>/note بررسی لاستیک قبل سفر</code><p>یادداشت متنی خودرو و زمینهٔ مربوط به آن.</p></article>
           <article class="command-card guide-card" data-search="latest آخرین موارد اخیر"><span>🧾 LATEST</span><code>/latest</code><p>نمایش ده مورد آخر همراه شناسهٔ کوتاه.</p></article>
           <article class="command-card guide-card" data-search="config تنظیمات بازه نگهداری خودرو"><span>🛠 CONFIG</span><code>/config</code><p>نمایش مشخصات خودرو و بازه‌های نگهداری موجود.</p></article>
+          <article class="command-card guide-card" data-search="مدارک خودرو کارت ماشین گواهینامه پلاک بیمه documents insurance"><span>▣ VEHICLE DOCUMENTS</span><code>/documents · /insurance</code><p>نمایش خصوصی کارت خودرو، پلاک، گواهینامه و وضعیت بیمه؛ فقط برای حساب مجاز ربات.</p></article>
           <article class="command-card guide-card" data-search="شناسه id تلگرام"><span>🆔 ID</span><code>/id</code><p>نمایش شناسهٔ حساب و گفتگو برای تنظیم دسترسی خصوصی ربات.</p></article>
         </div>
         <div class="guide-link-row"><a class="primary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">🤖 باز کردن ربات تلگرام ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">🌐 باز کردن داشبورد زنده ↗</a></div>
@@ -361,7 +418,7 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <div class="workflow-actions"><a class="secondary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">باز کردن ربات ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">داشبورد زنده ↗</a><a class="secondary-button" href="#top">بازگشت به بالا ↑</a></div>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.9.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.13.0</b></span></footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>
