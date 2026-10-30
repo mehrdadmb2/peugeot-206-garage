@@ -55,6 +55,7 @@ jobs:
           node --check assets/js/app.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
+          node --check assets/js/vehicle-documents.js
           node --check assets/js/persian-calendar.cjs
           node --check scripts/build-dashboard.mjs
           node --check worker/src/index.js
