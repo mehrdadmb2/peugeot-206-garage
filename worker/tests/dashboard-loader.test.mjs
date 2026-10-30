@@ -43,10 +43,10 @@ function payloadFor(url) {
 }
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
-  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.11\.0-diagnostics/);
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.11\.0-diagnostics/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.11\.0-diagnostics/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.11\.0-diagnostics/);
+  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.12\.0-persian-months/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.12\.0-persian-months/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.12\.0-persian-months/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.12\.0-persian-months/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
@@ -107,6 +107,19 @@ test('browser data loader ignores a stale Action snapshot and recalculates curre
   assert.ok(result.warnings.some(warning => warning.includes('محاسبات')));
 });
 
+
+test('browser data loader rejects an old calculator snapshot and recalculates raw source data', async () => {
+  const oldSnapshot = payloadFor('https://raw.githubusercontent.com/mehrdadmb2/peugeot-206-garage/main/data/dashboard.json');
+  delete oldSnapshot.computed.calculationVersion;
+  const loader = createLoader(async url => {
+    if (new URL(url).pathname.endsWith('/data/dashboard.json')) return jsonResponse(oldSnapshot);
+    return jsonResponse(payloadFor(url));
+  });
+  const result = await loader.load();
+  assert.equal(result.mode, 'direct-fallback');
+  assert.equal(result.precomputed, null);
+  assert.equal(result.events.length, 31);
+});
 
 test('browser data loader keeps available data and clearly reports missing monthly files', async () => {
   const loader = createLoader(async url => {
@@ -229,6 +242,26 @@ test('privacy-safe diagnostics are loaded before all app code and provide export
   assert.match(diagnosticsSource, /REDACTED/);
   assert.match(diagnosticsSource, /PERSIST_KEY/);
   assert.match(diagnosticsSource, /pagehide/);
+});
+
+test('intentional mirror AbortError is logged as debug rather than a network failure', async () => {
+  const listeners = new Map();
+  const window = {
+    location: { origin: 'https://example.test', pathname: '/garage/' },
+    navigator: { onLine: true, userAgent: 'test', language: 'fa-IR' },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    document: { readyState: 'loading', addEventListener: (name, fn) => listeners.set(`doc:${name}`, fn), scripts: [] },
+    addEventListener: (name, fn) => listeners.set(name, fn),
+    setTimeout, clearTimeout, performance: { getEntriesByType: () => [] }, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    fetch: async () => { const error = new Error('aborted'); error.name = 'AbortError'; throw error; }
+  };
+  vm.runInNewContext(diagnosticsSource, { window, URL, Date, Intl, JSON, Object, Array, String, Number, Error, Blob }, { filename: 'diagnostics-abort-test.js' });
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(window.fetch('https://raw.githubusercontent.com/example/data.json', { signal: controller.signal }), { name: 'AbortError' });
+  const networkEntries = window.GarageDiagnostics.entries.filter(entry => entry.scope === 'network.fetch');
+  assert.ok(networkEntries.some(entry => entry.level === 'debug'));
+  assert.equal(networkEntries.some(entry => entry.level === 'error'), false);
 });
 
 test('diagnostic entries survive page refresh and redact authorization and secret fields', () => {

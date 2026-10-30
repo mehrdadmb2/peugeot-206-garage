@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const PersianCalendar = require('../assets/js/persian-calendar.cjs');
 
 const DEFAULT_PURCHASE_KM = 428000;
 const TIME_ZONE = 'Asia/Tehran';
@@ -64,12 +67,15 @@ export function calculateDueItems(events, config, currentOdo, today = localDateS
   const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
 
   for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
-    const latest = events.filter(event =>
-      (event.type === 'service' && event.serviceKey === key) ||
-      ((event.type === 'part' || event.type === 'repair') && event.status !== 'open' &&
-        (event.serviceKey === key || event.componentKey === key) &&
-        (event.componentReplaced || event.type === 'repair' || event.status === 'fixed'))
-    ).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+    const latest = events.filter(event => {
+      const matches = [event.serviceKey, event.componentKey, event.serviceCatalogKey].filter(Boolean).includes(key);
+      if (!matches) return false;
+      if (event.type === 'service') return true;
+      if (event.type === 'part') return event.componentReplaced === true;
+      if (event.type === 'repair') return event.status !== 'open';
+      if (event.type === 'issue') return event.status === 'fixed' && Boolean(event.componentReplaced || event.componentKey || event.serviceKey || event.serviceCatalogKey);
+      return false;
+    }).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
 
     const baseline = !latest;
     const refOdo = latest ? numberOrNull(latest.odometerKm) : purchaseKm;
@@ -91,12 +97,17 @@ export function calculateDueItems(events, config, currentOdo, today = localDateS
 
   const catalog = config?.partCatalog || {};
   for (const [key, item] of Object.entries(catalog.items || {})) {
-    if (item.mode !== 'periodic' || config?.serviceIntervals?.[key]) continue;
-    const latest = events.filter(event =>
-      (event.componentKey === key || event.serviceKey === key || event.serviceCatalogKey === key) &&
-      (event.componentReplaced || event.type === 'service' || event.type === 'repair' || (event.type === 'issue' && event.status === 'fixed')) &&
-      event.status !== 'open'
-    ).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+    if (item.mode !== 'periodic' || config?.serviceIntervals?.[key] || (item.serviceKey && config?.serviceIntervals?.[item.serviceKey])) continue;
+    const latest = events.filter(event => {
+      const matches = [event.componentKey, event.serviceKey, event.serviceCatalogKey].filter(Boolean).includes(key) ||
+        (item.serviceKey && [event.componentKey, event.serviceKey, event.serviceCatalogKey].includes(item.serviceKey));
+      if (!matches || event.status === 'open') return false;
+      if (event.type === 'service') return true;
+      if (event.type === 'part') return event.componentReplaced === true;
+      if (event.type === 'repair') return true;
+      if (event.type === 'issue') return event.status === 'fixed' && Boolean(event.componentReplaced || event.componentKey || event.serviceKey || event.serviceCatalogKey);
+      return false;
+    }).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
 
     const baseline = !latest;
     const refOdo = latest ? numberOrNull(latest.odometerKm) : purchaseKm;
@@ -127,6 +138,12 @@ function addDays(value, count) {
   if (![year, month, day].every(Number.isFinite)) return null;
   const date = new Date(Date.UTC(year, month - 1, day + count));
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function expenseAmount(event) {
+  if (!event || (event.type === 'fine' && !event.paid)) return 0;
+  if (event.type === 'issue' && Number(event.repairCostRial) > 0) return Number(event.repairCostRial) || 0;
+  return Number(event.costRial) > 0 ? Number(event.costRial) : 0;
 }
 
 function expenseDate(event) {
@@ -233,9 +250,11 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
   }
 
   const today = localDateString(now);
-  const currentMonth = today.slice(0, 7);
-  const currentMonthEvents = events.filter(event => String(event.date || event.occurredAt || '').slice(0, 7) === currentMonth);
-  const currentMonthCosts = events.filter(event => Number(event.costRial) > 0 && (event.type !== 'fine' || Boolean(event.paid)) && expenseDate(event).slice(0, 7) === currentMonth);
+  // Monthly summaries follow the Iranian/Persian calendar, not the Gregorian
+  // storage partition used by data/logs/YYYY-MM.json.
+  const currentMonth = PersianCalendar.monthKey(now);
+  const currentMonthEvents = events.filter(event => PersianCalendar.monthKey(event.occurredAt || event.date || event.createdAt) === currentMonth);
+  const currentMonthCosts = events.filter(event => expenseAmount(event) > 0 && PersianCalendar.monthKey(expenseDate(event)) === currentMonth);
   const currentMonthFuel = currentMonthEvents.filter(event => event.type === 'fuel');
   const currentOdometerKm = calculateCurrentOdometer(events);
   const dueItems = calculateDueItems(events, config, currentOdometerKm, today);
@@ -253,11 +272,12 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
+      calculationVersion: 2,
       eventCount: events.length,
       currentOdometerKm,
       currentMonth,
       currentMonthEventCount: currentMonthEvents.length,
-      currentMonthCostRial: sum(currentMonthCosts, event => event.costRial),
+      currentMonthCostRial: sum(currentMonthCosts, expenseAmount),
       currentMonthFuelLiters: sum(currentMonthFuel, event => event.liters),
       currentMonthFuelCount: currentMonthFuel.length,
       dueItems,

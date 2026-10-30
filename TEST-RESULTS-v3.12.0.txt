@@ -1,0 +1,31 @@
+Peugeot 206 Garage — v3.12.0 regression report
+================================================
+
+Result: PASS
+Automated Node test suites: 55 passed, 0 failed
+Standalone Worker smoke test: PASS
+Combined checks: 56 successful checks/tests
+
+Test coverage includes:
+- Persian calendar transition from 1405/07/30 to 1405/08/01.
+- Current Persian month summary from real repository data.
+- Aban fuel = 35 L, one fueling event.
+- Aban actual expense = 45,525,000 Rial (4,552,500 Toman).
+- Snapshot calculationVersion=2 and rejection of older snapshots.
+- Current odometer 431,584 km; purchase baseline 428,000 km; distance 3,584 km.
+- Air filter service baseline at 431,200 km; 9,616 km remaining.
+- Spark plug replacement at 431,462 km; 19,878 km remaining.
+- Battery and spark plug wires replacement at 431,462 km; 122 km since replacement.
+- 5,000 km purchase-baseline services show 1,416 km remaining, not overdue.
+- Dashboard stats, service reconciliation, journal month filter, fuel chart and expense chart render correctly.
+- Intentional mirror AbortError is logged as debug rather than a network error.
+- Existing data-loader fallback, offline cache, Worker API, Telegram command and duplicate-handling tests.
+
+Static checks:
+- node --check on browser scripts, calendar helper, builder and Worker files: PASS
+- JSON parse check for all data/*.json: PASS
+- Snapshot generation: PASS
+- Dashboard renderer smoke: PASS
+- Worker smoke: PASS
+
+Runtime publication to GitHub Pages and Cloudflare was not performed from this environment.

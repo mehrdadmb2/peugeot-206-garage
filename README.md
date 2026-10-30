@@ -10,7 +10,7 @@
     <a href="https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health"><img src="https://img.shields.io/badge/Cloudflare-Worker%20API-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Worker health"></a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/Version-3.10.3-8b5cf6?style=flat-square" alt="Version 3.10.3">
+    <img src="https://img.shields.io/badge/Version-3.12.0-8b5cf6?style=flat-square" alt="Version 3.12.0">
     <img src="https://img.shields.io/badge/Runtime-Request--driven-16a34a?style=flat-square" alt="Request driven">
     <img src="https://img.shields.io/badge/Language-Persian%20%2B%20English-2563eb?style=flat-square" alt="Persian and English">
     <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white" alt="MIT license">
@@ -21,11 +21,22 @@
   <img src="assets/img/206-sd-garage.webp" width="92%" alt="White Peugeot 206 SD in a dark cinematic garage" />
 </p>
 
-> **نسخهٔ پروژه:** Garage OS 3.10.3 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
+> **نسخهٔ پروژه:** Garage OS 3.12.0 · **خودرو:** پژو ۲۰۶ SD سفید، مدل ۱۳۸۷ · **منطقهٔ زمانی:** `Asia/Tehran`
 >
-> نسخهٔ **3.10.3** مسیر بارگذاری داشبورد را مستقل از GitHub Actions و Cloudflare Worker می‌کند. Snapshot آماده فقط در صورت سلامت و تازگی مصرف می‌شود؛ در غیر این صورت مرورگر `index.json`، `config.json` و لاگ‌های ماهانه را از GitHub Pages، GitHub Raw یا jsDelivr می‌خواند و محاسبات را خودش انجام می‌دهد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
+> نسخهٔ **3.12.0** علاوه بر بازیابی مستقل داشبورد، گزارش‌های ماهانه را با تقویم شمسی و منطقهٔ زمانی `Asia/Tehran` محاسبه می‌کند و مبنای سرویس‌ها را با آخرین تعویض/سرویس واقعی تطبیق می‌دهد. Snapshot آماده فقط در صورت سلامت و تازگی مصرف می‌شود؛ در غیر این صورت مرورگر `index.json`، `config.json` و لاگ‌های ماهانه را از GitHub Pages، GitHub Raw یا jsDelivr می‌خواند و محاسبات را خودش انجام می‌دهد. **قبل از جایگزینی فایل‌ها، از پوشهٔ `data/` پشتیبان بگیر.** فایل‌های ماهانه، مبنای خرید و تنظیمات سرویس‌ها بخشی از اطلاعات واقعی خودرو هستند.
 
 > **بازیابی خودکار:** خطای 403، 404، Timeout، JSON خراب، Snapshot ناقص/قدیمی و خرابی بخشی از لاگ‌ها جداگانه شناسایی می‌شوند. دادهٔ ناقص با هشدار مشخص می‌شود؛ اگر هیچ منبع معتبری در دسترس نباشد، سایت به‌جای نمایش صفرهای گمراه‌کننده خطای واضح نشان می‌دهد.
+
+### نسخهٔ 3.12.0 — محاسبات شمسی و تطبیق سرویس‌ها
+
+- کارت هزینه و سوخت ماه جاری، نمودارهای ماهانه، فیلتر ماه دفتر وقایع و گزارش هزینه/سوخت اکنون از ماه شمسی `Asia/Tehran` استفاده می‌کنند؛ نام فایل لاگ همچنان می‌تواند میلادی باشد.
+- برای رویدادهایی که در مرز ماه شمسی قرار می‌گیرند، ماه از زمان واقعی `occurredAt`/`date` تبدیل می‌شود؛ بنابراین رویداد ۲۳ اکتبر ۲۰۲۶ در آبان ۱۴۰۵ قرار می‌گیرد، هرچند فایلش `2026-10.json` است.
+- محاسبهٔ Snapshot در GitHub Actions هم همین تقویم شمسی را به کار می‌برد و هزینهٔ واقعی را یکسان با داشبورد محاسبه می‌کند؛ جریمهٔ پرداخت‌نشده در هزینه‌ها شمرده نمی‌شود.
+- Snapshotهای ساخته‌شده با الگوریتم قدیمی (`calculationVersion` غیر از ۲) کنار گذاشته می‌شوند و مرورگر خودکار دادهٔ خام را دوباره محاسبه می‌کند.
+- آخرین رویداد نگهداری برای هر سرویس از `serviceKey`، `componentKey` و `serviceCatalogKey` پیدا می‌شود؛ ثبت تعویض قطعه و سرویس اخیر مبنای فاصله را به کیلومتر واقعی همان رویداد منتقل می‌کند.
+- کارت‌های سرویس برای اعداد مثبت عبارت «km مانده» و برای اعداد منفی «عبور از موعد» نشان می‌دهند؛ خلاصهٔ تطبیق نیز کیلومتر خرید/فعلی، پیمایش از خرید و تعویض‌های اخیر را نمایش می‌دهد.
+- لغو برنامه‌ریزی‌شدهٔ درخواست‌های آینه‌ای پس از دریافت پاسخ موفق دیگر به‌عنوان خطای شبکه ثبت نمی‌شود؛ دلیل رد Snapshot قدیمی در گزارش تشخیصی ثبت می‌شود.
+- ۵۶ تست محلی شامل تست ساخت Snapshot، مرز تقویم شمسی، مقادیر واقعی سوخت و هزینه، سرویس‌های تعویض‌شده، رندر UI، Worker و Smoke اجرا شده‌اند.
 
 ### نسخهٔ 3.10.3 — بازیابی مستقل داشبورد
 

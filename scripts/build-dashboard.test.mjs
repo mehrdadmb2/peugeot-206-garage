@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { buildDashboardData, calculateCurrentOdometer, calculateDueItems } from './build-dashboard.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,6 +18,7 @@ function writeJson(path, value) {
 test('real repository data builds a complete dashboard snapshot without dropping events or catalog data', () => {
   const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-10-30T06:00:00.000Z') });
   assert.equal(snapshot.schemaVersion, 1);
+  assert.equal(snapshot.computed.calculationVersion, 2);
   assert.ok(snapshot.events.length >= 1);
   assert.equal(snapshot.computed.eventCount, snapshot.events.length);
   assert.equal(snapshot.computed.componentCount, 62);
@@ -49,7 +52,7 @@ test('precomputation de-duplicates events and calculates odometer, monthly fuel/
     const snapshot = buildDashboardData({ rootDir: temp, now: new Date('2026-10-02T12:00:00.000Z') });
     assert.equal(snapshot.events.length, 3);
     assert.equal(snapshot.computed.currentOdometerKm, 10050);
-    assert.equal(snapshot.computed.currentMonth, '2026-10');
+    assert.equal(snapshot.computed.currentMonth, '1405-07');
     assert.equal(snapshot.computed.currentMonthEventCount, 3);
     assert.equal(snapshot.computed.currentMonthFuelLiters, 2);
     assert.equal(snapshot.computed.currentMonthCostRial, 20000);
@@ -73,4 +76,38 @@ test('invalid or missing monthly data fails the build instead of publishing an e
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
+});
+
+
+test('Persian current-month metrics include Aban events stored under Gregorian October log', () => {
+  const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-11-02T07:00:00.000Z') });
+  assert.equal(snapshot.computed.currentMonth, '1405-08');
+  assert.equal(snapshot.computed.currentMonthFuelLiters, 35);
+  assert.equal(snapshot.computed.currentMonthFuelCount, 1);
+  assert.equal(snapshot.computed.currentMonthCostRial, 45525000);
+  assert.ok(snapshot.computed.currentMonthEventCount > 0);
+});
+
+test('latest replaced parts reset maintenance baselines using their actual odometer records', () => {
+  const config = JSON.parse(readFileSync(join(projectRoot, 'data/config.json'), 'utf8'));
+  const events = JSON.parse(readFileSync(join(projectRoot, 'data/logs/2026-10.json'), 'utf8')).events;
+  assert.deepEqual(calculateDueItems(events, config, 431584, '2026-11-02'), [], 'purchase-baseline services at 5,000 km must have 1,416 km remaining, not be marked overdue');
+  const due = calculateDueItems(events, config, 451462, '2026-11-02');
+  const sparkPlug = due.find(item => item.key === 'spark_plugs');
+  assert.ok(sparkPlug, 'spark plug should be due at 20,000 km from replacement');
+  assert.equal(sparkPlug.refOdo, 431462);
+  assert.equal(sparkPlug.leftKm, 0);
+  const airFilter = calculateDueItems(events, config, 441200, '2026-11-02').find(item => item.key === 'air_filter');
+  assert.ok(airFilter, 'air filter should be due at 10,000 km from service');
+  assert.equal(airFilter.refOdo, 431200);
+  assert.equal(airFilter.leftKm, 0);
+});
+
+test('Persian month keys are not confused with Gregorian storage month names', () => {
+  const PersianCalendar = require('../assets/js/persian-calendar.cjs');
+  assert.equal(PersianCalendar.monthKey('2026-10-22'), '1405-07');
+  assert.equal(PersianCalendar.monthKey('2026-10-23'), '1405-08');
+  assert.equal(PersianCalendar.monthKey('2026-10-29T21:35:00+03:30'), '1405-08');
+  assert.equal(PersianCalendar.monthKey('2026-11-02T07:00:00.000Z'), '1405-08');
+  assert.deepEqual(PersianCalendar.previousMonthKeys('1405-08', 3), ['1405-06', '1405-07', '1405-08']);
 });

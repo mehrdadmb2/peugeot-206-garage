@@ -1,5 +1,5 @@
 /*
- * 206 Garage resilient data loader v3.11.0
+ * 206 Garage resilient data loader v3.12.0
  * The browser must not depend on GitHub Actions or the Cloudflare Worker.
  * It prefers the precomputed snapshot, validates freshness, and falls back
  * to raw repository JSON on the website origin, GitHub Raw, or jsDelivr.
@@ -90,6 +90,7 @@
     const urls = sourceUrls(path);
     const activeControllers = [];
     const delayedTimers = [];
+    let winnerChosen = false;
     const attempts = urls.map((url, index) => new Promise((resolve, reject) => {
       const delay = HEDGE_DELAYS_MS[index] ?? (index * 650);
       const timer = setTimeout(async () => {
@@ -97,9 +98,11 @@
         activeControllers.push(controller);
         try {
           const data = await requestJson(url, label, controller);
+          if (!winnerChosen) winnerChosen = true;
           resolve({ data, url, source: sourceName(url) });
         } catch (error) {
-          diagnostic('warn', 'data.source', `منبع ${sourceName(url)} برای ${label} ناموفق بود.`, { message: error.message });
+          const expectedCancellation = winnerChosen && error?.name === 'AbortError';
+          if (!expectedCancellation) diagnostic('warn', 'data.source', `منبع ${sourceName(url)} برای ${label} ناموفق بود.`, { message: error.message, name: error?.name || 'Error' });
           reject(new Error(`${sourceName(url)} → ${error.message}`));
         }
       }, delay);
@@ -149,6 +152,9 @@
         !Array.isArray(snapshot.computed.dueItems) ||
         !Array.isArray(snapshot.computed.distanceEntries)) {
       throw new Error('محاسبات داخل dashboard.json ناقص یا ناسازگار است.');
+    }
+    if (Number(snapshot.computed.calculationVersion) !== 2) {
+      throw new Error('نسخهٔ محاسبات Snapshot قدیمی است؛ نسخهٔ فعلی باید ۲ باشد. دادهٔ خام دوباره محاسبه می‌شود.');
     }
     if (!snapshot.months.every(month => /^\d{4}-\d{2}$/.test(String(month)))) {
       throw new Error('فهرست ماه‌ها در dashboard.json نامعتبر است.');
@@ -292,7 +298,11 @@
     if (snapshotSettled.status === 'fulfilled') {
       snapshot = snapshotSettled.value.data;
       try { validateSnapshot(snapshot); }
-      catch (error) { snapshotError = error; snapshot = null; }
+      catch (error) {
+        snapshotError = error;
+        diagnostic('warn', 'snapshot.invalid', 'Snapshot به‌دلیل ساختار یا نسخهٔ محاسبات نامعتبر کنار گذاشته شد؛ دریافت دادهٔ خام ادامه می‌یابد.', { message: error.message, calculationVersion: snapshot?.computed?.calculationVersion ?? null });
+        snapshot = null;
+      }
     } else snapshotError = snapshotSettled.reason;
 
     let index = null;
@@ -307,6 +317,7 @@
 
     if (snapshot) {
       const staleReasons = snapshotStaleness(snapshot, index);
+      if (staleReasons.length) diagnostic('warn', 'snapshot.stale', 'Snapshot دریافت شد اما به‌دلیل کهنگی/عدم تطابق کنار گذاشته شد.', { reasons: staleReasons.slice(0, 8), generatedAt: snapshot.generatedAt || null, generatedForLocalDate: snapshot.generatedForLocalDate || null, sourceUpdatedAt: snapshot.sourceUpdatedAt || null, currentMonthKey: snapshot.computed?.currentMonth || null });
       if (!staleReasons.length) {
         return {
           mode: 'snapshot', config: snapshot.config,
@@ -396,7 +407,7 @@
   root.GarageDataLoader = Object.freeze({
     load, fetchJson, validateConfig, validateIndex, validateSnapshot, snapshotStaleness,
     saveLocalCache, readLocalCache,
-    version: '3.11.0'
+    version: '3.12.0'
   });
-  diagnostic('info', 'data.loader', 'موتور بارگذاری داده نصب شد.', { version: '3.11.0', baseUrl: APP_BASE_URL?.href || 'unresolved' });
+  diagnostic('info', 'data.loader', 'موتور بارگذاری داده نصب شد.', { version: '3.12.0', baseUrl: APP_BASE_URL?.href || 'unresolved' });
 })(window);

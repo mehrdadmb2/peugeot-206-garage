@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-30T05:53:22.780Z",
+  "generatedAt": "2026-10-30T10:24:38.184Z",
   "generatedForLocalDate": "2026-10-30",
   "sourceUpdatedAt": "2026-10-29T22:41:00+03:30",
   "months": [
@@ -2891,13 +2891,14 @@
     }
   ],
   "computed": {
+    "calculationVersion": 2,
     "eventCount": 31,
     "currentOdometerKm": 431584,
-    "currentMonth": "2026-10",
-    "currentMonthEventCount": 31,
-    "currentMonthCostRial": 46072500,
-    "currentMonthFuelLiters": 71.5,
-    "currentMonthFuelCount": 2,
+    "currentMonth": "1405-08",
+    "currentMonthEventCount": 26,
+    "currentMonthCostRial": 45525000,
+    "currentMonthFuelLiters": 35,
+    "currentMonthFuelCount": 1,
     "dueItems": [],
     "dueCount": 0,
     "eventTypes": {

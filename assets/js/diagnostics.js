@@ -1,9 +1,9 @@
-/* 206 Garage Diagnostics v3.11.0
+/* 206 Garage Diagnostics v3.12.0
  * Privacy-first client diagnostics. No vehicle records, tokens or secrets are exported.
  */
 (function (root) {
   'use strict';
-  const VERSION = '3.11.0';
+  const VERSION = '3.12.0';
   const MAX_ENTRIES = 500;
   const PERSIST_KEY = 'peugeot206garage:diagnostics:v1';
   const PERSIST_LIMIT = 220;
@@ -288,7 +288,14 @@
         }
         return response;
       } catch (error) {
-        log('error', 'network.fetch', 'درخواست شبکه با خطا متوقف شد.', { url: String(rawUrl).replace(/[?#].*$/, ''), durationMs: Math.round((root.performance?.now?.() || Date.now()) - start), error });
+        // Hedged source requests are intentionally aborted as soon as another
+        // mirror wins. Do not report those expected cancellations as failures.
+        const intentionalAbort = error?.name === 'AbortError' && Boolean(init?.signal?.aborted);
+        if (!intentionalAbort) {
+          log('error', 'network.fetch', 'درخواست شبکه با خطا متوقف شد.', { url: String(rawUrl).replace(/[?#].*$/, ''), durationMs: Math.round((root.performance?.now?.() || Date.now()) - start), error });
+        } else {
+          log('debug', 'network.fetch', 'درخواست آینهٔ جایگزین پس از دریافت پاسخ موفق لغو شد.', { url: String(rawUrl).replace(/[?#].*$/, ''), durationMs: Math.round((root.performance?.now?.() || Date.now()) - start) });
+        }
         throw error;
       }
     };

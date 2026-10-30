@@ -3,6 +3,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null };
+  const PersianCalendar = window.GaragePersianCalendar || null;
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
     expense: 'هزینه', fine: 'جریمه', wash: 'کارواش', issue: 'خرابی', repair: 'تعمیر', note: 'یادداشت'
@@ -256,21 +257,21 @@
 
   function renderStats() {
     const all = state.events;
-    const now = localDateString(new Date());
-    const monthKey = now.slice(0, 7);
-    const monthEvents = all.filter(event => String(event.date || event.occurredAt || '').slice(0, 7) === monthKey);
+    const monthKey = currentPersianMonthKey();
+    const monthEvents = all.filter(event => eventPersianMonthKey(event) === monthKey);
     const currentOdo = calculateOdometer(all);
-    const monthFuel = monthEvents.filter(e => e.type === 'fuel');
+    const monthFuel = monthEvents.filter(event => event.type === 'fuel');
     const cached = state.precomputed?.currentMonth === monthKey ? state.precomputed : null;
-    const totalLiters = cached ? Number(cached.currentMonthFuelLiters) || 0 : sum(monthFuel, e => e.liters);
+    const totalLiters = cached ? Number(cached.currentMonthFuelLiters) || 0 : sum(monthFuel, event => event.liters);
     const due = calculateDue(all, state.config, currentOdo);
-    const cost = cached ? Number(cached.currentMonthCostRial) || 0 : sum(all.filter(e => isActualExpense(e) && expenseDate(e).slice(0, 7) === monthKey), e => e.costRial);
+    const monthCostEvents = all.filter(event => isActualExpense(event) && persianMonthKey(expenseDate(event)) === monthKey);
+    const cost = cached ? Number(cached.currentMonthCostRial) || 0 : sum(monthCostEvents, expenseAmount);
     $('#statOdometer').textContent = currentOdo == null ? '—' : formatNumber(currentOdo);
     $('#statOdometerFoot').textContent = currentOdo == null ? 'ابتدا /km را در تلگرام ثبت کن' : `بر پایه ${countOdometerSources(all)} ثبت کیلومتر/مسافت`;
     $('#statCost').textContent = currentOdo == null && !monthEvents.length ? '—' : compactMoney(cost / 10);
-    $('#statCostFoot').textContent = `${formatNumber(monthEvents.length)} رویداد در ماه جاری`;
+    $('#statCostFoot').textContent = `${formatNumber(monthCostEvents.length)} رویداد هزینه‌دار در ${persianMonthLabel(monthKey)}`;
     $('#statFuel').textContent = monthFuel.length ? formatNumber(totalLiters, 1) : '۰';
-    $('#statFuelFoot').textContent = `${formatNumber(monthFuel.length)} بار سوخت‌گیری`;
+    $('#statFuelFoot').textContent = `${formatNumber(monthFuel.length)} بار سوخت‌گیری در ${persianMonthLabel(monthKey)}`;
     $('#statDue').textContent = due.length ? formatNumber(due.length) : '۰';
     $('#statDueFoot').textContent = due.some(x => x.overdue) ? 'حداقل یک سرویس از موعد گذشته' : due.length ? 'سرویس نزدیک موعد را بررسی کن' : 'از داده‌های سرویس ثبت‌شده';
   }
@@ -293,6 +294,25 @@
   function maintenanceStageRank(stage) {
     return ({ critical: 0, overdue: 1, due: 2, upcoming: 3, ok: 4, monitor: 5 })[stage] ?? 6;
   }
+  function numberOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+  function maintenanceEventMatches(event, key, item = null) {
+    const accepted = new Set([key, item?.serviceKey].filter(Boolean).map(String));
+    const identifiers = [event?.serviceKey, event?.componentKey, event?.serviceCatalogKey].filter(Boolean).map(String);
+    if (!identifiers.some(identifier => accepted.has(identifier))) return false;
+    if (event.type === 'service') return true;
+    if (event.type === 'part') return event.componentReplaced === true;
+    if (event.type === 'repair') return event.status !== 'open';
+    if (event.type === 'issue') return event.status === 'fixed' && Boolean(event.componentReplaced || event.componentKey || event.serviceKey || event.serviceCatalogKey);
+    return false;
+  }
+  function latestMaintenanceForKey(events, key, item = null) {
+    return events.filter(event => maintenanceEventMatches(event, key, item))
+      .sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+  }
   function latestMaintenanceEvent(events, key, typeKey = 'serviceKey') {
     return events.filter(e =>
       ((e.type === 'service' || e.type === 'part' || e.type === 'repair') && (e[typeKey] === key || e.componentKey === key)) &&
@@ -309,10 +329,7 @@
     const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
     const currentOdo = calculateOdometer(events);
     const serviceCards = services.map(([key, service]) => {
-      const latest = events.filter(e =>
-        (e.type === 'service' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key)) ||
-        ((e.type === 'part' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open' && (e.serviceKey === key || e.componentKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'repair' || e.status === 'fixed'))
-      ).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+      const latest = latestMaintenanceForKey(events, key, config.partCatalog?.items?.[key] || null);
       const baseline = !latest;
       const reference = latest || {
         id: `purchase-${key}`,
@@ -325,7 +342,7 @@
       };
       const intervalKm = Number(service.intervalKm) || 0;
       const intervalDays = Number(service.intervalDays) || 0;
-      const referenceKm = Number.isFinite(Number(reference.odometerKm)) ? Number(reference.odometerKm) : null;
+      const referenceKm = numberOrNull(reference.odometerKm);
       const remainingKm = intervalKm > 0 && currentOdo != null && referenceKm != null ? Math.round(referenceKm + intervalKm - currentOdo) : null;
       const referenceDate = reference.date || String(reference.occurredAt || '').slice(0, 10) || null;
       const dueDate = intervalDays > 0 && referenceDate ? addDays(referenceDate, intervalDays) : null;
@@ -338,15 +355,16 @@
         ? clamp((intervalKm - remainingKm) / intervalKm * 100, 0, 100)
         : (intervalDays > 0 && remainingDays != null ? clamp((intervalDays - remainingDays) / intervalDays * 100, 0, 100) : 0);
       const headline = remainingKm != null
-        ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : `${formatNumber(remainingKm)} km`)
+        ? (remainingKm < 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : remainingKm === 0 ? 'موعد سرویس رسیده' : `${formatNumber(remainingKm)} km مانده`)
         : remainingDays != null ? `${formatNumber(Math.abs(remainingDays))} روز${remainingDays <= 0 ? ' عبور از موعد' : ' تا موعد'}`
           : currentOdo != null && referenceKm != null ? `${formatNumber(Math.max(0, currentOdo - referenceKm))} km از مبنا` : 'نامشخص';
-      const subline = remainingKm != null ? (remainingKm <= 0 ? 'از موعد کیلومتری گذشته' : 'تا موعد کیلومتری بعدی')
+      const subline = remainingKm != null ? (remainingKm < 0 ? 'از موعد کیلومتری گذشته' : remainingKm === 0 ? 'موعد کیلومتری همین حالا رسیده' : 'مانده تا سرویس/بازدید بعدی')
         : remainingDays != null ? (remainingDays <= 0 ? 'از موعد زمانی گذشته' : 'تا موعد زمانی بعدی')
           : baseline ? 'از مبنای کیلومتر خرید؛ تاریخ خرید برای محاسبه روز مشخص نیست' : 'برای تخمین موعد، تاریخ/کیلومتر معتبر لازم است';
       const footParts = [];
       if (baseline) {
-        footParts.push(`سابقه سرویس ثبت نشده؛ مبنای کیلومتری ${formatNumber(purchaseKm)} km`);
+        footParts.push(`سابقه سرویس بعد از خرید ثبت نشده؛ مبنای ${formatNumber(purchaseKm)} km`);
+        if (currentOdo != null && currentOdo >= purchaseKm) footParts.push(`از خرید ${formatNumber(currentOdo - purchaseKm)} km پیموده شده`);
         footParts.push(purchaseDate ? `تاریخ مبنا: ${escapeHtml(purchaseDate)}` : 'سن تقویمی از خرید محاسبه نمی‌شود');
       } else {
         if (latest.odometerKm != null) footParts.push(`آخرین سرویس/تعویض: ${formatNumber(latest.odometerKm)} km`);
@@ -356,6 +374,7 @@
       }
       return { key, stage, rank: maintenanceStageRank(stage), kmSort: remainingKm ?? Infinity, card: serviceCard({ key, service, latest: reference, status, statusClass, headline, subline, progress, foot: footParts.join(' · ') }) };
     }).sort((a, b) => a.rank - b.rank || a.kmSort - b.kmSort || a.key.localeCompare(b.key));
+    renderServiceReconciliation(config, events, currentOdo);
     const dynamicCards = renderInstalledMaintenanceCards(config, events, currentOdo);
     $('#serviceGrid').innerHTML = serviceCards.length
       ? serviceCards.map(item => item.card).join('')
@@ -365,6 +384,31 @@
     renderComponentCatalog();
     renderInstalledComponents();
     renderServiceCatalog();
+  }
+
+  function renderServiceReconciliation(config, events, currentOdo) {
+    const node = $('#serviceReconciliation');
+    if (!node) return;
+    const purchaseKm = numberOrNull(config?.ownership?.purchaseOdometerKm ?? config?.ownership?.baselineOdometerKm ?? config?.vehicle?.purchaseOdometerKm) ?? 428000;
+    const driven = currentOdo != null && currentOdo >= purchaseKm ? currentOdo - purchaseKm : null;
+    const latestReplacements = events.filter(event => event.type === 'part' && event.componentReplaced === true && numberOrNull(event.odometerKm) !== null)
+      .sort((a, b) => eventEpoch(b) - eventEpoch(a));
+    const seen = new Set();
+    const replacementNotes = latestReplacements.filter(event => {
+      const key = String(event.componentKey || event.componentName || event.title || event.id);
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, 4).map(event => {
+      const since = currentOdo == null ? null : Math.max(0, currentOdo - Number(event.odometerKm));
+      return `${event.componentName || event.title || 'قطعه'}: ${since == null ? '—' : `${formatNumber(since)} km از تعویض`}`;
+    });
+    const parts = [
+      `مبنای خرید: ${formatNumber(purchaseKm)} km`,
+      `کیلومتر فعلی: ${currentOdo == null ? 'نامشخص' : `${formatNumber(currentOdo)} km`}`,
+      `پیمایش از خرید: ${driven == null ? 'نامشخص' : `${formatNumber(driven)} km`}`
+    ];
+    if (replacementNotes.length) parts.push(`تعویض‌های اخیر: ${replacementNotes.join(' · ')}`);
+    node.textContent = `${parts.join('  |  ')}. اعداد مثبت «مانده تا موعد» هستند؛ فقط عبارت «عبور از موعد» به معنی عقب‌افتادگی است.`;
   }
 
   function renderInstalledMaintenanceCards(config, events, currentOdo) {
@@ -378,13 +422,11 @@
     const cards = [];
     for (const [key, item] of Object.entries(items)) {
       if (key in scheduled || (item.serviceKey && item.serviceKey in scheduled)) continue;
-      const event = events.filter(e =>
-        ((e.componentKey === key || e.serviceKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'repair' || e.type === 'service' || (e.type === 'issue' && e.status === 'fixed')))
-      ).filter(e => e.status !== 'open').sort((a,b) => eventEpoch(b)-eventEpoch(a))[0] || null;
+      const event = latestMaintenanceForKey(events, key, item);
       const baseline = !event;
       const reference = event || { id: `purchase-${key}`, type: 'purchase-baseline', date: purchaseDate, occurredAt: purchaseDate ? `${purchaseDate}T12:00:00+03:30` : null, jalaliDate: purchaseDate || 'از مبنای خرید', odometerKm: purchaseKm, baseline: true };
       const category = categories[item.category] || { label: item.category || 'قطعه', icon: '🔩', theme: '#36c7e8' };
-      const refKm = Number.isFinite(Number(reference.odometerKm)) ? Number(reference.odometerKm) : null;
+      const refKm = numberOrNull(reference.odometerKm);
       const kmSince = currentOdo != null && refKm != null ? Number(currentOdo) - refKm : null;
       const referenceDate = reference.date || String(reference.occurredAt || '').slice(0,10) || null;
       const daysSince = referenceDate ? Math.max(0, daysBetween(referenceDate, localDateString(new Date()))) : null;
@@ -397,7 +439,7 @@
       const status = `${maintenanceStageLabel(stage)}${baseline ? ' · سابقه ندارد' : ''}`;
       const statusClass = maintenanceStageClass(stage);
       const headline = hasInterval
-        ? (remainingKm != null ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : `${formatNumber(remainingKm)} km`) : remainingDays != null ? `${formatNumber(Math.max(0, remainingDays))} روز` : 'موعد نامشخص')
+        ? (remainingKm != null ? (remainingKm < 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از موعد` : remainingKm === 0 ? 'موعد رسیده' : `${formatNumber(remainingKm)} km مانده`) : remainingDays != null ? `${formatNumber(Math.max(0, remainingDays))} روز` : 'موعد نامشخص')
         : (kmSince != null ? `${formatNumber(Math.max(0, kmSince))} km` : 'عمر نامشخص');
       const subline = hasInterval
         ? (stage === 'critical' ? 'بسیار فراتر از بازه؛ بررسی فوری' : stage === 'overdue' ? 'از بازهٔ تنظیم‌شده عبور کرده' : stage === 'due' ? 'موعد تعویض/بازدید رسیده' : stage === 'upcoming' ? 'به موعد نزدیک می‌شود' : 'کارکرد از مرجع نگهداری')
@@ -513,21 +555,21 @@
     if (events === state.events && config === state.config && Array.isArray(state.precomputed?.dueItems)) return state.precomputed.dueItems;
     const result = [];
     const ownership = config?.ownership || {};
-    const purchaseKm = Number(ownership.purchaseOdometerKm ?? 428000);
+    const purchaseKm = numberOrNull(ownership.purchaseOdometerKm ?? ownership.baselineOdometerKm ?? config?.vehicle?.purchaseOdometerKm) ?? 428000;
     const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
     const today = localDateString(new Date());
     for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
-      const latest = events.filter(e => (e.type === 'service' && e.serviceKey === key) || ((e.type === 'part' || e.type === 'repair') && e.status !== 'open' && (e.serviceKey === key || e.componentKey === key) && (e.componentReplaced || e.type === 'repair' || e.status === 'fixed'))).sort((a, b) => eventEpoch(b) - eventEpoch(a))[0] || null;
+      const latest = latestMaintenanceForKey(events, key, config?.partCatalog?.items?.[key] || null);
       const baseline = !latest;
-      const refOdo = latest ? (latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) : null) : purchaseKm;
+      const refOdo = latest ? numberOrNull(latest.odometerKm) : purchaseKm;
       const refDate = latest?.date || (latest?.occurredAt ? String(latest.occurredAt).slice(0,10) : null) || (baseline ? purchaseDate : null);
       const kmInterval = Number(service.intervalKm) || 0;
       const dayInterval = Number(service.intervalDays) || 0;
-      const leftKm = kmInterval > 0 && currentOdo != null && refOdo != null ? refOdo + kmInterval - currentOdo : null;
+      const leftKm = kmInterval > 0 && currentOdo != null && refOdo != null ? Math.round(refOdo + kmInterval - currentOdo) : null;
       const dueDate = dayInterval > 0 && refDate ? addDays(refDate, dayInterval) : null;
       const leftDays = dueDate ? daysBetween(today, dueDate) : null;
-      const nearKm = leftKm != null && leftKm <= Math.max(500, kmInterval * .1);
-      const nearDays = leftDays != null && leftDays <= 14;
+      const nearKm = leftKm != null && leftKm > 0 && leftKm <= Math.max(500, kmInterval * .1);
+      const nearDays = leftDays != null && leftDays > 0 && leftDays <= 14;
       const overdueKm = leftKm != null && leftKm < 0 ? Math.abs(leftKm) : 0;
       const overdueDays = leftDays != null && leftDays < 0 ? Math.abs(leftDays) : 0;
       const stage = (overdueKm >= Math.max(1000, kmInterval * .2) && kmInterval > 0) || overdueDays >= 30 ? 'critical'
@@ -538,15 +580,15 @@
     }
     const catalog = config?.partCatalog || {};
     for (const [key, item] of Object.entries(catalog.items || {})) {
-      if (item.mode !== 'periodic' || config?.serviceIntervals?.[key]) continue;
-      const latest = events.filter(e => (e.componentKey === key || e.serviceKey === key || e.serviceCatalogKey === key) && (e.componentReplaced || e.type === 'service' || e.type === 'repair' || (e.type === 'issue' && e.status === 'fixed')) && e.status !== 'open').sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0] || null;
+      if (item.mode !== 'periodic' || config?.serviceIntervals?.[key] || (item.serviceKey && config?.serviceIntervals?.[item.serviceKey])) continue;
+      const latest = latestMaintenanceForKey(events, key, item);
       const baseline = !latest;
-      const refOdo = latest ? (latest.odometerKm != null && Number.isFinite(Number(latest.odometerKm)) ? Number(latest.odometerKm) : null) : purchaseKm;
+      const refOdo = latest ? numberOrNull(latest.odometerKm) : purchaseKm;
       const refDate = latest?.date || (latest?.occurredAt ? String(latest.occurredAt).slice(0,10) : null) || (baseline ? purchaseDate : null);
       const kmInterval = Number(item.intervalKm) || 0;
       const dayInterval = Number(item.intervalDays) || 0;
       const kmSince = currentOdo != null && refOdo != null ? currentOdo - refOdo : null;
-      const leftKm = kmInterval > 0 && kmSince != null ? kmInterval - kmSince : null;
+      const leftKm = kmInterval > 0 && kmSince != null ? Math.round(kmInterval - kmSince) : null;
       const dueDate = dayInterval > 0 && refDate ? addDays(refDate,dayInterval) : null;
       const leftDays = dueDate ? daysBetween(today,dueDate) : null;
       const overdueKm = leftKm != null && leftKm < 0 ? Math.abs(leftKm) : 0;
@@ -637,8 +679,8 @@
     const select = $('#monthFilter');
     if (!select) return;
     const old = select.value;
-    const months = [...new Set([...state.months, ...state.events.map(e=>String(e.date || '').slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m))])].sort().reverse();
-    select.innerHTML = '<option value="all">تمام ماه‌ها</option>' + months.map(m=>`<option value="${m}">${escapeHtml(monthShort(m))} · ${m}</option>`).join('');
+    const months = [...new Set([currentPersianMonthKey(), ...state.events.map(event => eventPersianMonthKey(event)).filter(Boolean)])].sort().reverse();
+    select.innerHTML = '<option value="all">تمام ماه‌ها</option>' + months.map(month => `<option value="${month}">${escapeHtml(persianMonthLabel(month))} · ${formatNumber(Number(month.slice(0,4)))}-${formatNumber(Number(month.slice(5,7)))}</option>`).join('');
     if (old === 'all' || months.includes(old)) select.value = old; else select.value = 'all';
   }
 
@@ -758,7 +800,7 @@
       const d = new Date(now.getTime()); d.setDate(d.getDate() - (d.getDay() + 6) % 7 - (11 - i) * 7);
       return localDateString(d);
     });
-    return getMonthKeys(localDateString(now).slice(0, 7), 12);
+    return previousPersianMonthKeys(currentPersianMonthKey(), 12);
   }
   function bucketForDate(value, period) {
     if (!value) return '';
@@ -769,7 +811,7 @@
       return `${localDateString(event)}T${String(event.getHours()).padStart(2, '0')}`;
     }
     if (period === 'day') return String(value).slice(0, 10);
-    if (period === 'month') return String(value).slice(0, 7);
+    if (period === 'month') return persianMonthKey(value);
     const day = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7);
     return `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`;
@@ -779,7 +821,7 @@
     if (period === 'hour') return key.slice(-2) + 'h';
     if (period === 'day') return key.slice(5);
     if (period === 'week') return key.slice(5);
-    return monthShort(key);
+    return persianMonthLabel(key);
   }
   function renderOverviewExtras() {
     const recent = state.events.slice().sort((a, b) => eventEpoch(b) - eventEpoch(a)).slice(0, 5);
@@ -809,7 +851,7 @@
     const actor = $('#actorFilter')?.value || 'all';
     state.filtered = state.events.filter(event => {
       if (type !== 'all' && event.type !== type) return false;
-      if (month !== 'all' && eventDateKey(event).slice(0, 7) !== month) return false;
+      if (month !== 'all' && eventPersianMonthKey(event) !== month) return false;
       if (actor !== 'all' && String(event.actor || 'من') !== actor) return false;
       if (text) {
         const haystack = [event.title, event.description, event.note, event.actor, event.serviceLabel, event.componentName, event.expenseCategory, event.fineLocation, event.ticketNumber].join(' ').toLocaleLowerCase('fa');
@@ -871,8 +913,8 @@
     const average = weightedDistance > 0 ? weightedLiters / weightedDistance * 100 : null;
     safeText('#fuelPageEfficiency', average == null ? '—' : formatNumber(average, 2));
     safeText('#fuelPageEfficiencyFoot', average == null ? 'برای محاسبه، دو ثبت باک کامل همراه کیلومتر لازم است.' : `${formatNumber(measurements.length)} بازه معتبر باک کامل`);
-    const months = getMonthKeys(localDateString(new Date()).slice(0, 7), 8);
-    chartBars('#fuelOnlyChart', months.map(key => ({ label: key, shortLabel: monthShort(key), value: sum(fuel.filter(event => eventDateKey(event).slice(0, 7) === key), event => event.liters) })), value => `${formatNumber(value, 1)} L`, 'هنوز سوخت‌گیری ثبت نشده است.');
+    const months = previousPersianMonthKeys(currentPersianMonthKey(), 8);
+    chartBars('#fuelOnlyChart', months.map(key => ({ label: key, shortLabel: persianMonthLabel(key), value: sum(fuel.filter(event => eventPersianMonthKey(event) === key), event => event.liters) })), value => `${formatNumber(value, 1)} L`, 'هنوز سوخت‌گیری ثبت نشده است.');
     chartBars('#fuelConsumptionChart', measurements.slice(-8).map(item => ({ label: item.date, shortLabel: item.date, value: item.rate })), value => `${formatNumber(value, 2)}`, 'برای محاسبه مصرف، دو سوخت‌گیری باک کامل و کیلومتر معتبر لازم است.');
     safeText('#fuelWeightedAverage', average == null ? '—' : `${formatNumber(average, 2)} L/100km`);
     const list = $('#fuelEventList');
@@ -883,20 +925,20 @@
   function renderExpensePage() {
     const rows = state.events.filter(isActualExpense).slice().sort((a, b) => eventEpoch(b) - eventEpoch(a));
     const total = sum(rows, expenseAmount) / 10;
-    const month = localDateString(new Date()).slice(0, 7);
-    const monthly = sum(rows.filter(event => expenseDate(event).slice(0, 7) === month), expenseAmount) / 10;
+    const month = currentPersianMonthKey();
+    const monthly = sum(rows.filter(event => persianMonthKey(expenseDate(event)) === month), expenseAmount) / 10;
     const largest = rows.slice().sort((a, b) => expenseAmount(b) - expenseAmount(a))[0];
     const categories = {};
     rows.forEach(event => { const key = String(event.expenseCategory || (event.type === 'fuel' ? 'سوخت' : event.type === 'fine' ? 'جریمه پرداخت‌شده' : typeLabels[event.type] || event.type)); categories[key] = (categories[key] || 0) + expenseAmount(event) / 10; });
     safeText('#expensePageTotal', compactMoney(total));
     safeText('#expensePageTotalFoot', `${formatNumber(rows.length)} رویداد دارای هزینه واقعی`);
     safeText('#expensePageMonthly', compactMoney(monthly));
-    safeText('#expensePageMonthlyFoot', `${monthShort(month)} · ${month}`);
+    safeText('#expensePageMonthlyFoot', `${persianMonthLabel(month)} · ${month}`);
     safeText('#expensePageLargest', largest ? compactMoney(expenseAmount(largest) / 10) : '—');
     safeText('#expensePageLargestFoot', largest ? eventTitle(largest) : 'هزینه‌ای ثبت نشده است');
     safeText('#expensePageCategories', formatNumber(Object.keys(categories).length));
-    const months = getMonthKeys(localDateString(new Date()).slice(0, 7), 8);
-    chartBars('#expenseMonthlyChart', months.map(key => ({ label: key, shortLabel: monthShort(key), value: sum(rows.filter(event => expenseDate(event).slice(0, 7) === key), expenseAmount) / 10 })), value => compactMoney(value), 'هنوز دادهٔ مالی ثبت نشده است.');
+    const months = previousPersianMonthKeys(currentPersianMonthKey(), 8);
+    chartBars('#expenseMonthlyChart', months.map(key => ({ label: key, shortLabel: persianMonthLabel(key), value: sum(rows.filter(event => persianMonthKey(expenseDate(event)) === key), expenseAmount) / 10 })), value => compactMoney(value), 'هنوز دادهٔ مالی ثبت نشده است.');
     const catNode = $('#expenseCategoryChart');
     const catRows = Object.entries(categories).sort((a, b) => b[1] - a[1]);
     if (catNode) {
@@ -1027,6 +1069,36 @@
   function localDateString(date) {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
     const p = Object.fromEntries(parts.filter(x=>x.type!=='literal').map(x=>[x.type,x.value])); return `${p.year}-${p.month}-${p.day}`;
+  }
+  const persianCalendarFormatter = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const persianMonthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+  function persianMonthKey(value) {
+    if (PersianCalendar?.monthKey) return PersianCalendar.monthKey(value);
+    if (!value) return '';
+    const raw = value instanceof Date ? value : String(value).trim();
+    const date = raw instanceof Date ? raw : /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00+03:30`) : new Date(raw);
+    if (!Number.isFinite(date.getTime())) return '';
+    const parts = Object.fromEntries(persianCalendarFormatter.formatToParts(date).filter(part => part.type !== 'literal' && part.type !== 'era').map(part => [part.type, part.value]));
+    return parts.year && parts.month ? `${parts.year}-${String(parts.month).padStart(2, '0')}` : '';
+  }
+  function eventPersianMonthKey(event) {
+    return PersianCalendar?.monthKeyFromEvent ? PersianCalendar.monthKeyFromEvent(event) : persianMonthKey(event?.occurredAt || event?.date || event?.createdAt);
+  }
+  function currentPersianMonthKey(now = new Date()) { return persianMonthKey(now); }
+  function previousPersianMonthKeys(lastKey, count) {
+    if (PersianCalendar?.previousMonthKeys) return PersianCalendar.previousMonthKeys(lastKey, count);
+    const [yearValue, monthValue] = String(lastKey || '').split('-').map(Number);
+    if (!Number.isInteger(yearValue) || !Number.isInteger(monthValue) || monthValue < 1 || monthValue > 12) return [];
+    let year = yearValue, month = monthValue;
+    const result = [];
+    for (let index = 0; index < Math.max(0, count); index++) { result.unshift(`${year}-${String(month).padStart(2, '0')}`); month--; if (month < 1) { month = 12; year--; } }
+    return result;
+  }
+  function persianMonthLabel(key) {
+    if (PersianCalendar?.monthLabel) return PersianCalendar.monthLabel(key, formatNumber);
+    const [year, month] = String(key || '').split('-').map(Number);
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) return String(key || 'ماه نامشخص');
+    return `${persianMonthNames[month - 1]} ${formatNumber(year)}`;
   }
   function formatJalaliDate(value) {
     if (!value) return '—'; const date = new Date(`${String(value).slice(0,10)}T09:00:00Z`);
