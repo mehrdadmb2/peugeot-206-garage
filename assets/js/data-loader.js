@@ -1,5 +1,5 @@
 /*
- * 206 Garage resilient data loader v3.10.3
+ * 206 Garage resilient data loader v3.11.0
  * The browser must not depend on GitHub Actions or the Cloudflare Worker.
  * It prefers the precomputed snapshot, validates freshness, and falls back
  * to raw repository JSON on the website origin, GitHub Raw, or jsDelivr.
@@ -10,11 +10,21 @@
   const OWNER = 'mehrdadmb2';
   const REPO = 'peugeot-206-garage';
   const BRANCH = 'main';
-  const REQUEST_TIMEOUT_MS = 6500;
-  const HEDGE_DELAYS_MS = [0, 350, 950];
+  const REQUEST_TIMEOUT_MS = 5200;
+  const HEDGE_DELAYS_MS = [0, 180, 420];
   const MAX_JSON_CHARS = 8 * 1024 * 1024;
   const LOCAL_CACHE_KEY = 'peugeot206garage:data-cache:v1';
   const LOCAL_CACHE_MAX_CHARS = 3.5 * 1024 * 1024;
+  const APP_BASE_URL = (() => {
+    try {
+      const script = root.document?.currentScript || root.document?.querySelector('script[src*=\"data-loader.js\"]');
+      if (script?.src) return new URL('../../', script.src);
+    } catch (_) {}
+    try { return new URL('./', root.location.href); } catch (_) { return null; }
+  })();
+  const diagnostic = (level, scope, message, details) => {
+    try { root.GarageDiagnostics?.log(level, scope, message, details); } catch (_) {}
+  };
 
   function todayInTehran(now = new Date()) {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -29,7 +39,7 @@
     const stamp = Date.now().toString(36);
     const urls = [];
     try {
-      const local = new URL(cleanPath, root.location.href);
+      const local = new URL(cleanPath, APP_BASE_URL || root.location.href);
       local.searchParams.set('_garage', stamp);
       urls.push(local.href);
     } catch (_) {}
@@ -39,6 +49,8 @@
   }
 
   async function requestJson(url, label, controller) {
+    const startedAt = Date.now();
+    diagnostic('debug', 'data.request', `درخواست ${label} شروع شد.`, { source: sourceName(url), path: String(url).replace(/[?#].*$/, '') });
     let timeoutId = null;
     const timeout = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
@@ -60,8 +72,11 @@
       const text = await response.text();
       if (!text || !text.trim()) throw new Error(`${label}: پاسخ خالی است.`);
       if (text.length > MAX_JSON_CHARS) throw new Error(`${label}: حجم JSON غیرمنتظره و بیش از حد مجاز است.`);
-      try { return JSON.parse(text); }
-      catch (error) { throw new Error(`${label}: JSON نامعتبر است (${error.message}).`); }
+      try {
+        const data = JSON.parse(text);
+        diagnostic('info', 'data.response', `${label} با موفقیت دریافت شد.`, { source: sourceName(url), bytes: text.length, durationMs: Date.now() - startedAt });
+        return data;
+      } catch (error) { throw new Error(`${label}: JSON نامعتبر است (${error.message}).`); }
     })();
 
     try {
@@ -84,6 +99,7 @@
           const data = await requestJson(url, label, controller);
           resolve({ data, url, source: sourceName(url) });
         } catch (error) {
+          diagnostic('warn', 'data.source', `منبع ${sourceName(url)} برای ${label} ناموفق بود.`, { message: error.message });
           reject(new Error(`${sourceName(url)} → ${error.message}`));
         }
       }, delay);
@@ -246,14 +262,19 @@
   }
 
   async function load() {
+    const startedAt = Date.now();
+    diagnostic('info', 'data.load', 'بارگذاری مجموعه‌داده آغاز شد.');
     try {
       const dataset = await loadOnline();
       if (dataset.mode !== 'offline-cache') saveLocalCache(dataset);
+      diagnostic('info', 'data.load', 'بارگذاری مجموعه‌داده کامل شد.', { mode: dataset.mode, eventCount: dataset.events?.length || 0, monthCount: dataset.months?.length || 0, failedMonths: dataset.failedMonths || [], durationMs: Date.now() - startedAt });
       return dataset;
     } catch (error) {
+      diagnostic('error', 'data.load', 'بارگذاری آنلاین ناموفق بود.', error);
       const cached = readLocalCache();
       if (cached) {
         cached.warnings.push(`بازیابی آنلاین ناموفق بود: ${error.message}`);
+        diagnostic('warn', 'data.cache', 'آخرین دادهٔ معتبر از حافظهٔ محلی بازیابی شد.', { eventCount: cached.events.length, monthCount: cached.months.length });
         return cached;
       }
       throw error;
@@ -375,6 +396,7 @@
   root.GarageDataLoader = Object.freeze({
     load, fetchJson, validateConfig, validateIndex, validateSnapshot, snapshotStaleness,
     saveLocalCache, readLocalCache,
-    version: '3.10.3'
+    version: '3.11.0'
   });
+  diagnostic('info', 'data.loader', 'موتور بارگذاری داده نصب شد.', { version: '3.11.0', baseUrl: APP_BASE_URL?.href || 'unresolved' });
 })(window);

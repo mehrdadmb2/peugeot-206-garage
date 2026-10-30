@@ -1,0 +1,49 @@
+Peugeot 206 Garage v3.11.0 — Test Results
+Date: 2026-10-30
+
+Automated project suite
+- Command: npm test --prefix worker
+- Result: 50 passed, 0 failed.
+
+JavaScript syntax
+- node --check assets/js/app.js: PASS
+- node --check assets/js/data-loader.js: PASS
+- node --check assets/js/diagnostics.js: PASS
+- node --check worker/src/index.js: PASS
+- node --check worker/tests/dashboard-loader.test.mjs: PASS
+- node --check worker/tests/dashboard-render-smoke.test.mjs: PASS
+
+Real repository data-loader smoke test
+- Source: checked-in data/dashboard.json, config.json, index.json.
+- Mode: snapshot.
+- Events: 31.
+- Months: 1 (2026-10).
+- Service intervals: 17.
+- Part categories: 15.
+- Part catalog items: 62.
+- Service catalog entries: 17.
+- Browser local-cache write: PASS.
+
+Application rendering smoke test
+- app.js executed in a lightweight mocked DOM using the actual repository snapshot/config/events.
+- Main dashboard bootstrap invoked.
+- Connection state reached “داده‌ها آماده”.
+- Main service cards, dynamic maintenance, component catalog and service catalog populated.
+- Journal, analytics, fuel, expenses, traffic and settings renderers executed.
+- Renderer exceptions captured: 0.
+- This is an automated DOM simulation, not a claim of a live-browser session.
+
+Regression coverage added
+- Missing renderer/export callbacks referenced by bootstrap.
+- Every literal #id selector used by app.js exists in index.html.
+- Startup/connection badge guards for missing optional elements.
+- Per-section render failure isolation and safe unknown-section handling.
+- Diagnostics module load order, self-test and report export.
+- Persistent diagnostic logs after page refresh.
+- Authorization/token/secret redaction in diagnostic export.
+- End-to-end app bootstrap/render smoke test with actual checked-in data.
+
+Limitations
+- GitHub Pages could not be reached from this execution environment.
+- A production deployment and a full visual browser test on the hosted domain were not performed.
+- Hosted deployment is not claimed as verified. Deploy this package and, if anything remains wrong, attach the in-page diagnostics JSON.

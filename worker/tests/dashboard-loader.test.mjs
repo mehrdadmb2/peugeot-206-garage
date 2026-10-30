@@ -10,6 +10,7 @@ const html = readFileSync(resolve(root, 'index.html'), 'utf8');
 const app = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
 const loaderSource = readFileSync(resolve(root, 'assets/js/data-loader.js'), 'utf8');
 const css = readFileSync(resolve(root, 'assets/css/style.css'), 'utf8');
+const diagnosticsSource = readFileSync(resolve(root, 'assets/js/diagnostics.js'), 'utf8');
 
 function jsonResponse(value) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -42,9 +43,11 @@ function payloadFor(url) {
 }
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.10\.3-resilience/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.10\.3-resilience/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.10\.3-resilience/);
+  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.11\.0-diagnostics/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.11\.0-diagnostics/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.11\.0-diagnostics/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.11\.0-diagnostics/);
+  assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
   assert.match(html, /10500/);
@@ -156,7 +159,7 @@ test('browser data loader serves the last valid local cache when all online sour
 test('browser data loader checks primary, GitHub Raw and jsDelivr sources with full-response timeout and abort', () => {
   assert.match(loaderSource, /raw\.githubusercontent\.com/);
   assert.match(loaderSource, /cdn\.jsdelivr\.net/);
-  assert.match(loaderSource, /REQUEST_TIMEOUT_MS\s*=\s*6500/);
+  assert.match(loaderSource, /REQUEST_TIMEOUT_MS\s*=\s*5200/);
   assert.match(loaderSource, /response\.text\(\)/);
   assert.match(loaderSource, /new AbortController\(\)/);
   assert.match(loaderSource, /Promise\.race\(\[request, timeout\]\)/);
@@ -188,4 +191,69 @@ test('dashboard keeps a clickable Telegram bot identity tag in the hero area', (
   assert.match(html, /class="hero-bot-pill"/);
   assert.match(html, /@Peugeot206GarageBot/);
   assert.match(css, /\.hero-bot-pill/);
+});
+
+
+test('all dashboard renderers and export handlers referenced by bootstrap are actually defined', () => {
+  const required = ['updateJournal','renderJournal','renderAnalytics','renderOverviewExtras','renderFuelPage','renderExpensePage','renderTrafficDetails','renderSettingsPage','exportCsvAll','exportJsonAll','exportExpensesCsv','copyApiExample'];
+  for (const name of required) assert.match(app, new RegExp(`function\\s+${name}\\s*\\(`), `${name} must be declared before runtime`);
+});
+
+test('every literal DOM id used by the application exists in index.html', () => {
+  const usedIds = [...app.matchAll(/\$\(['\"]#([A-Za-z0-9_-]+)['\"]\)/g)].map(match => match[1]);
+  for (const id of new Set(usedIds)) assert.match(html, new RegExp(`id=[\"']${id}[\"']`), `#${id} must exist in index.html`);
+});
+
+test('startup and connection indicators tolerate missing optional DOM elements', () => {
+  assert.match(app, /refreshButton\?\.classList\.add/);
+  assert.match(app, /refreshButton\?\.classList\.remove/);
+  assert.match(app, /if \(!badge\)\s*\{/);
+  assert.match(app, /const target = targetSelector \? \$\(targetSelector\) : null;/);
+});
+
+test('render failures are isolated so one broken page does not stop the remaining dashboard', () => {
+  assert.match(app, /function safeRender\(/);
+  assert.match(app, /sections\.forEach\(\(\[name, renderer\]\) => safeRender/);
+  assert.match(app, /GarageDiagnostics\?\.log\('error', `render\./);
+  assert.match(app, /const targetSelector = targetMap\[name\];/);
+  assert.doesNotMatch(app, /\$\(targetMap\[name\] \|\| ''\)/);
+});
+
+test('privacy-safe diagnostics are loaded before all app code and provide export, persistent logs and self-check', () => {
+  assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
+  assert.match(diagnosticsSource, /unhandledrejection/);
+  assert.match(diagnosticsSource, /securitypolicyviolation/);
+  assert.match(diagnosticsSource, /downloadReport/);
+  assert.match(diagnosticsSource, /async function runChecks/);
+  assert.match(diagnosticsSource, /GarageDiagnostics/);
+  assert.match(diagnosticsSource, /REDACTED/);
+  assert.match(diagnosticsSource, /PERSIST_KEY/);
+  assert.match(diagnosticsSource, /pagehide/);
+});
+
+test('diagnostic entries survive page refresh and redact authorization and secret fields', () => {
+  const storage = new Map();
+  const listeners = new Map();
+  const createDiagnostics = () => {
+    const window = {
+      location: { origin: 'https://example.test', pathname: '/garage/' },
+      navigator: { onLine: true, userAgent: 'test', language: 'fa-IR' },
+      localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+      document: { readyState: 'loading', addEventListener: (name, fn) => listeners.set(`doc:${name}`, fn), scripts: [] },
+      addEventListener: (name, fn) => listeners.set(name, fn),
+      setTimeout, clearTimeout, performance: { getEntriesByType: () => [] }, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1
+    };
+    vm.runInNewContext(diagnosticsSource, { window, URL, Date, Intl, JSON, Object, Array, String, Number, Error, Blob }, { filename: 'diagnostics.js' });
+    return window.GarageDiagnostics;
+  };
+  const first = createDiagnostics();
+  first.log('error', 'test.scope', 'Authorization: Bearer abc123 token=secret123', { accessToken: 'private-value', safe: 'visible' });
+  listeners.get('pagehide')();
+  const saved = storage.get('peugeot206garage:diagnostics:v1');
+  assert.ok(saved);
+  assert.doesNotMatch(saved, /abc123|secret123|private-value/);
+  assert.match(saved, /REDACTED/);
+  const second = createDiagnostics();
+  assert.ok(second.entries.some(entry => entry.scope === 'test.scope'));
+  assert.ok(second.entries.some(entry => entry.level === 'error'));
 });
