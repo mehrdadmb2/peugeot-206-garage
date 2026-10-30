@@ -8,6 +8,8 @@ on:
       - 'data/index.json'
       - 'data/logs/**'
       - 'scripts/build-dashboard.mjs'
+      - 'assets/js/persian-calendar.cjs'
+      - 'scripts/build-dashboard.test.mjs'
       - '.github/workflows/build-dashboard.yml'
   schedule:
     # Refresh date-based service statuses every day at 09:15 Asia/Tehran.
@@ -51,8 +53,13 @@ jobs:
       - name: Verify generated JSON and run regression tests
         run: |
           node --check assets/js/app.js
+          node --check assets/js/data-loader.js
+          node --check assets/js/diagnostics.js
+          node --check assets/js/persian-calendar.cjs
+          node --check scripts/build-dashboard.mjs
           node --check worker/src/index.js
           node --test worker/tests/*.test.mjs scripts/*.test.mjs
+          node worker/test/smoke.mjs
           node -e "const d=require('./data/dashboard.json'); if(!Array.isArray(d.events)||!d.config?.partCatalog?.items||!d.computed) process.exit(1); console.log('Snapshot validated:', d.events.length, 'events;', Object.keys(d.config.partCatalog.items).length, 'parts')"
 
       - name: Publish the snapshot to GitHub Pages
