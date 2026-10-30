@@ -7,11 +7,11 @@
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="assets/css/style.css?v=3.13.0-private-documents-r1">
-  <script defer src="assets/js/diagnostics.js?v=3.13.0-private-documents-r1"></script>
-  <script defer src="assets/js/data-loader.js?v=3.13.0-private-documents-r1"></script>
-  <script defer src="assets/js/app.js?v=3.13.0-private-documents-r1"></script>
-  <script defer src="assets/js/vehicle-documents.js?v=3.13.0-private-documents-r1"></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=3.14.0-private-documents-r2">
+  <script defer src="assets/js/diagnostics.js?v=3.14.0-private-documents-r2"></script>
+  <script defer src="assets/js/data-loader.js?v=3.14.0-private-documents-r2"></script>
+  <script defer src="assets/js/app.js?v=3.14.0-private-documents-r2"></script>
+  <script defer src="assets/js/vehicle-documents.js?v=3.14.0-private-documents-r2"></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -301,7 +301,7 @@
     <span class="docs-lock-state" id="docsLockState">قفل است</span>
   </section>
   <section class="section-block panel docs-unlock-panel" id="docsLockedPanel">
-    <div class="section-heading"><div><span class="section-kicker">OWNER AUTHENTICATION</span><h2>بازکردن مدارک خصوصی</h2><p class="section-note">توکن دسترسی مدارک را که در Cloudflare Worker Secret ثبت کرده‌ای وارد کن.</p></div><span class="mini-heading-icon">🔐</span></div>
+    <div class="section-heading"><div><span class="section-kicker">OWNER AUTHENTICATION</span><h2>بازکردن مدارک خصوصی</h2><p class="section-note">رمز دسترسی دلخواهت را که در Cloudflare Worker Secret با نام DOCUMENTS_ACCESS_TOKEN ثبت کرده‌ای وارد کن؛ طول رمز محدودیت اجباری ندارد.</p></div><span class="mini-heading-icon">🔐</span></div>
     <form id="docsUnlockForm" class="docs-unlock-form">
       <label for="docsAccessToken">توکن دسترسی مدارک</label>
       <input
@@ -309,7 +309,7 @@
   type="password"
   required
   autocomplete="current-password"
-  placeholder="DOCUMENTS_ACCESS_TOKEN"
+  placeholder="رمز خصوصی مدارک (حتی یک کاراکتر)"
   spellcheck="false"
 >
       <button type="submit" class="primary-button" id="docsUnlockButton">🔓 بازکردن گاوصندوق</button>
@@ -319,10 +319,13 @@
   <section class="section-block docs-content" id="docsContent" hidden>
     <div class="docs-toolbar"><div><span class="section-kicker">SECURE SESSION</span><b>مدارک رمزگشایی‌شده در نشست فعلی</b><small id="docsUpdatedAt">—</small></div><button type="button" class="secondary-button small" id="docsLockButton">🔒 قفل‌کردن</button></div>
     <div id="docsExpiryAlerts" class="docs-expiry-alerts" aria-live="polite"></div>
-    <article class="docs-plate-card">
-      <div class="docs-plate-top"><span>🇮🇷 I.R. IRAN</span><span>پلاک ملی خودرو</span></div>
-      <div class="docs-plate-main" id="docsPlateVisual"><span>••</span><b>•</b><span>•••</span><strong>ایران<br><em>••</em></strong></div>
-      <div class="docs-plate-bottom"><span>PEUGEOT 206 SD</span><span id="docsPlateCaption">—</span></div>
+    <article class="docs-plate-card" aria-label="پلاک ملی خودرو">
+      <div class="docs-plate-blue-strip"><span class="plate-strip-emblem">✦</span><b>IR</b><small>IRAN</small></div>
+      <div class="docs-plate-content">
+        <div class="docs-plate-top"><span>پلاک ملی خودرو</span><span>جمهوری اسلامی ایران</span></div>
+        <div class="docs-plate-main" id="docsPlateVisual"><span>••</span><b>•</b><span>•••</span><strong>ایران<br><em>••</em></strong></div>
+        <div class="docs-plate-bottom"><span>PEUGEOT 206 SD</span><span id="docsPlateCaption">—</span></div>
+      </div>
     </article>
     <div class="docs-card-grid">
       <article class="docs-id-card docs-green-card" id="docsRegistrationCard"></article>
@@ -425,7 +428,7 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <div class="workflow-actions"><a class="secondary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">باز کردن ربات ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">داشبورد زنده ↗</a><a class="secondary-button" href="#top">بازگشت به بالا ↑</a></div>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.13.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.14.0</b></span></footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>

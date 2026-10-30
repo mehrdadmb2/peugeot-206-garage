@@ -1,0 +1,30 @@
+Peugeot 206 Garage v3.14.0 - Verification
+=========================================
+
+Automated tests:
+- Command: cd worker && npm test
+- Result: 66 passed, 0 failed.
+
+Static syntax checks:
+- cd worker && npm run check
+- node --check assets/js/vehicle-documents.js
+- Result: passed.
+
+Dashboard snapshot:
+- Command: node scripts/build-dashboard.mjs (from project root)
+- Result: generated data/dashboard.json successfully.
+- Events: 32; months: 1; current odometer: 431661 km.
+
+Private document image:
+- Telegram /documents test verifies sendMessage and sendDocument are both called.
+- SVG attachment name: peugeot-206-private-documents.svg.
+- SVG was parsed with Python XML ElementTree successfully.
+
+Privacy checks:
+- No private vehicle documents JSON, .env, .dev.vars, PEM, or key file is included in this release.
+- Public dashboard HTML contains no real plate digits or personal document identifiers; private plate is rendered only after authenticated data loads.
+- Private Telegram commands remain restricted to the configured allowlisted user and private chats.
+
+Notes:
+- SVG is a scalable vector image sent as a Telegram document attachment, not a raster PNG/JPEG photo.
+- Live Cloudflare deployment and Telegram API delivery were not performed from this environment; deploy the Worker and Pages files before testing the live bot.

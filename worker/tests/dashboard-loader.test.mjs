@@ -43,10 +43,10 @@ function payloadFor(url) {
 }
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
-  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.13\.0-private-documents/);
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.13\.0-private-documents/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.13\.0-private-documents/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.13\.0-private-documents/);
+  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.14\.0-private-documents/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.14\.0-private-documents/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.14\.0-private-documents/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.14\.0-private-documents/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
@@ -60,10 +60,15 @@ test('HTML loads a cache-busted independent browser data loader before the app',
 test('private documents UI is separately loaded, token-gated and contains no document numbers in public HTML', () => {
   const docs = readFileSync(resolve(root, 'assets/js/vehicle-documents.js'), 'utf8');
   assert.match(html, /data-view-pane="documents"/);
-  assert.match(html, /assets\/js\/vehicle-documents\.js\?v=3\.13\.0-private-documents/);
+  assert.match(html, /assets\/js\/vehicle-documents\.js\?v=3\.14\.0-private-documents/);
   assert.ok(html.indexOf('assets/js/vehicle-documents.js') > html.indexOf('assets/js/app.js'));
   assert.match(html, /docsAccessToken/);
   assert.match(docs, /Authorization.*Bearer/);
+  assert.match(docs, /const l = d\.driverLicense \|\| \{\}/);
+  assert.match(docs, /const t = d\.technicalInspection \|\| \{\}/);
+  assert.match(docs, /const ins = d\.insurance \|\| \{\}/);
+  assert.doesNotMatch(docs, /;\s*l=d\.driverLicense/);
+  assert.match(docs, /letter: 'ی'/);
   assert.match(docs, /15\*60\*1000/);
   assert.doesNotMatch(docs, /localStorage|sessionStorage/);
   assert.doesNotMatch(html, /(?<!\d)\d{10,12}(?!\d)/);

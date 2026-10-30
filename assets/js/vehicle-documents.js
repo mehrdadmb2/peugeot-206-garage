@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage · private vehicle documents UI · v3.13.0 */
+/* Peugeot 206 Garage · private vehicle documents UI · v3.14.0 */
 (() => {
   'use strict';
   const WORKER = 'https://peugeot-206-garage-bot.game-developer-mb.workers.dev';
@@ -9,6 +9,22 @@
     try { window.GarageDiagnostics?.log(level, 'vehicle-documents', message, details); } catch (_) {}
   };
   const faDigits = (value) => String(value ?? '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  const toFaDigits = (value) => String(value ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  function normalizePlate(plate = {}) {
+    const source = faDigits([plate.displayFull, plate.display, plate.number].filter(Boolean).join(' ')).replace(/[يى]/g, 'ی');
+    let match = source.match(/(\d{2})\s*[^\d\s]\s*(\d{3})/u);
+    if (!match) {
+      const reverse = source.match(/(\d{3})\s*[یيىسصالفبجچحخدذرزژشغفقکگلمنوهءئؤۀة]\s*(\d{2})/u);
+      if (reverse) match = [reverse[0], reverse[2], reverse[1]];
+    }
+    const left = faDigits(plate.leftDigits || match?.[1] || '68').replace(/\D/g, '').slice(0, 2) || '68';
+    const middle = faDigits(plate.middleDigits || match?.[2] || '127').replace(/\D/g, '').slice(0, 3) || '127';
+    const regionMatch = source.match(/(?:ایران|iran)\s*[:：-]?\s*(\d{2})/i);
+    const region = faDigits(plate.regionalCode || regionMatch?.[1] || '63').replace(/\D/g, '').slice(0, 2) || '63';
+    const display = `${toFaDigits(left)} ی ${toFaDigits(middle)}`;
+    return { leftDigits: toFaDigits(left), middleDigits: toFaDigits(middle), letter: 'ی', regionalCode: toFaDigits(region), display, displayFull: `${display} · ایران ${toFaDigits(region)}` };
+  }
+
   const fa = (value) => new Intl.NumberFormat('fa-IR').format(Number(value) || 0);
   const esc = (value) => String(value ?? '—').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const dateText = (value) => value ? esc(String(value).replace(/-/g, '/')) : 'ثبت نشده';
@@ -55,15 +71,13 @@
   function render(d){
     documents=d||{};
     const v = d.vehicle || {};
-
-const p = {
-  ...(d.plate || {}),
-  letter: 'ی'
-};
-
-const r = d.registration || {};l=d.driverLicense||{},t=d.technicalInspection||{},ins=d.insurance||{};
+    const p = normalizePlate(d.plate || {});
+    const r = d.registration || {};
+    const l = d.driverLicense || {};
+    const t = d.technicalInspection || {};
+    const ins = d.insurance || {};
     $('docsPlateVisual').innerHTML=`<span>${esc(p.leftDigits||'••')}</span><b>${esc(p.letter||'•')}</b><span>${esc(p.middleDigits||'•••')}</span><strong>ایران<br><em>${esc(p.regionalCode||'••')}</em></strong>`;
-    $('docsPlateCaption').textContent=p.displayFull||'پلاک خودرو';
+    $('docsPlateCaption').textContent=p.displayFull;
     $('docsRegistrationCard').innerHTML=`<div class="docs-card-brand"><span>🇮🇷 سند مالکیت وسیله نقلیه</span><small>VEHICLE REGISTRATION</small></div><h3>مشخصات خودرو</h3><div class="docs-registration-model">PEUGEOT <b>206 · SD</b></div><div class="docs-kv-grid">${kvRows([['نام مالک',r.ownerName],['کد ملی مالک',r.ownerNationalId],['نوع کاربری',v.bodyType],['تیپ درج‌شده',v.trimOnCard],['سال ساخت',v.modelYearJalali],['ظرفیت',`${v.seats||'—'} نفر`],['نوع سوخت',v.fuel],['رنگ',v.color],['شماره موتور',r.engineNumber],['شماره شاسی',r.chassisNumber],['VIN',r.vin],['سریال کارت',r.cardSerial]])}</div><div class="docs-card-footer"><span>IRAN · VEHICLE ID</span><b>${esc(p.display||'—')} / ${esc(p.regionalCode||'—')}</b></div>`;
     const licenseCategories=Array.isArray(l.categories)?l.categories:[];
     const licenseCategoryMarkup=licenseCategories.length?`<div class="docs-license-categories"><b>دسته‌های مجاز درج‌شده در پشت کارت</b>${licenseCategories.map(item=>`<div class="docs-license-category"><span>${esc(item.type||'دسته رانندگی')}</span><strong>${esc(item.status||'—')}</strong><small>اولین صدور: ${dateText(item.firstIssueDateJalali)}</small></div>`).join('')}</div>`:'';

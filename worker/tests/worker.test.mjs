@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.13.0");
+ assert.equal(body.version, "3.14.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.13.0");
+ assert.equal(body.version, "3.14.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -934,6 +934,14 @@ test("private vehicle documents endpoint rejects unauthenticated access", async 
  assert.equal((await response.json()).error, "documents_unauthorized");
 });
 
+test("private vehicle documents accept a one-character access secret when explicitly configured", async () => {
+ const store=new Map();
+ const seed={schemaVersion:1,vehicle:{model:"206 SD"},plate:{display:"68 S 127"},registration:{},driverLicense:{},technicalInspection:{},insurance:{}};
+ const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
+ const response=await worker.fetch(new Request("https://unit.test/api/private/documents",{headers:{authorization:"Bearer x"}}),{DOCUMENTS_ACCESS_TOKEN:"x",GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)});
+ assert.equal(response.status,200);
+});
+
 test("private vehicle documents are seeded into KV and returned only with the dedicated token", async () => {
  const token="d".repeat(48); const store=new Map();
  const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
@@ -974,20 +982,24 @@ test("private Jalali date parsing normalizes short dates and rejects impossible 
 
 
 test("Telegram /documents command resolves through aliases and returns private document details only to the allowlisted user", async () => {
- const token="d".repeat(48); const store=new Map(); const sent=[];
- const seed={schemaVersion:1,vehicle:{make:"Peugeot",model:"206 SD",modelYearJalali:1387,color:"سفید روغنی"},plate:{display:"۰۰ الف ۰۰۰",displayFull:"۰۰ الف ۰۰۰ · ایران ۰۰",regionalCode:"۰۰"},registration:{ownerName:"مالک تست",ownerNationalId:"0000000000",engineNumber:"ENGINE-1",chassisNumber:"CHASSIS-1",vin:"VIN-1"},driverLicense:{holderName:"راننده تست",nationalId:"1111111111",issueDateJalali:"1403/07/17",expiryDateJalali:"1413/07/17",validityYears:10,expiryDerived:true,categories:[{type:"پایه سوم · خودروهای سواری",firstIssueDateJalali:"1399/05/15",status:"مجاز"}]},technicalInspection:{certificateNumber:"TECH-1",issueDateJalali:"1404/10/24",expiryDateJalali:"1405/10/24",center:"شیراز",plateAtInspection:"ایران ۰۰ الف ۰۰۰",testTime:"15:13"},insurance:{status:"missing"}};
+ const token="d".repeat(48); const store=new Map(); const sent=[]; const uploaded=[];
+ const seed={schemaVersion:1,vehicle:{make:"Peugeot",model:"206 SD",modelYearJalali:1387,color:"سفید روغنی"},plate:{leftDigits:"68",middleDigits:"127",display:"68 S 127",regionalCode:"63"},registration:{ownerName:"مالک تست",ownerNationalId:"0000000000",engineNumber:"ENGINE-1",chassisNumber:"CHASSIS-1",vin:"VIN-1"},driverLicense:{holderName:"راننده تست",nationalId:"1111111111",issueDateJalali:"1403/07/17",expiryDateJalali:"1413/07/17",validityYears:10,expiryDerived:true,categories:[{type:"پایه سوم · خودروهای سواری",firstIssueDateJalali:"1399/05/15",status:"مجاز"}]},technicalInspection:{certificateNumber:"TECH-1",issueDateJalali:"1404/10/24",expiryDateJalali:"1405/10/24",center:"شیراز",plateAtInspection:"ایران ۰۰ الف ۰۰۰",testTime:"15:13"},insurance:{status:"missing"}};
  const kv={get:async key=>store.get(key)||null,put:async(key,value)=>{store.set(key,value);}};
  const originalFetch=globalThis.fetch;
  globalThis.fetch=async(input,init={})=>{
   const url=new URL(input);
   if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendMessage")){sent.push(JSON.parse(init.body));return new Response(JSON.stringify({ok:true,result:{message_id:sent.length}}),{status:200,headers:{"content-type":"application/json"}});}
+  if(url.hostname==="api.telegram.org"&&url.pathname.endsWith("/sendDocument")){uploaded.push(init.body);return new Response(JSON.stringify({ok:true,result:{message_id:uploaded.length}}),{status:200,headers:{"content-type":"application/json"}});}
   return new Response("unexpected upstream",{status:500});
  };
  try {
   const env={TELEGRAM_WEBHOOK_SECRET:"webhook-secret",TELEGRAM_BOT_TOKEN:"fake-bot-token",ALLOWED_TELEGRAM_USER_ID:"42",DOCUMENTS_ACCESS_TOKEN:token,GARAGE_PRIVATE_KV:kv,VEHICLE_DOCUMENTS_JSON:JSON.stringify(seed)};
   const response=await worker.fetch(new Request("https://unit.test/telegram",{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"webhook-secret"},body:JSON.stringify({message:{from:{id:42},chat:{id:42},date:1793380000,text:"/documents"}})}),env);
-  assert.equal(response.status,200);assert.equal(sent.length,1);
-  assert.match(sent[0].text,/مالک تست/);assert.match(sent[0].text,/راننده تست/);assert.match(sent[0].text,/معاینه فنی/);assert.match(sent[0].text,/پایه سوم/);assert.match(sent[0].text,/پلاک درج‌شده هنگام معاینه/);
+  assert.equal(response.status,200);assert.equal(sent.length,1);assert.equal(uploaded.length,1);
+  assert.match(sent[0].text,/مالک تست/);assert.match(sent[0].text,/راننده تست/);assert.match(sent[0].text,/معاینه فنی/);assert.match(sent[0].text,/پایه سوم/);assert.match(sent[0].text,/پلاک درج‌شده هنگام معاینه/);assert.match(sent[0].text,/۶۸ ی ۱۲۷ · ایران ۶۳/);
+  assert.ok(uploaded[0] instanceof FormData);
+  const imageFile=uploaded[0].get("document");assert.match(imageFile.name,/private-documents\.svg$/);
+  const svg=await imageFile.text();assert.match(svg,/<svg/);assert.match(svg,/۶۸/);assert.match(svg,/ی/);
   assert.ok(store.has("vehicle-documents:v1"));
  } finally { globalThis.fetch=originalFetch; }
 });

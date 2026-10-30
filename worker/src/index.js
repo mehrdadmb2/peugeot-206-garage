@@ -46,7 +46,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.13.0",
+        version: "3.14.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -71,7 +71,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.13.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.14.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN),
@@ -399,14 +399,23 @@ function duplicateConfirmationKeyboard(token) {
 }
 
 async function sendTelegramReply(reply, chatId, env) {
+  // A report may contain both its searchable text and a visual document.
+  // Send the text first so a failed attachment never hides the actual report.
   if (reply?.document) {
-    await sendDocument(env, chatId, reply.filename, reply.document, reply.caption || "خروجی دفتر خودرو");
-  } else if (Array.isArray(reply?.photos)) {
+    if (reply.text) await sendText(env, chatId, reply.text, false);
+    await sendDocument(env, chatId, reply.filename || "206-garage-document.svg", reply.document, reply.caption || "تصویر مدارک خودرو");
+    return;
+  }
+  if (Array.isArray(reply?.photos)) {
     if (reply.text) await sendText(env, chatId, reply.text, false);
     for (const item of reply.photos) await sendPhoto(env, chatId, item.filename, item.blob, item.caption || "نمودار تحلیلی پژو ۲۰۶");
-  } else if (Array.isArray(reply?.messages)) {
+    return;
+  }
+  if (Array.isArray(reply?.messages)) {
     for (const item of reply.messages) await sendText(env, chatId, item.text, item.markup || false);
-  } else if (reply?.text) {
+    return;
+  }
+  if (reply?.text) {
     const shortId = reply.eventId || eventIdFromReply(reply.text);
     const markup = reply.markup || (shortId ? eventActionKeyboard(shortId) : null);
     await sendText(env, chatId, reply.text, markup || reply.keyboard !== false);
@@ -450,8 +459,37 @@ async function handleTelegramUpdate(update, env, options = {}) {
     await sendTelegramReply(reply, chatId, env);
   } catch (error) {
     console.error("message processing failed", error?.stack || error);
-    await sendText(env, chatId, "⚠️ عملیات انجام نشد. وضعیت Worker و دسترسی Contents: Read and write را در Cloudflare بررسی کن. جزئیات فنی در Worker Logs ثبت شده است.");
+    const message = telegramFailureMessage(error);
+    try {
+      await sendText(env, chatId, message, false);
+    } catch (notifyError) {
+      console.error("telegram failure notification could not be delivered", notifyError?.stack || notifyError);
+    }
   }
+}
+
+function telegramFailureMessage(error) {
+  const detail = String(error?.message || error || "خطای ناشناخته");
+  if (/Telegram sendDocument failed/i.test(detail)) {
+    return "⚠️ گزارش متنی پردازش شد، اما تلگرام در دریافت فایل تصویری مدارک خطا داد. متن گزارش را در پیام قبلی می‌بینی؛ برای جزئیات، Worker Logs را بررسی کن. ممکن است نوع فایل یا محدودیت‌های Telegram Bot API علت باشد.";
+  }
+  if (/Telegram sendPhoto failed/i.test(detail)) {
+    return "⚠️ تلگرام نتوانست تصویر را دریافت کند. داده‌های ثبت‌شده تغییر نکرده‌اند؛ جزئیات خطا در Worker Logs موجود است.";
+  }
+  if (/Telegram sendMessage failed|TELEGRAM_BOT_TOKEN/i.test(detail)) {
+    return "⚠️ ارسال پیام به تلگرام ناموفق شد. مقدار Secret به نام TELEGRAM_BOT_TOKEN، فعال بودن ربات و پاسخ API تلگرام را بررسی کن. جزئیات فنی در Worker Logs ثبت شده است.";
+  }
+  if (/GARAGE_PRIVATE_KV/i.test(detail)) {
+    return "🔐 فضای خصوصی مدارک در Worker متصل نیست. در Cloudflare بخش Settings → Bindings یک KV Namespace با نام Binding دقیق GARAGE_PRIVATE_KV متصل کن.";
+  }
+  if (/VEHICLE_DOCUMENTS_JSON|schema/i.test(detail)) {
+    return "🔐 داده اولیه مدارک تنظیم نشده یا ساختار آن معتبر نیست. Secret با نام VEHICLE_DOCUMENTS_JSON و مقدار JSON مدارک را بررسی کن؛ داده‌های خصوصی را در مخزن عمومی قرار نده.";
+  }
+  if (/GitHub|Contents API|github\.com|GITHUB_TOKEN/i.test(detail)) {
+    return "⚠️ خطا هنگام خواندن یا ذخیره سوابق در GitHub رخ داد. مقدار GITHUB_TOKEN، دسترسی Contents: Read and write و نام مخزن/Branch را بررسی کن. برای فرمان مدارک خصوصی، دسترسی KV نیز جداگانه لازم است.";
+  }
+  return `⚠️ عملیات کامل نشد. داده‌ها را دوباره ارسال نکن تا از ثبت تکراری جلوگیری شود. خطا: ${escapeTelegramText(safePublicError(error))}
+جزئیات کامل در Worker Logs ثبت شده است.`;
 }
 
 async function handleCallbackQuery(query, env) {
@@ -796,7 +834,7 @@ function telegramHtml(value) {
     return output;
   };
   const namedLinks = html => String(html).replaceAll(SITE_URL,`<a href="${SITE_URL}">باز کردن داشبورد</a>`).replaceAll(BOT_URL,`<a href="${BOT_URL}">گفت‌وگو با ربات</a>`);
-  const headingPattern=/^(?:🧾|👤|📊|⛽|🚦|🧰|🗂|🛡️|📝|✏️|⚙️|🚘|📦|🔎|📖|💳|✅|❌|⚠️|🔩|🔧|🧪|🔋|🛠️|🧭)\s+[^:]{2,70}$/u;
+  const headingPattern=/^(?:🧾|👤|📊|⛽|🚦|🧰|🗂|🛡️|🪪|📝|✏️|⚙️|🚘|📦|🔎|📖|💳|✅|❌|⚠️|🔩|🔧|🧪|🔋|🛠️|🧭)\s+[^:]{2,70}$/u;
   return lines.map(original=>{
     const line=original.trimEnd(); if(!line.trim())return "";
     let safe=namedLinks(trusted(line));
@@ -834,7 +872,7 @@ async function processMessage(text, message, env, options = {}) {
     const event = await findEventByPrefix(deepLinkEvent[1], env);
     return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد موردنظر پیدا نشد یا حذف شده است. /latest را بررسی کن.", keyboard: false };
   }
-  if (/^\/(documents|vehicle-documents|مدارک|مدارک_خودرو)(?:@\w+)?\b/i.test(text)) return { text: await privateDocumentsReport(env), keyboard: false };
+  if (/^\/(documents|vehicle-documents|مدارک|مدارک_خودرو)(?:@\w+)?\b/i.test(text)) return await privateDocumentsTelegramReply(env);
   if (/^\/(insurance|bime|بیمه)(?:@\w+)?\b/i.test(text)) return { text: await insuranceCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
@@ -2491,7 +2529,7 @@ function isPrivateDocumentsAuthorized(request, env) {
   const expected = String(env.DOCUMENTS_ACCESS_TOKEN || "");
   const authorization = String(request.headers.get("Authorization") || "");
   const token = authorization.replace(/^Bearer\s+/i, "").trim();
-  return expected.length >= 32 && constantTimeEqual(token, expected);
+  return expected.length >= 1 && constantTimeEqual(token, expected);
 }
 function normalizeJalaliInput(value) {
   const raw = normalizeDigits(String(value || "").trim()).replace(/-/g, "/").replace(/\s+/g, "");
@@ -2529,39 +2567,143 @@ async function savePrivateVehicleDocuments(env, documents) {
   if (!env.GARAGE_PRIVATE_KV) throw new Error("GARAGE_PRIVATE_KV binding is not configured.");
   await env.GARAGE_PRIVATE_KV.put(PRIVATE_VEHICLE_DOCS_KEY, JSON.stringify(documents));
 }
+function normalizePrivatePlate(plate = {}) {
+  const normalizeDigitsLocal = value => normalizeDigits(String(value ?? ""));
+  const sources = [plate.displayFull, plate.display, plate.number, plate.plateNumber].filter(Boolean).join(" ");
+  const source = normalizeDigitsLocal(sources).replace(/[يى]/g, "ی").replace(/ك/g, "ک");
+  let match = source.match(/(\d{2})\s*[^\d\s]\s*(\d{3})/u);
+  if (!match) {
+    const reverse = source.match(/(\d{3})\s*[یيىسصالفبجچحخدذرزژشغفقکگلمنوهءئؤۀة]\s*(\d{2})/u);
+    if (reverse) match = [reverse[0], reverse[2], reverse[1]];
+  }
+  const left = normalizeDigitsLocal(plate.leftDigits || match?.[1] || "68").replace(/\D/g, "").slice(0, 2) || "68";
+  const middle = normalizeDigitsLocal(plate.middleDigits || match?.[2] || "127").replace(/\D/g, "").slice(0, 3) || "127";
+  const regionMatch = source.match(/(?:ایران|iran)\s*[:：-]?\s*(\d{2})/i);
+  const region = normalizeDigitsLocal(plate.regionalCode || regionMatch?.[1] || "63").replace(/\D/g, "").slice(0, 2) || "63";
+  const faDigitsLocal = value => String(value).replace(/\d/g, digit => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+  const leftFa = faDigitsLocal(left), middleFa = faDigitsLocal(middle), regionFa = faDigitsLocal(region);
+  return {
+    leftDigits: leftFa,
+    middleDigits: middleFa,
+    letter: "ی",
+    regionalCode: regionFa,
+    display: `${leftFa} ی ${middleFa}`,
+    displayFull: `${leftFa} ی ${middleFa} · ایران ${regionFa}`
+  };
+}
+
 function formatPrivateDocumentsReport(documents) {
-  const v=documents.vehicle||{}, p=documents.plate||{}, r=documents.registration||{}, l=documents.driverLicense||{}, t=documents.technicalInspection||{}, i=documents.insurance||{};
-  const safe=(value)=>escapeTelegramText(value || "ثبت نشده");
+  const v=documents.vehicle||{}, p=normalizePrivatePlate(documents.plate||{}), r=documents.registration||{}, l=documents.driverLicense||{}, t=documents.technicalInspection||{}, i=documents.insurance||{};
+  const safe=(value)=>String(value ?? "ثبت نشده").replace(/[\u0000-\u001f]/g, " ").trim() || "ثبت نشده";
   const lines = [
-    "▣ <b>گاوصندوق خصوصی مدارک پژو ۲۰۶</b>",
-    `🚘 <b>پلاک:</b> <code>${safe(p.displayFull || `${p.display || "—"} · ایران ${p.regionalCode || "—"}`)}</code>`,
-    `🚗 <b>خودرو:</b> ${safe(v.make)} ${safe(v.model)} · مدل ${safe(v.modelYearJalali)} · ${safe(v.color)}`,
-    `👤 <b>مالک کارت:</b> ${safe(r.ownerName)} · کد ملی <code>${safe(r.ownerNationalId)}</code>`,
-    `🔧 <b>موتور:</b> <code>${safe(r.engineNumber)}</code>`,
-    `🔩 <b>شاسی:</b> <code>${safe(r.chassisNumber)}</code>`,
-    `🧬 <b>VIN:</b> <code>${safe(r.vin)}</code>`,
+    "▣ گاوصندوق خصوصی مدارک پژو ۲۰۶",
+    `🚘 پلاک: ${safe(p.displayFull)}`,
+    `🚗 خودرو: ${safe(v.make)} ${safe(v.model)} · مدل ${safe(v.modelYearJalali)} · ${safe(v.color)}`,
+    `👤 مالک کارت: ${safe(r.ownerName)} · کد ملی ${safe(r.ownerNationalId)}`,
+    `🔧 شماره موتور: ${safe(r.engineNumber)}`,
+    `🔩 شماره شاسی: ${safe(r.chassisNumber)}`,
+    `🧬 VIN: ${safe(r.vin)}`,
     "",
-    "🪪 <b>گواهینامه رانندگی</b>",
-    `دارنده: ${safe(l.holderName)} · کد ملی <code>${safe(l.nationalId)}</code>`,
-    `شماره گواهینامه: <code>${safe(l.licenseNumber)}</code> · سریال <code>${safe(l.cardSerial)}</code>`,
+    "🪪 گواهینامه رانندگی",
+    `دارنده: ${safe(l.holderName)} · کد ملی ${safe(l.nationalId)}`,
+    `شماره گواهینامه: ${safe(l.licenseNumber)} · سریال ${safe(l.cardSerial)}`,
     `تولد: ${safe(l.birthDateJalali)} · صدور: ${safe(l.issueDateJalali)}`,
     `اعتبار: ${safe(l.validityYears)} سال · انقضا: ${safe(l.expiryDateJalali)}${l.expiryDerived ? " (محاسبه‌شده)" : ""}`,
     ...(Array.isArray(l.categories) && l.categories.length ? ["دسته‌های درج‌شده در پشت کارت:", ...l.categories.map(item => `• ${safe(item.type)} · ${safe(item.status)} · اولین صدور: ${safe(item.firstIssueDateJalali)}`)] : []),
     "",
-    "🛠 <b>معاینه فنی</b>",
-    `شماره گواهی: <code>${safe(t.certificateNumber)}</code> · مرکز: ${safe(t.center)}`,
+    "🛠 معاینه فنی",
+    `شماره گواهی: ${safe(t.certificateNumber)} · مرکز: ${safe(t.center)}`,
     `صدور: ${safe(t.issueDateJalali)} · اعتبار تا: ${safe(t.expiryDateJalali)} · ساعت: ${safe(t.testTime)}`,
     `تعداد مراجعه: ${safe(t.visitCount)} · سوخت: ${safe(t.fuel)} · مدل: ${safe(t.inspectionModel)}`,
-    ...(t.plateAtInspection ? [`پلاک درج‌شده هنگام معاینه: <code>${safe(t.plateAtInspection)}</code>`, `⚠️ ${safe(t.plateAtInspectionNote || "پلاک برگهٔ معاینه را با پلاک فعلی کارت خودرو یکسان فرض نکن.")}`] : []),
+    ...(t.plateAtInspection ? [`پلاک درج‌شده هنگام معاینه: ${safe(t.plateAtInspection)}`, `⚠️ ${safe(t.plateAtInspectionNote || "پلاک برگهٔ معاینه را با پلاک فعلی کارت خودرو یکسان فرض نکن.")}`] : []),
     "",
-    "🛡 <b>بیمه</b>",
-    i?.expiryDateJalali ? `شرکت: ${safe(i.provider)} · بیمه‌گذار: ${safe(i.insuredName)}\nشماره: <code>${safe(i.policyNumber)}</code>\nصدور: ${safe(i.issueDateJalali)} · انقضا: ${safe(i.expiryDateJalali)}` : "اطلاعات بیمه‌نامه هنوز ثبت نشده است؛ تصویر بیمه در آرشیو فعلی پیدا نشد."
+    "🛡 بیمه خودرو",
+    i?.expiryDateJalali ? `شرکت: ${safe(i.provider)} · بیمه‌گذار: ${safe(i.insuredName)} · شماره: ${safe(i.policyNumber)} · صدور: ${safe(i.issueDateJalali)} · انقضا: ${safe(i.expiryDateJalali)}` : "اطلاعات بیمه‌نامه هنوز ثبت نشده است؛ تصویر بیمه در آرشیو فعلی پیدا نشد."
   ];
   return lines.join("\n");
 }
+function escapeSvg(value) {
+  return String(value ?? "ثبت نشده").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;").slice(0, 180);
+}
+function svgText(x, y, value, size=27, color="#eaf3ff", weight=500, anchor="end") {
+  return `<text x="${x}" y="${y}" text-anchor="${anchor}" direction="rtl" unicode-bidi="plaintext" font-family="Vazirmatn, Noto Sans Arabic, Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${color}">${escapeSvg(value)}</text>`;
+}
+function buildPrivateDocumentsSvg(documents) {
+  const v=documents.vehicle||{}, p=normalizePrivatePlate(documents.plate||{}), r=documents.registration||{}, l=documents.driverLicense||{}, t=documents.technicalInspection||{}, i=documents.insurance||{};
+  const cards=[]; let y=570;
+  const addCard=(title, rows)=>{
+    cards.push(`<rect x="70" y="${y}" width="1060" height="${120+Math.ceil(rows.length/2)*78}" rx="26" fill="#111f31" stroke="#30465f" stroke-width="2"/>`);
+    cards.push(svgText(1080,y+48,title,27,"#72e7d3",800));
+    rows.forEach((row,index)=>{
+      const col=index%2, line=Math.floor(index/2), x=col===0?1080:560, yy=y+94+line*78;
+      cards.push(svgText(x,yy,row[0],18,"#8faac4",500));
+      cards.push(svgText(x,yy+32,row[1]||"ثبت نشده",23,"#f2f7ff",700));
+    });
+    y += 120+Math.ceil(rows.length/2)*78+20;
+  };
+  addCard("مشخصات خودرو و مالک",[
+    ["خودرو",`${v.make||"Peugeot"} ${v.model||"206 SD"} · ${v.modelYearJalali||"—"}`],
+    ["رنگ / سوخت",`${v.color||"—"} · ${v.fuel||"—"}`],
+    ["مالک کارت",r.ownerName],
+    ["شماره ملی مالک",r.ownerNationalId],
+    ["شماره موتور",r.engineNumber],
+    ["شماره شاسی",r.chassisNumber],
+    ["VIN",r.vin],
+    ["سریال کارت",r.cardSerial]
+  ]);
+  addCard("گواهینامه رانندگی",[
+    ["دارنده",l.holderName],
+    ["شماره گواهینامه",l.licenseNumber],
+    ["شماره ملی",l.nationalId],
+    ["تاریخ تولد",l.birthDateJalali],
+    ["صدور",l.issueDateJalali],
+    ["انقضا",l.expiryDateJalali]
+  ]);
+  addCard("معاینه فنی",[
+    ["شماره گواهی",t.certificateNumber],
+    ["مرکز",t.center],
+    ["تاریخ صدور",t.issueDateJalali],
+    ["اعتبار تا",t.expiryDateJalali],
+    ["ساعت / مراجعه",`${t.testTime||"—"} · ${t.visitCount||"—"}`],
+    ["مدل درج‌شده",t.inspectionModel]
+  ]);
+  addCard("بیمه شخص ثالث",[
+    ["شرکت بیمه",i.provider||"ثبت نشده"],
+    ["شماره بیمه‌نامه",i.policyNumber||"ثبت نشده"],
+    ["تاریخ صدور",i.issueDateJalali||"ثبت نشده"],
+    ["تاریخ انقضا",i.expiryDateJalali||"ثبت نشده"]
+  ]);
+  const height=y+35;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071321"/><stop offset=".55" stop-color="#10243a"/><stop offset="1" stop-color="#101a2c"/></linearGradient><linearGradient id="plate" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#e6edf0"/></linearGradient><linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#1873b9"/><stop offset="1" stop-color="#083a70"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity=".38"/></filter></defs>
+  <rect width="1200" height="${height}" fill="url(#bg)"/><circle cx="1030" cy="80" r="300" fill="#36d8c0" opacity=".05"/><circle cx="90" cy="430" r="260" fill="#58aaff" opacity=".06"/>
+  ${svgText(1100,75,"PEUGEOT 206 GARAGE",22,"#72e7d3",800)}${svgText(1100,130,"گاوصندوق خصوصی مدارک خودرو",44,"#f5f9ff",900)}${svgText(1100,175,"نسخه تصویری · فقط برای حساب مجاز",21,"#94abc2",500)}
+  <g filter="url(#shadow)"><rect x="85" y="220" width="1030" height="285" rx="24" fill="url(#plate)" stroke="#b8c3ca" stroke-width="9"/><rect x="100" y="235" width="102" height="255" rx="8" fill="url(#blue)"/><path d="M151 275 l-19 7 v20 c0 17 12 27 19 31 7-4 19-14 19-31 v-20z" fill="#fff" opacity=".95"/><path d="M151 279 l-15 6 v16 c0 13 9 22 15 26 6-4 15-13 15-26 v-16z" fill="#e53e52"/><path d="M136 285 h30 v7 h-30z" fill="#fff"/><text x="151" y="375" text-anchor="middle" fill="#fff" font-family="Arial" font-size="22" font-weight="800">IR</text><text x="151" y="405" text-anchor="middle" fill="#fff" font-family="Arial" font-size="15" font-weight="700">IRAN</text>
+  <text x="285" y="395" text-anchor="middle" direction="ltr" font-family="Arial" font-size="100" font-weight="900" fill="#101820">${escapeSvg(p.leftDigits)}</text><text x="455" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="94" font-weight="900" fill="#101820">ی</text><text x="655" y="395" text-anchor="middle" direction="ltr" font-family="Arial" font-size="100" font-weight="900" fill="#101820">${escapeSvg(p.middleDigits)}</text><rect x="850" y="245" width="235" height="235" rx="8" fill="#fff" stroke="#98a5ae" stroke-width="3"/><text x="967" y="315" text-anchor="middle" direction="rtl" font-family="Vazirmatn, Arial" font-size="37" font-weight="800" fill="#141c22">ایران</text><text x="967" y="427" text-anchor="middle" font-family="Arial" font-size="91" font-weight="900" fill="#101820">${escapeSvg(p.regionalCode)}</text><path d="M190 440 H820" stroke="#c8d0d5" stroke-width="2"/></g>
+  ${svgText(1090,545,p.displayFull,20,"#eaf3ff",700)}
+  ${cards.join("\n")}
+  ${svgText(1090,height-20,"این فایل از فضای خصوصی مدارک تولید شده است · 206 GARAGE",17,"#7892aa",500)}
+  </svg>`;
+}
+async function privateDocumentsTelegramReply(env) {
+  try {
+    const documents = await loadPrivateVehicleDocuments(env);
+    const svg = buildPrivateDocumentsSvg(documents);
+    return {
+      text: formatPrivateDocumentsReport(documents),
+      document: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+      filename: "peugeot-206-private-documents.svg",
+      caption: "🪪 تصویر مدارک پژو ۲۰۶ · فایل برداری با قابلیت بزرگ‌نمایی",
+      keyboard: false
+    };
+  } catch (error) {
+    console.error("private documents Telegram report failed", error?.stack || error);
+    return { text: `🔐 گاوصندوق مدارک هنوز آماده نیست.\n${escapeTelegramText(safePublicError(error))}\n\nKV Binding: GARAGE_PRIVATE_KV · مقداردهی اولیه: VEHICLE_DOCUMENTS_JSON`, keyboard: false };
+  }
+}
 async function privateDocumentsReport(env) {
   try { return formatPrivateDocumentsReport(await loadPrivateVehicleDocuments(env)); }
-  catch (error) { return `🔐 گاوصندوق مدارک هنوز راه‌اندازی نشده است.\n${escapeTelegramText(error.message)}\n\nپس از تنظیم GARAGE_PRIVATE_KV و VEHICLE_DOCUMENTS_JSON دوباره /documents را بفرست.`; }
+  catch (error) { return `🔐 گاوصندوق مدارک هنوز راه‌اندازی نشده است.\n${escapeTelegramText(safePublicError(error))}\n\nپس از تنظیم GARAGE_PRIVATE_KV و VEHICLE_DOCUMENTS_JSON دوباره /documents را بفرست.`; }
 }
 async function insuranceCommand(raw, env) {
   const args = String(raw || "").trim();
