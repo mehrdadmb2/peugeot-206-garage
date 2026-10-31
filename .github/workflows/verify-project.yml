@@ -1,0 +1,63 @@
+name: Verify Garage OS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'assets/**'
+      - 'scripts/**'
+      - 'worker/src/**'
+      - 'worker/tests/**'
+      - 'worker/test/**'
+      - 'worker/package.json'
+      - '.github/workflows/verify-project.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'assets/**'
+      - 'scripts/**'
+      - 'worker/src/**'
+      - 'worker/tests/**'
+      - 'worker/test/**'
+      - 'worker/package.json'
+      - '.github/workflows/verify-project.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: garage-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check assets/js/app.js
+          node --check assets/js/experience.js
+          node --check assets/js/data-loader.js
+          node --check assets/js/diagnostics.js
+          node --check assets/js/vehicle-documents.js
+          node --check assets/js/persian-calendar.cjs
+          node --check scripts/build-dashboard.mjs
+          node --check worker/src/index.js
+
+      - name: Run regression and UI tests
+        working-directory: worker
+        run: npm test
+
+      - name: Run Worker smoke test
+        run: node worker/test/smoke.mjs

@@ -53,6 +53,7 @@ jobs:
       - name: Verify generated JSON and run regression tests
         run: |
           node --check assets/js/app.js
+          node --check assets/js/experience.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
           node --check assets/js/vehicle-documents.js
