@@ -1,0 +1,34 @@
+Peugeot 206 Garage v3.15.0 - Verification
+=========================================
+
+Automated regression tests:
+- Command: cd worker && npm test
+- Result: 72 passed, 0 failed.
+- Includes six v3.15 experience-layer checks and a real snapshot smoke assertion for global event search and direct journal navigation.
+
+Static syntax checks:
+- node --check assets/js/app.js
+- node --check assets/js/experience.js
+- node --check assets/js/data-loader.js
+- node --check assets/js/diagnostics.js
+- node --check assets/js/vehicle-documents.js
+- node --check assets/js/persian-calendar.cjs
+- node --check scripts/build-dashboard.mjs
+- node --check worker/src/index.js
+- Result: passed.
+
+Worker smoke test:
+- Command: node worker/test/smoke.mjs
+- Result: passed (health, odometer, trip, fuel, service, fine payment, summary, CSV export, interval updates and webhook secret).
+
+Compatibility / data-integrity checks:
+- Existing dashboard snapshot remains readable and renders all sections in the automated smoke test.
+- Snapshot fixture: 32 events and 62 catalogued parts.
+- Existing mileage, fuel-consumption, expense, fine, maintenance-due and private-document business logic was not rewritten.
+- No data/config/log/dashboard JSON files were changed in this release.
+- Worker implementation, Telegram handlers, Cloudflare KV bindings and Secrets were not changed.
+- Global search exposes only selected public event fields; it does not expose private vehicle-document payloads.
+
+Deployment note:
+- Live GitHub Pages, Cloudflare Worker and Telegram API deployment was not performed from this environment.
+- Only the dashboard repository files need to be pushed for v3.15.0; the existing Worker deployment remains compatible.

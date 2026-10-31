@@ -854,7 +854,7 @@
       if (month !== 'all' && eventPersianMonthKey(event) !== month) return false;
       if (actor !== 'all' && String(event.actor || 'من') !== actor) return false;
       if (text) {
-        const haystack = [event.title, event.description, event.note, event.actor, event.serviceLabel, event.componentName, event.expenseCategory, event.fineLocation, event.ticketNumber].join(' ').toLocaleLowerCase('fa');
+        const haystack = [event.id, event.title, event.description, event.note, event.actor, event.serviceLabel, event.componentName, event.expenseCategory, event.fineLocation, event.ticketNumber, event.odometerKm, event.liters].join(' ').toLocaleLowerCase('fa');
         if (!haystack.includes(text)) return false;
       }
       return true;
@@ -879,7 +879,7 @@
       if (amount > 0) metrics.push(`${moneyText(amount / 10)} تومان`);
       if (event.actor) metrics.push(`👤 ${event.actor}`);
       if (event.paid === false && event.type === 'fine') metrics.push('پرداخت‌نشده');
-      return `<article class="event-entry"><div class="event-entry-icon">${icons[event.type] || '•'}</div><div class="event-entry-main"><div class="event-entry-head"><b>${escapeHtml(eventTitle(event))}</b><span class="event-type-pill">${escapeHtml(labels[event.type] || event.type || 'رویداد')}</span></div><p>${escapeHtml(detail)}</p><small>${escapeHtml(date)}${event.time ? ` · ${escapeHtml(event.time)}` : ''} · ${escapeHtml(String(event.id || '').slice(0, 8))}</small><div class="event-entry-metrics">${metrics.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div></div></article>`;
+      return `<article class="event-entry" data-event-id="${escapeAttr(event.id)}"><div class="event-entry-icon">${icons[event.type] || '•'}</div><div class="event-entry-main"><div class="event-entry-head"><b>${escapeHtml(eventTitle(event))}</b><span class="event-type-pill">${escapeHtml(labels[event.type] || event.type || 'رویداد')}</span></div><p>${escapeHtml(detail)}</p><small>${escapeHtml(date)}${event.time ? ` · ${escapeHtml(event.time)}` : ''} · ${escapeHtml(String(event.id || '').slice(0, 8))}</small><div class="event-entry-metrics">${metrics.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div></div></article>`;
     }).join('') : '<div class="empty-state">با فیلتر فعلی رویدادی پیدا نشد. فیلترها را تغییر بده یا داده‌های تلگرام را بررسی کن.</div>';
     const more = $('#loadMoreButton'); if (more) more.hidden = rows.length >= (state.filtered || state.events).length;
   }
@@ -1119,6 +1119,74 @@
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function escapeAttr(value) { return /^[a-z0-9_-]+$/i.test(String(value)) ? String(value) : ''; }
   function showToast(text) { const el=$('#toast'); if (!el) { window.GarageDiagnostics?.log('warn','app.toast','عنصر اعلان موقت (#toast) در HTML وجود ندارد.',{ message:String(text || '') }); return; } el.textContent=text;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3000); }
+  function normalizeGlobalSearch(value) {
+    return String(value ?? '').normalize('NFKC').toLocaleLowerCase('fa')
+      .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک')
+      .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+      .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+      .trim();
+  }
+  function searchEvents(query, limit = 8) {
+    const needle = normalizeGlobalSearch(query);
+    if (!needle || !state.events.length) return [];
+    const tokens = needle.split(/\s+/).filter(Boolean);
+    return state.events.map(event => {
+      const haystack = normalizeGlobalSearch([
+        event.id, event.title, event.description, event.note, event.actor,
+        event.serviceLabel, event.componentName, event.expenseCategory,
+        event.fineLocation, event.ticketNumber, event.odometerKm,
+        event.distanceKm, event.liters, event.costRial
+      ].join(' '));
+      return { event, haystack };
+    }).filter(item => tokens.every(token => item.haystack.includes(token)))
+      .sort((a, b) => eventEpoch(b.event) - eventEpoch(a.event))
+      .slice(0, Math.max(1, Math.min(20, Number(limit) || 8)))
+      .map(({ event }) => ({
+        id: String(event.id || ''),
+        title: String(eventTitle(event) || event.type || 'رویداد'),
+        description: String(event.description || event.note || event.componentName || event.serviceLabel || ''),
+        actor: String(event.actor || 'من'),
+        type: String(typeLabels[event.type] || event.type || 'رویداد'),
+        date: String(event.jalaliDate || eventDateKey(event) || ''),
+        odometerKm: Number.isFinite(Number(event.odometerKm)) ? Number(event.odometerKm) : null,
+        amountToman: expenseAmount(event) > 0 ? Math.round(expenseAmount(event) / 10) : null
+      }));
+  }
+  function openEventById(id) {
+    const key = String(id || '');
+    if (!key || !state.events.some(event => String(event.id) === key)) return false;
+    activateTab('journal', false);
+    const input = $('#searchInput');
+    if (input) input.value = key;
+    const type = $('#typeFilter'); if (type) type.value = 'all';
+    const month = $('#monthFilter'); if (month) month.value = 'all';
+    const actor = $('#actorFilter'); if (actor) actor.value = 'all';
+    state.shown = 12;
+    updateJournal();
+    const index = state.filtered.findIndex(event => String(event.id) === key);
+    if (index >= 0) {
+      state.shown = Math.max(12, index + 1);
+      renderJournal();
+      requestAnimationFrame(() => {
+        const row = $$('#eventList [data-event-id]').find(node => node.dataset.eventId === key);
+        if (row) {
+          row.classList.add('is-command-target');
+          row.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+          window.setTimeout(() => row.classList.remove('is-command-target'), 2600);
+        }
+      });
+      return true;
+    }
+    return false;
+  }
+  // Narrow public bridge for the optional command palette; private document data is never exposed here.
+  window.GarageApp = Object.freeze({
+    searchEvents,
+    openEvent: openEventById,
+    navigate: name => activateTab(name),
+    refresh: () => loadDashboard(true)
+  });
+
   function initTilt() {
     const finePointer = matchMedia('(hover:hover) and (pointer:fine)').matches;
     if (!finePointer || matchMedia('(prefers-reduced-motion: reduce)').matches) return;

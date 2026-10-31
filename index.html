@@ -8,10 +8,12 @@
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="assets/css/style.css?v=3.14.0-private-documents-r2">
+  <link rel="stylesheet" href="assets/css/experience.css?v=3.15.0">
   <script defer src="assets/js/diagnostics.js?v=3.14.0-private-documents-r2"></script>
   <script defer src="assets/js/data-loader.js?v=3.14.0-private-documents-r2"></script>
-  <script defer src="assets/js/app.js?v=3.14.0-private-documents-r2"></script>
+  <script defer src="assets/js/app.js?v=3.15.0"></script>
   <script defer src="assets/js/vehicle-documents.js?v=3.14.0-private-documents-r2"></script>
+  <script defer src="assets/js/experience.js?v=3.15.0"></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -28,8 +30,11 @@
       <a href="#overview" data-tab="overview" class="active">نمای کلی</a><a href="#maintenance" data-tab="maintenance">نگهداری</a><a href="#analytics" data-tab="analytics">تحلیل</a><a href="#activity" data-tab="journal">دفتر وقایع</a><a href="#page-documents" data-tab="documents">مدارک</a>
     </nav>
     <div class="top-actions">
+      <button id="garageCommandOpen" class="header-link garage-command-trigger" type="button" aria-haspopup="dialog" aria-controls="garageCommandDialog" aria-label="جست‌وجوی سراسری؛ میانبر کنترل کی">⌕ <span>جست‌وجوی سریع</span><kbd>Ctrl K</kbd></button>
+      <button id="garageAppearanceOpen" class="icon-button garage-appearance-trigger" type="button" aria-expanded="false" aria-controls="garageAppearancePanel" title="شخصی‌سازی ظاهر" aria-label="شخصی‌سازی ظاهر">◈</button>
       <a class="header-link telegram-header-link" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer" aria-label="بازکردن ربات تلگرام">✈ <span>ربات</span></a>
       <a class="header-link github-header-link" href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer" aria-label="مخزن GitHub">⌘ <span>مخزن</span></a>
+      <time id="garageClock" class="garage-clock" aria-label="ساعت و تاریخ تهران"><small>TEHRAN</small><b>--:--</b></time>
       <span id="connectionBadge" class="status-badge"><i></i> در حال اتصال</span>
       <button id="refreshButton" class="icon-button" type="button" aria-label="تازه‌سازی داده‌ها" title="تازه‌سازی"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.7-2L20 12M4 12l2.2 5a7 7 0 0 0 11.7-2"/></svg></button>
     </div>
@@ -428,8 +433,34 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <div class="workflow-actions"><a class="secondary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">باز کردن ربات ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">داشبورد زنده ↗</a><a class="secondary-button" href="#top">بازگشت به بالا ↑</a></div>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.14.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.15.0</b></span></footer>
   </main>
+  <section id="garageAppearancePanel" class="garage-appearance-panel" aria-label="شخصی‌سازی ظاهر" hidden>
+    <div class="garage-panel-heading"><div><span class="garage-panel-kicker">PERSONAL WORKSPACE</span><b>ظاهر محیط کار</b></div><button type="button" id="garageAppearanceClose" class="garage-panel-close" aria-label="بستن پنل">×</button></div>
+    <p class="garage-panel-description">پالت رنگ و تراکم نمایش فقط در همین مرورگر ذخیره می‌شود.</p>
+    <div class="garage-accent-label">پالت رنگ</div>
+    <div class="garage-accent-options" role="group" aria-label="انتخاب رنگ اصلی">
+      <button type="button" data-accent-choice="blue" aria-pressed="true"><i class="accent-swatch swatch-blue"></i><span>آبی نئون</span><small>CYBER BLUE</small></button>
+      <button type="button" data-accent-choice="mint" aria-pressed="false"><i class="accent-swatch swatch-mint"></i><span>سبز فسفری</span><small>NEON MINT</small></button>
+      <button type="button" data-accent-choice="amber" aria-pressed="false"><i class="accent-swatch swatch-amber"></i><span>نارنجی نئون</span><small>VOLT ORANGE</small></button>
+    </div>
+    <div class="garage-preference-list">
+      <label class="garage-preference"><span><b>نمایش فشرده</b><small>کارت‌ها و فاصله‌ها جمع‌وجورتر شوند</small></span><input id="garageCompactToggle" type="checkbox"><i></i></label>
+      <label class="garage-preference"><span><b>کاهش انیمیشن‌ها</b><small>حرکت‌ها و افکت‌های غیرضروری محدود شوند</small></span><input id="garageMotionToggle" type="checkbox"><i></i></label>
+    </div>
+    <div class="garage-panel-footer"><span>ذخیره خودکار روی این دستگاه</span><button id="garageResetAppearance" type="button">بازنشانی</button></div>
+    <button id="garageInstallApp" class="garage-install-button" type="button" hidden>⬇ نصب برنامه روی دستگاه</button>
+  </section>
+
+  <dialog id="garageCommandDialog" class="garage-command-dialog" aria-labelledby="garageCommandTitle">
+    <div class="garage-command-shell">
+      <header class="garage-command-header"><div><span class="garage-panel-kicker">206 GARAGE / COMMAND CENTER</span><h2 id="garageCommandTitle">جست‌وجو و دسترسی سریع</h2></div><button id="garageCommandClose" class="garage-panel-close" type="button" aria-label="بستن جست‌وجو">×</button></header>
+      <label class="garage-command-search"><span aria-hidden="true">⌕</span><input id="garageCommandSearch" type="search" placeholder="جست‌وجوی سرویس، جریمه، سوخت، شخص، کیلومتر یا بخش…" autocomplete="off" spellcheck="false"><kbd>ESC</kbd></label>
+      <div class="garage-command-meta"><span id="garageCommandCount">بخش‌ها و سوابق</span><span>↑ ↓ برای حرکت · Enter برای بازکردن</span></div>
+      <div id="garageCommandResults" class="garage-command-results" role="listbox" aria-label="نتایج جست‌وجو"></div>
+      <footer class="garage-command-footer"><span><kbd>Ctrl</kbd> + <kbd>K</kbd> بازکردن جست‌وجو</span><span><kbd>/</kbd> جست‌وجوی سریع</span><span><kbd>Alt</kbd> + <kbd>1–9</kbd> جابه‌جایی بین بخش‌ها</span></footer>
+    </div>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">برای نمایش نمودارها و خواندن فایل‌های JSON، JavaScript مرورگر باید فعال باشد.</div></noscript>
 </body>

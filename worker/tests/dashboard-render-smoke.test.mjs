@@ -123,4 +123,11 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
   assert.equal(dataset.events.length, 32);
   assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);
+
+  const sampleEvent = snapshot.events[0];
+  const globalMatches = window.GarageApp.searchEvents(String(sampleEvent.id), 5);
+  assert.ok(globalMatches.some(item => item.id === String(sampleEvent.id)), 'global search should find an existing event by ID');
+  assert.equal(window.GarageApp.openEvent(String(sampleEvent.id)), true, 'global search result should open the matching journal event');
+  assert.equal(elements.get('#searchInput')?.value, String(sampleEvent.id));
+  assert.match(elements.get('#eventList')?.innerHTML || '', new RegExp(`data-event-id=\"${String(sampleEvent.id)}\"`));
 });

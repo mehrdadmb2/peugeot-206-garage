@@ -45,7 +45,7 @@ function payloadFor(url) {
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
   assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.14\.0-private-documents/);
   assert.match(html, /assets\/js\/data-loader\.js\?v=3\.14\.0-private-documents/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.14\.0-private-documents/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.15\.0/);
   assert.match(html, /assets\/css\/style\.css\?v=3\.14\.0-private-documents/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
