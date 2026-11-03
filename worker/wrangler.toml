@@ -8,8 +8,10 @@ GITHUB_OWNER = "mehrdadmb2"
 GITHUB_REPO = "peugeot-206-garage"
 GITHUB_BRANCH = "main"
 
-# Private document storage (create with: npx wrangler kv namespace create GARAGE_PRIVATE_KV)
-# Then add the returned namespace ID: 
+# Private document storage. Before deploying with Wrangler, connect the EXISTING
+# GARAGE_PRIVATE_KV namespace used by the live Worker. Do not create a new namespace.
+# Copy its current ID from Cloudflare Dashboard > Worker > Settings > Bindings,
+# then uncomment and fill these lines with that existing ID:
 # [[kv_namespaces]]
 # binding = "GARAGE_PRIVATE_KV"
-# id = "YOUR_CREATED_NAMESPACE_ID"
+# id = "EXISTING_NAMESPACE_ID"

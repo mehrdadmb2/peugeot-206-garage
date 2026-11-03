@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import * as fuelEngine from '../../assets/js/fuel-intelligence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const appSource = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
@@ -28,7 +29,7 @@ class FakeElement {
     this.style = {};
     this.classList = new FakeClassList();
     this.attributes = {};
-    this.value = selector === '#searchInput' ? '' : 'all';
+    this.value = selector === '#searchInput' ? '' : selector === '#fuelTripDistanceInput' ? '40' : 'all';
     this.hidden = false;
     this.tagName = selector.startsWith('#') ? 'DIV' : String(selector).toUpperCase();
     this.textContent = '';
@@ -77,6 +78,7 @@ test('real project snapshot boots the app and all dashboard sections render with
     document, location: { href: 'https://garage.test/' },
     navigator: { onLine: true, language: 'fa-IR' },
     GarageDataLoader: { load: async () => dataset },
+    __fuelEngine: fuelEngine,
     GarageDiagnostics: {
       log: (...entry) => diagnosticEntries.push(entry),
       setContext: context => diagnosticEntries.push(['context', context])
@@ -93,7 +95,8 @@ test('real project snapshot boots the app and all dashboard sections render with
     matchMedia: () => ({ matches: false }), requestAnimationFrame: callback => callback()
   };
 
-  vm.runInNewContext(appSource, sandbox, { filename: 'assets/js/app.js' });
+  const appWithFuelEngine = appSource.replace("await import('./fuel-intelligence.mjs')", 'window.__fuelEngine');
+  vm.runInNewContext(appWithFuelEngine, sandbox, { filename: 'assets/js/app.js' });
   listeners.get('DOMContentLoaded')?.();
   await new Promise(resolveWait => setTimeout(resolveWait, 20));
 
@@ -109,19 +112,28 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelOnlyChart')?.innerHTML || '', /۳۵/);
   assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
   assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۶۶۱ km/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۱۹۹ km از تعویض/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۸۰۱ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۵۳۹ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۳۳۹ km مانده/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۷۸۷ km/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳۲۵ km از تعویض/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۶۷۵ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۴۱۳ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۲۱۳ km مانده/);
   assert.doesNotMatch(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۴۱۶ km عبور از موعد/);
   assert.ok((elements.get('#componentCatalog')?.innerHTML || '').length > 1000, 'part catalog should be populated');
   assert.ok((elements.get('#serviceCatalogGrid')?.innerHTML || '').length > 500, 'service catalog should be populated');
   assert.ok((elements.get('#eventList')?.innerHTML || '').length > 500, 'journal should show real events');
   assert.ok((elements.get('#costChart')?.innerHTML || '').length > 100, 'analytics chart should be rendered');
   assert.ok((elements.get('#fuelEventList')?.innerHTML || '').length > 100, 'fuel page should render');
+  assert.match(elements.get('#fuelEstimateRate')?.textContent || '', /۹٫۱۹ L\/100km/);
+  assert.match(elements.get('#fuelEstimateLiters')?.textContent || '', /۳٫۶۷ لیتر/);
+  assert.match(elements.get('#fuelEstimateCost')?.textContent || '', /۵٬۵۱۲ تومان/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /برآورد سوخت این پیمایش/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /۳٫۶۷ لیتر/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /۵٬۵۱۲ تومان/);
+  assert.match(elements.get('#specVehicleNameHero')?.textContent || '', /Peugeot 206 SD/);
+  assert.match(elements.get('#specEngineIdentity')?.textContent || '', /TU3/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /km داده/);
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
-  assert.equal(dataset.events.length, 32);
+  assert.equal(dataset.events.length, snapshot.events.length);
   assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);
 
   const sampleEvent = snapshot.events[0];

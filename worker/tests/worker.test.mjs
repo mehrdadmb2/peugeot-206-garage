@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.14.0");
+ assert.equal(body.version, "3.17.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.14.0");
+ assert.equal(body.version, "3.17.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -143,8 +143,11 @@ test("odometer submitted by another driver attributes the distance since the pri
   const body = await response.json();
   assert.equal(body.persisted, true);
   assert.match(body.reply, /مسافت از آخرین کیلومتر ثبت‌شده: ۱۸۱ km/);
-  const month = JSON.parse(files.get("data/logs/2026-10.json"));
-  const current = month.events.find(event => event.type === "odometer" && event.odometerKm === 431381);
+  const writtenIndex = JSON.parse(files.get("data/index.json"));
+  const current = writtenIndex.months.flatMap(monthKey => {
+   const path = `data/logs/${monthKey}.json`;
+   return files.has(path) ? JSON.parse(files.get(path)).events : [];
+  }).find(event => event.type === "odometer" && event.odometerKm === 431381);
   assert.ok(current);
   assert.equal(current.actor, "بابام");
   assert.equal(current.deltaSincePreviousKm, 181);
@@ -152,6 +155,58 @@ test("odometer submitted by another driver attributes the distance since the pri
  } finally {
   globalThis.fetch = originalFetch;
  }
+});
+
+test("odometer confirmation includes a partial-refuel fuel and trip-cost estimate", async () => {
+ const token = "f".repeat(64);
+ const fuelLog = { schemaVersion: 1, month: "2026-10", events: [
+  { id: "fuel-partial-1", type: "fuel", title: "سوخت‌گیری", actor: "بابام", occurredAt: "2026-10-22T09:00:00+03:30", date: "2026-10-22", odometerKm: 431200, liters: 36.5, costRial: 547500, fullTank: false },
+  { id: "odo-prior", type: "odometer", title: "ثبت کیلومتر", actor: "من", occurredAt: "2026-10-29T09:00:00+03:30", date: "2026-10-29", odometerKm: 431581 },
+  { id: "fuel-partial-2", type: "fuel", title: "سوخت‌گیری", actor: "من", occurredAt: "2026-10-29T10:00:00+03:30", date: "2026-10-29", odometerKm: 431581, liters: 35, costRial: 525000, fullTank: false }
+ ] };
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {} })],
+  ["data/logs/2026-10.json", JSON.stringify(fuelLog)]
+ ]);
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (!url.hostname.includes("api.github.com")) return new Response("unexpected upstream", { status: 500 });
+  const suffix = url.pathname.split("/contents/")[1];
+  const path = suffix.split("/").map(decodeURIComponent).join("/");
+  if ((init.method || "GET").toUpperCase() === "GET") {
+   const content = files.get(path); if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (init.method === "PUT") {
+   const body = JSON.parse(init.body); files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+   return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected method", { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/api/v1/record", {
+   method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+   body: JSON.stringify({ type: "odometer", title: "ثبت کیلومترشمار", odometerKm: 431621, occurredAt: "2026-11-03T20:00:00+03:30" })
+  }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.persisted, true);
+  assert.match(body.reply, /مسافت از آخرین کیلومتر ثبت‌شده: ۴۰ km/);
+  assert.match(body.reply, /مصرف تقریبی این مسیر: ۳٫۶۷ لیتر/);
+  assert.match(body.reply, /هزینه تقریبی سوخت این مسیر: ۵٬۵۱۲ تومان/);
+  const index = JSON.parse(files.get("data/index.json"));
+  const saved = index.months.flatMap(month => {
+   const path = `data/logs/${month}.json`;
+   return files.has(path) ? JSON.parse(files.get(path)).events : [];
+  }).find(event => event.type === "odometer" && event.odometerKm === 431621);
+  assert.ok(saved);
+  assert.equal(saved.deltaSincePreviousKm, 40);
+  assert.equal(saved.fuelEstimateLiters, 3.67);
+  assert.equal(saved.fuelEstimateCostRial, 55118);
+  assert.equal(saved.fuelEstimateConfidence, "low");
+ } finally { globalThis.fetch = originalFetch; }
 });
 
 test("Telegram operations list formats IDs and quotes and uses named clickable navigation links", async () => {
@@ -341,8 +396,12 @@ test("repairjob expands a multi-part workshop visit, preserves actor/specs and k
   }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
   assert.equal(response.status, 200);
   const body = await response.json(); assert.equal(body.persisted, true, body.reply);
-  const currentLog = JSON.parse(files.get("data/logs/2026-10.json"));
-  const created = currentLog.events.filter(e => e.repairGroupId);
+  const writtenIndex = JSON.parse(files.get("data/index.json"));
+  const allWrittenEvents = writtenIndex.months.flatMap(monthKey => {
+   const path = `data/logs/${monthKey}.json`;
+   return files.has(path) ? JSON.parse(files.get(path)).events : [];
+  });
+  const created = allWrittenEvents.filter(e => e.repairGroupId);
   assert.ok(created.length >= 7, `expected multiple repair rows; got ${created.length}`);
   assert.ok(created.every(e => e.actor === "بابام"));
   const battery = created.find(e => e.componentKey === "battery");

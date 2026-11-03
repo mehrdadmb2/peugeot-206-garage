@@ -1,0 +1,57 @@
+Peugeot 206 Garage v3.17.0 — Verification Report
+Date: 2026-11-03
+
+Automated regression tests
+--------------------------
+Command: npm test --prefix worker
+Result: 78 tests passed, 0 failed, 0 skipped.
+
+Additional syntax checks
+------------------------
+PASS node --check assets/js/app.js
+PASS node --check assets/js/fuel-intelligence.mjs
+PASS node --check worker/src/index.js
+PASS node --check scripts/build-dashboard.mjs
+PASS npm run check --prefix worker
+
+Worker smoke test
+-----------------
+PASS GET /health
+PASS odometer formats and trip distance
+PASS fuel handling
+PASS service keys
+PASS fine payment
+PASS summary and CSV export
+PASS interval updates
+PASS webhook secret validation
+
+Fuel-model regression coverage
+------------------------------
+PASS partial-refuel estimate without full tanks
+PASS model confidence improves with additional non-overlapping samples
+PASS partial top-ups are counted once inside full-to-full checkpoints
+PASS invalid odometer spans and implausible rates are excluded
+PASS odometer Worker confirmation stores fuel and trip-cost estimates
+PASS journal and fuel calculator render the estimated values
+
+Technical page and interface checks
+-----------------------------------
+PASS specs page is rendered from current vehicle configuration
+PASS one top-navigation link and one application tab target the specs page
+PASS no duplicate HTML IDs
+PASS responsive/reduced-motion UI checks
+PASS source links and engine-variant caution are present
+
+Current vehicle data used for the initial estimate
+--------------------------------------------------
+Fuel records available: 2 partial refuels
+Odometer interval: 431,200 km to 431,581 km (381 km)
+Latest partial refuel in that interval: 35.00 L
+Initial estimated average: approximately 9.19 L/100 km
+Price basis: approximately 1,500 Toman/L (weighted average of the available priced refuels)
+Example trip: 40 km -> approximately 3.67 L and 5,512 Toman
+Confidence: LOW / initial estimate — tank level at partial-fill boundaries is unknown.
+
+Deployment status
+-----------------
+Local tests and Worker smoke test passed. A live Cloudflare deployment was not performed from this environment. Since worker/src/index.js changed, deploy the Worker after replacing the repository files. The supplied wrangler.toml intentionally does not invent the private KV namespace ID; restore the EXISTING GARAGE_PRIVATE_KV binding before a Wrangler deploy. Do not create a new namespace. Keep all existing secrets.

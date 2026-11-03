@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { buildDashboardData } from '../../scripts/build-dashboard.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const html = readFileSync(resolve(root, 'index.html'), 'utf8');
@@ -11,6 +12,13 @@ const app = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
 const loaderSource = readFileSync(resolve(root, 'assets/js/data-loader.js'), 'utf8');
 const css = readFileSync(resolve(root, 'assets/css/style.css'), 'utf8');
 const diagnosticsSource = readFileSync(resolve(root, 'assets/js/diagnostics.js'), 'utf8');
+const rawIndex = JSON.parse(readFileSync(resolve(root, 'data/index.json'), 'utf8'));
+const expectedEventCount = rawIndex.months.reduce((total, month) => {
+  const file = resolve(root, `data/logs/${month}.json`);
+  try { return total + JSON.parse(readFileSync(file, 'utf8')).events.filter(event => event && event.id && !event.deletedAt).length; }
+  catch { return total; }
+}, 0);
+const freshSnapshot = () => buildDashboardData({ rootDir: root, now: new Date() });
 
 function jsonResponse(value) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -45,7 +53,7 @@ function payloadFor(url) {
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
   assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.14\.0-private-documents/);
   assert.match(html, /assets\/js\/data-loader\.js\?v=3\.14\.0-private-documents/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.15\.0/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.17\.0/);
   assert.match(html, /assets\/css\/style\.css\?v=3\.14\.0-private-documents/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
@@ -108,14 +116,14 @@ test('browser data loader validates snapshots and falls back to raw JSON when th
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 32);
+  assert.equal(result.events.length, expectedEventCount);
   assert.equal(Object.keys(result.config.partCatalog.items).length, 62);
   assert.equal(Object.keys(result.config.partCatalog.services).length, 17);
   assert.ok(result.warnings.some(warning => warning.includes('محاسبهٔ مستقیم')));
 });
 
 test('browser data loader ignores a stale Action snapshot and recalculates current raw data', async () => {
-  const stale = payloadFor('https://raw.githubusercontent.com/mehrdadmb2/peugeot-206-garage/main/data/dashboard.json');
+  const stale = freshSnapshot();
   stale.generatedForLocalDate = '2026-10-01';
   const loader = createLoader(async url => {
     if (new URL(url).pathname.endsWith('/data/dashboard.json')) return jsonResponse(stale);
@@ -124,13 +132,13 @@ test('browser data loader ignores a stale Action snapshot and recalculates curre
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 32);
+  assert.equal(result.events.length, expectedEventCount);
   assert.ok(result.warnings.some(warning => warning.includes('محاسبات')));
 });
 
 
 test('browser data loader rejects an old calculator snapshot and recalculates raw source data', async () => {
-  const oldSnapshot = payloadFor('https://raw.githubusercontent.com/mehrdadmb2/peugeot-206-garage/main/data/dashboard.json');
+  const oldSnapshot = freshSnapshot();
   delete oldSnapshot.computed.calculationVersion;
   const loader = createLoader(async url => {
     if (new URL(url).pathname.endsWith('/data/dashboard.json')) return jsonResponse(oldSnapshot);
@@ -139,7 +147,7 @@ test('browser data loader rejects an old calculator snapshot and recalculates ra
   const result = await loader.load();
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
-  assert.equal(result.events.length, 32);
+  assert.equal(result.events.length, expectedEventCount);
 });
 
 test('browser data loader keeps available data and clearly reports missing monthly files', async () => {
@@ -156,7 +164,7 @@ test('browser data loader keeps available data and clearly reports missing month
   });
   const result = await loader.load();
   assert.equal(result.mode, 'direct-partial');
-  assert.equal(result.events.length, 32);
+  assert.equal(result.events.length, JSON.parse(readFileSync(resolve(root, 'data/logs/2026-10.json'), 'utf8')).events.length);
   assert.deepEqual(Array.from(result.failedMonths), ['2026-09']);
   assert.ok(result.warnings.some(warning => warning.includes('بارگذاری')));
 });
@@ -165,19 +173,19 @@ test('browser data loader uses a valid fresh snapshot without loading every mont
   const calls = [];
   const loader = createLoader(async url => {
     calls.push(new URL(url).pathname);
-    return jsonResponse(payloadFor(url));
+    return jsonResponse(new URL(url).pathname.endsWith('/data/dashboard.json') ? freshSnapshot() : payloadFor(url));
   });
   const result = await loader.load();
   assert.equal(result.mode, 'snapshot');
   assert.equal(result.precomputed.eventCount, result.events.length);
-  assert.equal(result.events.length, 32);
+  assert.equal(result.events.length, expectedEventCount);
   assert.equal(calls.some(path => /data\/logs\//.test(path)), false);
 });
 
 
 test('browser data loader serves the last valid local cache when all online sources are unavailable', async () => {
   const storage = new Map();
-  const online = createLoader(async url => jsonResponse(payloadFor(url)), storage);
+  const online = createLoader(async url => jsonResponse(new URL(url).pathname.endsWith('/data/dashboard.json') ? freshSnapshot() : payloadFor(url)), storage);
   const first = await online.load();
   assert.equal(first.mode, 'snapshot');
   assert.ok(storage.has('peugeot206garage:data-cache:v1'));
@@ -186,7 +194,7 @@ test('browser data loader serves the last valid local cache when all online sour
   const cached = await offline.load();
   assert.equal(cached.mode, 'offline-cache');
   assert.equal(cached.precomputed, null);
-  assert.equal(cached.events.length, 32);
+  assert.equal(cached.events.length, expectedEventCount);
   assert.ok(cached.warnings.some(warning => warning.includes('آخرین دادهٔ ذخیره‌شده')));
 });
 

@@ -8,8 +8,8 @@ const experience = fs.readFileSync(new URL('../assets/js/experience.js', import.
 const css = fs.readFileSync(new URL('../assets/css/experience.css', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../.github/workflows/build-dashboard.yml', import.meta.url), 'utf8');
 
-test('v3.15 workspace assets are loaded after the existing core application', () => {
-  assert.match(html, /assets\/css\/experience\.css\?v=3\.15\.0/);
+test('v3.17 workspace assets are loaded after the existing core application', () => {
+  assert.match(html, /assets\/css\/experience\.css\?v=3\.17\.0/);
   assert.match(html, /assets\/js\/experience\.js\?v=3\.15\.0/);
   assert.ok(html.indexOf('assets/js/app.js') < html.indexOf('assets/js/experience.js'));
   assert.ok(html.indexOf('assets/js/vehicle-documents.js') < html.indexOf('assets/js/experience.js'));
@@ -59,4 +59,10 @@ test('new interaction layer respects reduced motion and responsive layouts', () 
 
 test('GitHub Actions runs a syntax check for the new browser experience module', () => {
   assert.match(workflow, /node --check assets\/js\/experience\.js/);
+});
+
+test('technical specifications appears once in each navigation layer', () => {
+  const matches = html.match(/data-tab=\"specifications\"/g) || [];
+  assert.equal(matches.length, 2, 'one top-navigation link and one app tab should target the specifications page');
+  assert.match(html, /id=\"page-specifications\"/);
 });
