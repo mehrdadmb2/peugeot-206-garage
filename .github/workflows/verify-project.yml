@@ -47,6 +47,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check assets/js/app.js
+          node --check assets/js/fuel-intelligence.mjs
           node --check assets/js/experience.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js

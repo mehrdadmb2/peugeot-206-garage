@@ -8,6 +8,10 @@ on:
       - 'data/index.json'
       - 'data/logs/**'
       - 'scripts/build-dashboard.mjs'
+      - 'index.html'
+      - 'assets/js/app.js'
+      - 'assets/js/fuel-intelligence.mjs'
+      - 'worker/src/index.js'
       - 'assets/js/persian-calendar.cjs'
       - 'scripts/build-dashboard.test.mjs'
       - '.github/workflows/build-dashboard.yml'
@@ -53,6 +57,7 @@ jobs:
       - name: Verify generated JSON and run regression tests
         run: |
           node --check assets/js/app.js
+          node --check assets/js/fuel-intelligence.mjs
           node --check assets/js/experience.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
