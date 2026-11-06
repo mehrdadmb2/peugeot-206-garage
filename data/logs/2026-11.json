@@ -632,10 +632,21 @@
       "title": "ثبت کیلومترشمار",
       "description": "ثبت کیلومترشمار",
       "actor": "من",
-      "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "note": "گرفتن برگه اشتغال به خدمت",
+      "updatedAt": "2026-11-06T10:15:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-11-06T10:15:00+03:30",
+          "by": "telegram",
+          "before": {
+            "note": ""
+          },
+          "after": {
+            "note": "گرفتن برگه اشتغال به خدمت"
+          }
+        }
+      ],
       "createdAt": "2026-11-06T06:45:12.099Z",
       "occurredAt": "2026-11-06T10:15:00+03:30",
       "date": "2026-11-06",
