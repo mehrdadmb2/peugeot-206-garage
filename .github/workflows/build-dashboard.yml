@@ -15,6 +15,8 @@ on:
       - 'worker/src/index.js'
       - 'assets/js/persian-calendar.cjs'
       - 'scripts/build-dashboard.test.mjs'
+      - 'worker/tests/**'
+      - 'worker/test/**'
       - '.github/workflows/build-dashboard.yml'
   schedule:
     # Refresh date-based service statuses every day at 09:15 Asia/Tehran.
