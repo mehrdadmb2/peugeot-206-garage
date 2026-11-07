@@ -20,6 +20,14 @@ function finitePositive(value) {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
+function refuelCostRial(event) {
+  return finitePositive(event?.costRial)
+    || finitePositive(event?.amountRial)
+    || finitePositive(event?.costToman) * 10
+    || finitePositive(event?.amountToman) * 10
+    || null;
+}
+
 function median(values) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -125,11 +133,11 @@ export function calculateFuelModel(events, options = {}) {
   const consumptionLPer100 = sampleDistanceKm > 0 ? sampleLiters / sampleDistanceKm * 100 : null;
   const confidence = confidenceFor(accepted, sampleDistanceKm);
   const recentPriced = sourceEvents
-    .filter(event => event?.type === 'fuel' && epochOf(event) <= cutoff && finitePositive(event.liters) && finitePositive(event.costRial))
+    .filter(event => event?.type === 'fuel' && epochOf(event) <= cutoff && finitePositive(event.liters) && refuelCostRial(event))
     .sort((a, b) => epochOf(b) - epochOf(a))
     .slice(0, 5);
   const pricedLiters = recentPriced.reduce((sum, item) => sum + Number(item.liters), 0);
-  const pricedCostRial = recentPriced.reduce((sum, item) => sum + Number(item.costRial), 0);
+  const pricedCostRial = recentPriced.reduce((sum, item) => sum + refuelCostRial(item), 0);
   const priceTomanPerLiter = pricedLiters > 0 ? pricedCostRial / pricedLiters / 10 : null;
   const allExact = accepted.length > 0 && accepted.every(item => item.measured);
 

@@ -18,7 +18,7 @@ function writeJson(path, value) {
 test('real repository data builds a complete dashboard snapshot without dropping events or catalog data', () => {
   const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-10-30T06:00:00.000Z') });
   assert.equal(snapshot.schemaVersion, 1);
-  assert.equal(snapshot.computed.calculationVersion, 2);
+  assert.equal(snapshot.computed.calculationVersion, 4);
   assert.ok(snapshot.events.length >= 1);
   assert.equal(snapshot.computed.eventCount, snapshot.events.length);
   assert.equal(snapshot.computed.componentCount, 62);
@@ -27,6 +27,10 @@ test('real repository data builds a complete dashboard snapshot without dropping
   assert.ok(snapshot.computed.currentOdometerKm > 428000);
   assert.ok(Array.isArray(snapshot.computed.dueItems));
   assert.ok(Array.isArray(snapshot.computed.distanceEntries));
+  assert.ok(snapshot.computed.vehicleCostModel);
+  assert.ok(snapshot.computed.vehicleCostModel.operatingCostPerKmToman > 0);
+  assert.equal('included' in snapshot.computed.vehicleCostModel, false, 'snapshot should store a compact calculation summary, not duplicated raw event records');
+  assert.equal('intervals' in snapshot.computed.vehicleCostModel.fuelModel, false, 'fuel interval source events should not be duplicated inside the public summary');
   assert.equal(new Set(snapshot.events.map(event => event.id)).size, snapshot.events.length);
 });
 

@@ -7,11 +7,11 @@
   <meta name="description" content="دفتر هوشمند پژو ۲۰۶؛ ثبت کیلومتر، سوخت‌گیری، هزینه، سرویس، خرابی، جریمه و یادآورهای نگهداری با ربات تلگرام.">
   <title>206 Garage · دفتر هوشمند خودرو</title>
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"><link rel="apple-touch-icon" href="assets/img/favicon.svg"><meta name="color-scheme" content="dark"><link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="assets/css/style.css?v=3.14.0-private-documents-r2">
+  <link rel="stylesheet" href="assets/css/style.css?v=3.18.0">
   <link rel="stylesheet" href="assets/css/experience.css?v=3.17.0">
   <script defer src="assets/js/diagnostics.js?v=3.14.0-private-documents-r2"></script>
-  <script defer src="assets/js/data-loader.js?v=3.14.0-private-documents-r2"></script>
-  <script defer src="assets/js/app.js?v=3.17.0"></script>
+  <script defer src="assets/js/data-loader.js?v=3.18.0"></script>
+  <script defer src="assets/js/app.js?v=3.18.0"></script>
   <script defer src="assets/js/vehicle-documents.js?v=3.14.0-private-documents-r2"></script>
   <script defer src="assets/js/experience.js?v=3.15.0"></script>
 </head>
@@ -275,6 +275,34 @@
         <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">SPENDING TREND</span><h3>روند هزینه در ماه‌ها</h3></div><span class="chart-tag"><i></i> تومان</span></div><div id="expenseMonthlyChart" class="chart-wrap"><div class="empty-state">هنوز داده‌ی مالی ثبت نشده است.</div></div></article>
         <article class="chart-card panel"><div class="chart-heading"><div><span class="card-overline">CATEGORY BREAKDOWN</span><h3>تفکیک هزینه‌ها</h3></div><span class="chart-tag chart-tag-cyan"><i></i> درصد از کل</span></div><div id="expenseCategoryChart" class="category-breakdown"><div class="empty-state">با ثبت هزینه‌ها دسته‌ها نمایش داده می‌شوند.</div></div></article>
       </section>
+      <section class="section-block ownership-cost-engine panel" aria-labelledby="ownershipCostTitle">
+        <div class="ownership-cost-heading"><div><span class="section-kicker">TOTAL COST OF OWNERSHIP / SMART MODEL</span><h2 id="ownershipCostTitle">محاسبهٔ جامع هزینه، استهلاک و سفر</h2><p>تمام مبلغ‌های ثبت‌شده از دفتر خودرو دوباره خوانده و با پیمایش فعلی محاسبه می‌شوند؛ نرخ سوخت نیز از ثبت‌های واقعی بنزین استخراج می‌شود.</p></div><span class="ownership-cost-live"><i></i> محاسبهٔ زنده از سوابق</span></div>
+        <div class="ownership-cost-kpis">
+          <article class="ownership-cost-kpi ownership-cost-kpi-main"><small>کل هزینه‌های پرداخت‌شدهٔ ثبت‌شده</small><strong id="ownershipCostTotal">—</strong><span id="ownershipCostCoverage">—</span></article>
+          <article class="ownership-cost-kpi"><small>هزینهٔ عملیاتی مدل‌شده / km</small><strong id="ownershipCostPerKm">—</strong><span id="ownershipCostDistance">—</span></article>
+          <article class="ownership-cost-kpi"><small>میانگین هزینهٔ واقعی ثبت‌شده / km</small><strong id="ownershipRecordedCostPerKm">—</strong><span>جمع پرداخت‌های ثبت‌شده تقسیم بر مسافت مالکیت</span></article>
+          <article class="ownership-cost-kpi"><small>ذخیرهٔ استهلاک و نگهداری / km</small><strong id="ownershipWearPerKm">—</strong><span>قطعات + سرویس‌ها + تعمیرات دارای مبلغ</span></article>
+          <article class="ownership-cost-kpi"><small>کل پرداخت ثبت‌شده با جریمه / km</small><strong id="ownershipAllRecordedCostPerKm">—</strong><span>تمام مبالغ پرداخت‌شده، با احتساب جریمه</span></article>
+        </div>
+        <div class="ownership-cost-breakdown">
+          <div><span>⛽ سوخت ثبت‌شده</span><strong id="ownershipFuelHistorical">—</strong></div>
+          <div><span>🛠️ استهلاک و نگهداری</span><strong id="ownershipWearHistorical">—</strong></div>
+          <div><span>◈ سایر هزینه‌های جاری</span><strong id="ownershipOtherHistorical">—</strong></div>
+          <div><span>🚦 جریمه‌های پرداخت‌شده (جداگانه)</span><strong id="ownershipFinesHistorical">—</strong></div>
+          <div><span>🔴 بدهی جریمهٔ پرداخت‌نشده</span><strong id="ownershipFinesUnpaid">—</strong></div>
+        </div>
+        <div class="ownership-trip-estimator">
+          <div class="ownership-trip-input"><label for="ownershipTripDistanceInput">برآورد هزینهٔ یک سفر</label><div class="ownership-trip-input-row"><input id="ownershipTripDistanceInput" type="number" min="1" max="5000" step="1" value="100" inputmode="decimal"><span>کیلومتر</span></div><small id="ownershipTripHeading">۱۰۰ کیلومتر</small></div>
+          <div class="ownership-trip-results">
+            <div><small>بنزین سفر</small><strong id="ownershipTripFuel">—</strong><em id="ownershipFuelRate">—</em></div>
+            <div><small>ذخیرهٔ استهلاک</small><strong id="ownershipTripWear">—</strong></div>
+            <div><small>هزینهٔ جاری دیگر</small><strong id="ownershipTripOther">—</strong></div>
+            <div class="ownership-trip-total"><small>جمع هزینهٔ عملیاتی سفر</small><strong id="ownershipTripTotal">—</strong><em id="ownershipTripPerKm">—</em></div>
+          </div>
+        </div>
+        <p id="ownershipCostFormula" class="ownership-cost-formula">هزینهٔ استهلاک و مالکیت با ثبت هزینه و کیلومتر جدید به‌صورت خودکار بازمحاسبه می‌شود.</p>
+        <p class="ownership-cost-disclaimer">این «استهلاک عملیاتی» بر اساس هزینه‌های واقعی قطعه، سرویس، اجرت و تعمیر ثبت‌شده است؛ افت ارزش بازار خودرو را شامل نمی‌شود، چون قیمت خرید و ارزش روز خودرو در داده‌ها ثبت نشده‌اند. مبالغ تاریخی نیز تعدیل تورمی نشده‌اند. جریمه‌های پرداخت‌شده در تاریخچهٔ مالی دیده می‌شوند اما در هزینهٔ پیش‌بینی سفر سرشکن نمی‌شوند؛ جریمهٔ پرداخت‌نشده نیز بدهی است، نه هزینهٔ پرداخت‌شده.</p>
+      </section>
       <section class="section-block"><div class="section-heading"><div><span class="section-kicker">RECENT PAYMENTS</span><h2>آخرین هزینه‌های قابل محاسبه</h2></div><div class="export-actions"><button id="expenseCsv" class="secondary-button small" type="button">خروجی هزینه‌ها CSV ↓</button></div></div><div id="expenseEventList" class="expense-event-list panel"><div class="empty-state">هزینه‌ای ثبت نشده است.</div></div></section>
       <section class="notice-strip"><span class="notice-symbol">i</span><p>برای گزارش حسابداری، پرداخت جریمه در تاریخ پرداخت و تعمیر خرابی در تاریخ رفع خرابی شمرده می‌شود. جریمه‌ی پرداخت‌نشده بدهی است، نه هزینه‌ی پرداخت‌شده.</p></section>
     </div>
@@ -469,7 +497,7 @@
       <div class="workflow-copy"><span class="section-kicker">AUTOMATION PIPELINE</span><h2>یک پیام ساده؛ یک سابقه ماندگار</h2><p>تلگرام ← Cloudflare Worker ← فایل‌های JSON در GitHub ← این داشبورد در GitHub Pages.</p></div>
       <div class="workflow-actions"><a class="secondary-button" href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">باز کردن ربات ↗</a><a class="secondary-button" href="https://mehrdadmb2.github.io/peugeot-206-garage/" target="_blank" rel="noopener noreferrer">داشبورد زنده ↗</a><a class="secondary-button" href="#top">بازگشت به بالا ↑</a></div>
     </section>
-<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.17.0</b></span></footer>
+<footer class="footer"><a class="brand footer-brand" href="#top"><span class="brand-mark small-mark">206</span><span class="brand-copy"><strong>206 <b>GARAGE</b></strong><small>MAINTAINED BY YOUR MESSAGES</small></span></a><div class="footer-note"><span>ساخته‌شده برای ثبت دقیق، نه حدس‌زدن.</span><span>تمام مبالغ به تومان نمایش داده می‌شوند؛ ذخیره خام هزینه با واحد ریال است.</span><span class="footer-links"><a href="https://t.me/Peugeot206GarageBot" target="_blank" rel="noopener noreferrer">ربات تلگرام @Peugeot206GarageBot ↗</a><a href="https://github.com/mehrdadmb2/peugeot-206-garage" target="_blank" rel="noopener noreferrer">مخزن GitHub ↗</a></span></div><span class="footer-version">GARAGE OS <b>v3.18.0</b></span></footer>
   </main>
   <section id="garageAppearancePanel" class="garage-appearance-panel" aria-label="شخصی‌سازی ظاهر" hidden>
     <div class="garage-panel-heading"><div><span class="garage-panel-kicker">PERSONAL WORKSPACE</span><b>ظاهر محیط کار</b></div><button type="button" id="garageAppearanceClose" class="garage-panel-close" aria-label="بستن پنل">×</button></div>

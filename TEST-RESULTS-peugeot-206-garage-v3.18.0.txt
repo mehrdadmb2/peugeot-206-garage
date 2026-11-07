@@ -1,0 +1,40 @@
+Peugeot 206 Garage v3.18.0 — Local Validation Report
+===================================================
+
+Automated test suite:
+  89 passed
+  0 failed
+  0 skipped
+
+Coverage highlights:
+  - Journal detail rendering (description, note, repair and structured fields)
+  - Live recalculation from current event ledger
+  - Odometer timeline edits and deletions
+  - Partial-refuel estimation and full-to-full aggregation
+  - Weighted price inference from latest five priced refuels
+  - Rial and Toman amount normalization
+  - Grouped repair cost de-duplication
+  - Wear, maintenance, labor, other operating costs and fines
+  - Paid-fine history versus unpaid fine liability
+  - Per-kilometre historic and modeled cost metrics
+  - Trip fuel-only and comprehensive operating-cost estimates
+  - Telegram /costs command integration
+  - Dashboard snapshot and real-data boot smoke tests
+  - Private documents authentication and Worker API tests
+
+Additional checks:
+  - npm run check --prefix worker: PASS
+  - node worker/test/smoke.mjs: PASS
+  - node scripts/build-dashboard.mjs: PASS
+
+Generated dashboard snapshot:
+  Events: 44
+  Months: 2
+  Current odometer: 431877 km
+  Maintenance due items: 0
+  Snapshot size: approximately 129.2 KiB
+
+Deployment note:
+  GitHub Pages and Cloudflare Worker were not deployed from this environment.
+  Deploy in the user's own GitHub/Cloudflare accounts after preserving secrets and
+  the existing GARAGE_PRIVATE_KV binding.

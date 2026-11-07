@@ -1,4 +1,5 @@
 import { calculateFuelModel, estimateFuelTrip } from "../../assets/js/fuel-intelligence.mjs";
+import { calculateVehicleCostModel } from "../../assets/js/vehicle-cost-intelligence.mjs";
 const API_VERSION = "2022-11-28";
 const TZ = "Asia/Tehran";
 const FILE_INDEX = "data/index.json";
@@ -47,7 +48,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.17.0",
+        version: "3.18.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -72,7 +73,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.17.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.18.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN),
@@ -793,6 +794,7 @@ const COMMAND_ALIASES = {
   note: "note", memo: "note", یادداشت: "note",
   latest: "latest", recent: "latest", آخرین: "latest",
   fuelstats: "fuelstats", fuel_stats: "fuelstats", consumption: "fuelstats", مصرف: "fuelstats",
+  costs: "costs", costreport: "costs", ownershipcost: "costs", totalcost: "costs", هزینه_کل: "costs", استهلاک: "costs",
   detail: "detail", event: "detail", info: "detail", جزئیات: "detail", رویداد: "detail",
   edit: "edit", اصلاح: "edit", ویرایش: "edit", revise: "revise", اصلاح_پیام: "revise",
   annotate: "annotate", comment: "annotate", noteevent: "annotate", توضیح: "annotate",
@@ -910,6 +912,7 @@ async function processMessage(text, message, env, options = {}) {
     return event ? { text: `⚠️ تأیید حذف این عملیات لازم است.\n\n${formatEventDetails(event)}\n\nرویداد پیش از حذف از دفتر فعال در بایگانی نگهداری می‌شود.`, markup: deleteConfirmationKeyboard(event.id.slice(0,8)) } : { text: "رویداد پیدا نشد. نمونه: /delete a1b2c3d4", keyboard: false };
   }
   if (/^\/restore\b/i.test(text)) return { text: await restoreDeletedEvent(text.replace(/^\/\S+/, "").trim(), env), keyboard: false };
+  if (/^\/costs\b|^\/costreport\b|^\/هزینه_کل\b|^\/استهلاک\b/i.test(text)) return { text: await ownershipCostReport(text, env), keyboard: false };
   if (/^\/summary\b/i.test(text) || /^\/گزارش\b/i.test(text)) return { text: await summaryReport(text, env), keyboard: true };
   if (/^\/due\b/i.test(text) || /^\/سرویس‌ها\b/i.test(text)) return { text: await dueReport(env), keyboard: true };
   if (/^\/config\b/i.test(text) || /^\/تنظیمات\b/i.test(text)) return { text: await configReport(env), keyboard: false };
@@ -1084,6 +1087,7 @@ function helpText() {
 /summary today|week|month|all — خلاصه و مبالغ
 /fines — جمع کل جریمه، پرداختی و بدهی
 /fuelstats — مصرف و هزینه سوخت
+/costs 100 — هزینه هر کیلومتر، استهلاک و برآورد سفر ۱۰۰ کیلومتری
 /due — سرویس‌های نزدیک موعد یا عقب‌افتاده
 /config — تنظیمات و بازه‌های نگهداری
 /interval engine_oil 5000 180 — تنظیم فاصله سرویس
@@ -3005,6 +3009,49 @@ function calculateFuelConsumptionHistory(fuelEvents) {
       toDate: to.jalaliDate || to.date || String(to.occurredAt || "").slice(0,10) });
   }
   return results;
+}
+
+async function ownershipCostReport(commandText, env) {
+  const events = await loadAllEvents(env);
+  const config = await readConfig(env);
+  const currentOdo = calculateCurrentOdometer(events);
+  const distanceMatch = String(commandText || "").match(/(?:^|\s)([0-9۰-۹٠-٩]{1,5})(?:\s|$)/);
+  const tripDistance = distanceMatch ? Math.max(1, Math.min(5000, Number(normalizeDigits(distanceMatch[1])))) : 100;
+  const model = calculateVehicleCostModel(events, {
+    purchaseOdometerKm: config.ownership?.purchaseOdometerKm ?? DEFAULT_PURCHASE_ODOMETER_KM,
+    currentOdometerKm: currentOdo,
+    tripDistanceKm: tripDistance
+  });
+  const toman = value => value == null ? "—" : formatMoneyToman(Math.round(value * 10));
+  const trip = model.trip;
+  return `💳 گزارش جامع هزینه و استهلاک خودرو
+
+🚘 مسافت مبنا: ${formatNum(model.distanceKm)} km
+کیلومتر فعلی: ${currentOdo == null ? "ثبت نشده" : `${formatNum(currentOdo)} km`} · کیلومتر خرید: ${formatNum(model.purchaseOdometerKm)} km
+
+📚 هزینه‌های ثبت‌شده و پرداخت‌شده
+کل هزینه‌های ثبت‌شده: ${toman(model.totalRecordedToman)}
+سوخت: ${toman(model.totalFuelToman)} · استهلاک/قطعه/سرویس/تعمیر: ${toman(model.totalWearToman)}
+سایر هزینه‌های جاری: ${toman(model.totalOtherToman)}
+جریمه‌های پرداخت‌شده (جدا): ${toman(model.totalPaidFinesToman)}
+جریمه‌های پرداخت‌نشده / بدهی باز: ${toman(model.unpaidFinesToman)}
+
+📐 نرخ‌های تاریخی به‌ازای هر کیلومتر
+هزینه بنزین مدل‌شده: ${toman(model.fuelCostPerKmToman)} / km
+هزینه استهلاک و نگهداری: ${toman(model.wearCostPerKmToman)} / km
+هزینه عملیاتی مدل‌شده (سوخت + نگهداری + سایر): ${toman(model.operatingCostPerKmToman)} / km
+میانگین واقعی پرداخت‌های ثبت‌شده: ${toman(model.recordedOperatingCostPerKmToman)} / km
+مجموع ثبت‌شده با جریمه پرداختی: ${toman(model.allRecordedCostPerKmToman)} / km
+
+🧭 برآورد سفر ${formatNum(tripDistance)} کیلومتری
+بنزین: ${trip?.fuelCostToman == null ? "داده کافی برای برآورد سوخت نیست" : toman(trip.fuelCostToman)}${trip?.fuelLiters == null ? "" : ` · ${formatNum(trip.fuelLiters, 2)} لیتر`}
+ذخیره استهلاک و نگهداری: ${toman(trip?.wearReserveToman)}
+سایر هزینه‌های جاری: ${toman(trip?.otherRunningReserveToman)}
+جمع هزینه عملیاتی سفر: ${toman(trip?.estimatedOperatingCostToman)}
+هزینه هر کیلومتر این مدل: ${toman(trip?.estimatedOperatingCostPerKmToman)}
+نرخ بنزین مبنا: ${trip?.fuelPriceTomanPerLiter == null ? "ثبت نشده" : `${formatNum(trip.fuelPriceTomanPerLiter)} تومان/لیتر`} · ${trip?.fuelConfidenceLabel || model.fuelModel.confidenceLabel}
+
+📌 روش: هزینه بنزین هر km از مصرف مدل‌شده × نرخ موزون پنج سوخت‌گیری قیمت‌دار اخیر به دست می‌آید؛ هزینه قطعات/سرویس/تعمیر ثبت‌شده تقسیم بر مسافت از کیلومتر خرید، ذخیره استهلاک عملیاتی است. جریمه در هزینه تاریخی دیده می‌شود، اما در سفر آینده سرشکن نمی‌شود. هزینه‌های بدون مبلغ وارد جمع نشده‌اند (${formatNum(model.unpricedEventCount)} مورد). مبالغ تاریخی تعدیل تورمی نشده‌اند. افت ارزش بازار خودرو هم محاسبه نشده؛ قیمت خرید و ارزش روز در داده‌ها موجود نیست.`;
 }
 
 async function fuelReport(env) {

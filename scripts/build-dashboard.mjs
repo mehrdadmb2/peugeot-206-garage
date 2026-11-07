@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from '
 import { join, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { calculateVehicleCostModel } from '../assets/js/vehicle-cost-intelligence.mjs';
 const require = createRequire(import.meta.url);
 const PersianCalendar = require('../assets/js/persian-calendar.cjs');
 
@@ -142,13 +143,15 @@ function addDays(value, count) {
 
 function expenseAmount(event) {
   if (!event || (event.type === 'fine' && !event.paid)) return 0;
-  if (event.type === 'issue' && Number(event.repairCostRial) > 0) return Number(event.repairCostRial) || 0;
-  return Number(event.costRial) > 0 ? Number(event.costRial) : 0;
+  const positive = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 0;
+  if (event.type === 'fine') return positive(event.paidAmountRial) || positive(event.paidAmountToman) * 10 || positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10;
+  if (event.type === 'issue') return positive(event.repairCostRial) || positive(event.repairCostToman) * 10 || positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10;
+  return positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10 || positive(event.repairCostRial) || positive(event.repairCostToman) * 10;
 }
 
 function expenseDate(event) {
   if (event.type === 'fine' && event.paid && event.paidAt) return String(event.paidAt).slice(0, 10);
-  if (event.type === 'issue' && event.resolvedAt && Number(event.repairCostRial) > 0) return String(event.resolvedAt).slice(0, 10);
+  if (event.type === 'issue' && event.resolvedAt && (Number(event.repairCostRial) > 0 || Number(event.repairCostToman) > 0)) return String(event.resolvedAt).slice(0, 10);
   return String(event.occurredAt || event.date || event.createdAt || '').slice(0, 10);
 }
 
@@ -263,6 +266,44 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
 
   const sourceTimestamps = [index.updatedAt, config.updatedAt, ...logUpdatedAt].filter(Boolean).sort();
   const distanceEntries = calculateDistanceEntries(events, config.ownership || {});
+  const fullVehicleCostModel = calculateVehicleCostModel(events, {
+    purchaseOdometerKm: config.ownership?.purchaseOdometerKm ?? DEFAULT_PURCHASE_KM,
+    currentOdometerKm
+  });
+  // Publish a compact derived summary; raw event metadata, fingerprints and
+  // nested interval source records remain only in the canonical event ledger.
+  const vehicleCostModel = {
+    distanceKm: fullVehicleCostModel.distanceKm,
+    distanceBasis: fullVehicleCostModel.distanceBasis,
+    purchaseOdometerKm: fullVehicleCostModel.purchaseOdometerKm,
+    currentOdometerKm: fullVehicleCostModel.currentOdometerKm,
+    totalFuelToman: fullVehicleCostModel.totalFuelToman,
+    totalWearToman: fullVehicleCostModel.totalWearToman,
+    totalOtherToman: fullVehicleCostModel.totalOtherToman,
+    totalPaidFinesToman: fullVehicleCostModel.totalPaidFinesToman,
+    unpaidFinesToman: fullVehicleCostModel.unpaidFinesToman,
+    totalOperatingToman: fullVehicleCostModel.totalOperatingToman,
+    totalRecordedToman: fullVehicleCostModel.totalRecordedToman,
+    fuelCostPerKmToman: fullVehicleCostModel.fuelCostPerKmToman,
+    wearCostPerKmToman: fullVehicleCostModel.wearCostPerKmToman,
+    operatingCostPerKmToman: fullVehicleCostModel.operatingCostPerKmToman,
+    recordedOperatingCostPerKmToman: fullVehicleCostModel.recordedOperatingCostPerKmToman,
+    allRecordedCostPerKmToman: fullVehicleCostModel.allRecordedCostPerKmToman,
+    latestFuelUnitPriceToman: fullVehicleCostModel.latestFuelUnitPriceToman,
+    fuelModel: {
+      consumptionLPer100: fullVehicleCostModel.fuelModel.consumptionLPer100,
+      priceTomanPerLiter: fullVehicleCostModel.fuelModel.priceTomanPerLiter,
+      confidenceKey: fullVehicleCostModel.fuelModel.confidenceKey,
+      confidenceLabel: fullVehicleCostModel.fuelModel.confidenceLabel,
+      refuelCount: fullVehicleCostModel.fuelModel.refuelCount,
+      sampleIntervals: fullVehicleCostModel.fuelModel.sampleIntervals,
+      sampleDistanceKm: fullVehicleCostModel.fuelModel.sampleDistanceKm
+    },
+    counts: fullVehicleCostModel.counts,
+    includedCostCount: fullVehicleCostModel.includedCostCount,
+    unpricedEventCount: fullVehicleCostModel.unpricedEventCount,
+    formula: fullVehicleCostModel.formula
+  };
   const snapshot = {
     schemaVersion: 1,
     generatedAt: now.toISOString(),
@@ -272,7 +313,7 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
-      calculationVersion: 2,
+      calculationVersion: 4,
       eventCount: events.length,
       currentOdometerKm,
       currentMonth,
@@ -286,7 +327,8 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
       serviceIntervalCount: Object.keys(config.serviceIntervals || {}).length,
       componentCount: Object.keys(config.partCatalog?.items || {}).length,
       serviceCatalogCount: Object.keys(config.partCatalog?.services || {}).length,
-      distanceEntries
+      distanceEntries,
+      vehicleCostModel
     }
   };
   return snapshot;

@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null, fuelEngine: null };
+  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null, fuelEngine: null, costEngine: null };
   const PersianCalendar = window.GaragePersianCalendar || null;
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
@@ -17,6 +17,8 @@
     brake_fluid: ['روغن ترمز', 'brake fluid'], brake_inspection: ['بازدید ترمز', 'لنت', 'brake'], tyre_inspection: ['لاستیک', 'فشار باد', 'tyre'], battery_check: ['باتری', 'باطری', 'battery']
   };
   let toastTimer = null;
+  let dashboardLoadInFlight = false;
+  let lastDashboardLoadAt = 0;
 
   document.addEventListener('DOMContentLoaded', () => {
     const diag = window.GarageDiagnostics;
@@ -47,6 +49,9 @@
         }
       });
       safeBind('#refreshButton', 'click', () => loadDashboard(true));
+      window.addEventListener?.('focus', () => { if (Date.now() - lastDashboardLoadAt > 20000) loadDashboard(false); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastDashboardLoadAt > 20000) loadDashboard(false); });
+      window.setInterval?.(() => { if (!document.hidden && Date.now() - lastDashboardLoadAt > 85000) loadDashboard(false); }, 90000);
       document.addEventListener('click', async event => {
         const commandButton = event.target?.closest?.('[data-component-command]');
         if (!commandButton) return;
@@ -65,6 +70,7 @@
       safeBind('#monthFilter', 'change', updateJournal);
       safeBind('#actorFilter', 'change', updateJournal);
       safeBind('#fuelTripDistanceInput', 'input', renderFuelTripEstimator);
+      safeBind('#ownershipTripDistanceInput', 'input', renderOwnershipCostModel);
       safeBind('#guideSearch', 'input', filterGuideCards);
       safeBind('#loadMoreButton', 'click', () => { state.shown += 12; renderJournal(); });
       $$('[data-analytics-period]').forEach(button => button.addEventListener('click', () => {
@@ -98,6 +104,8 @@
   });
 
   async function loadDashboard(userInitiated) {
+    if (dashboardLoadInFlight) return;
+    dashboardLoadInFlight = true;
     const loadStartedAt = Date.now();
     window.GarageDiagnostics?.log('info', 'app.load', 'بارگذاری داشبورد آغاز شد.', { userInitiated: Boolean(userInitiated), loaderAvailable: Boolean(window.GarageDataLoader?.load) });
     const refreshButton = $('#refreshButton');
@@ -105,6 +113,10 @@
       if (!state.fuelEngine) {
         try { state.fuelEngine = await import('./fuel-intelligence.mjs'); }
         catch (error) { window.GarageDiagnostics?.log('warn', 'fuel.engine', 'موتور برآورد سوخت بارگذاری نشد؛ سایر بخش‌ها بدون آن ادامه می‌یابند.', error); }
+      }
+      if (!state.costEngine) {
+        try { state.costEngine = await import('./vehicle-cost-intelligence.mjs'); }
+        catch (error) { window.GarageDiagnostics?.log('error', 'cost.engine', 'موتور محاسبات هزینه بارگذاری نشد.', error); }
       }
       setConnection('loading');
       refreshButton?.classList.add('is-loading');
@@ -127,6 +139,7 @@
       state.dataWarnings = Array.isArray(dataset.warnings) ? dataset.warnings : [];
       state.failedMonths = Array.isArray(dataset.failedMonths) ? dataset.failedMonths : [];
       state.refreshedAt = new Date();
+      lastDashboardLoadAt = Date.now();
 
       populateMonthFilter();
       populateActorFilter();
@@ -181,6 +194,7 @@
       if (window.__garageBootScreen?.fail) window.__garageBootScreen.fail(`بارگذاری مستقیم و فایل محاسبات آماده هر دو ناموفق شدند: ${reason}`);
       if (userInitiated) showToast('دریافت داده ناموفق بود؛ جزئیات در دفتر وقایع ثبت شد.');
     } finally {
+      dashboardLoadInFlight = false;
       refreshButton?.classList.remove('is-loading');
       if (window.__garageBootScreen?.release) window.__garageBootScreen.release();
       else {
@@ -710,13 +724,19 @@
   function csvCell(value) { return `"${String(value ?? '').replace(/"/g,'""')}"`; }
   function expenseAmount(event) {
     if (!event || (event.type === 'fine' && !event.paid)) return 0;
-    if (event.type === 'issue' && Number(event.repairCostRial) > 0) return Number(event.repairCostRial) || 0;
-    return Number(event.costRial) > 0 ? Number(event.costRial) : 0;
+    const positive = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 0;
+    if (event.type === 'fine') {
+      return positive(event.paidAmountRial) || positive(event.paidAmountToman) * 10 || positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10;
+    }
+    if (event.type === 'issue') {
+      return positive(event.repairCostRial) || positive(event.repairCostToman) * 10 || positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10;
+    }
+    return positive(event.costRial) || positive(event.amountRial) || positive(event.costToman) * 10 || positive(event.amountToman) * 10 || positive(event.repairCostRial) || positive(event.repairCostToman) * 10;
   }
   function isActualExpense(event) { return expenseAmount(event) > 0; }
   function expenseDate(event) {
     if (event.type === 'fine' && event.paid && event.paidAt) return String(event.paidAt).slice(0,10);
-    if (event.type === 'issue' && Number(event.repairCostRial)>0 && event.resolvedAt) return String(event.resolvedAt).slice(0,10);
+    if (event.type === 'issue' && (Number(event.repairCostRial)>0 || Number(event.repairCostToman)>0) && event.resolvedAt) return String(event.resolvedAt).slice(0,10);
     return String(event.occurredAt || event.date || event.createdAt || '').slice(0,10);
   }
   function calculateOdometer(events) {
@@ -834,7 +854,7 @@
     if (recentNode) recentNode.innerHTML = recent.length ? recent.map(event => {
       const meta = [event.jalaliDate || eventDateKey(event), event.actor || 'من', event.odometerKm != null ? `${formatNumber(event.odometerKm)} km` : ''].filter(Boolean).join(' · ');
       const amount = eventAmountToman(event);
-      return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(eventTitle(event))}</div><div class="mini-row-desc">${escapeHtml(event.description || event.note || '')}</div><div class="mini-row-meta">${escapeHtml(meta)}</div></div><div class="mini-row-value">${amount > 0 ? `${escapeHtml(moneyText(amount))} تومان` : escapeHtml(event.type === 'fuel' && event.liters ? `${formatNumber(event.liters, 1)} لیتر` : '—')}</div></div>`;
+      return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(eventTitle(event))}</div><div class="mini-row-desc">${escapeHtml([event.description, event.note, event.repairDescription, event.symptom].filter(Boolean).join(' · '))}</div><div class="mini-row-meta">${escapeHtml(meta)}</div></div><div class="mini-row-value">${amount > 0 ? `${escapeHtml(moneyText(amount))} تومان` : escapeHtml(event.type === 'fuel' && event.liters ? `${formatNumber(event.liters, 1)} لیتر` : '—')}</div></div>`;
     }).join('') : '<div class="empty-state">هنوز رویدادی ثبت نشده است.</div>';
     const alertsNode = $('#overviewAlerts');
     if (alertsNode) {
@@ -844,7 +864,7 @@
       const alerts = [
         ...due.slice(0, 4).map(item => ({ icon: item.overdue ? '⛔' : '⚠', title: item.label, detail: item.leftKm != null ? `${formatNumber(item.leftKm)} کیلومتر تا موعد` : item.leftDays != null ? `${formatNumber(item.leftDays)} روز تا موعد` : item.stage })),
         ...unpaid.slice(0, 2).map(item => ({ icon: '🚦', title: 'جریمه پرداخت‌نشده', detail: `${moneyText((Number(item.costRial) || 0) / 10)} تومان` })),
-        ...openIssues.slice(0, 2).map(item => ({ icon: '🔧', title: eventTitle(item), detail: item.description || 'نیازمند پیگیری' }))
+        ...openIssues.slice(0, 2).map(item => ({ icon: '🔧', title: eventTitle(item), detail: [item.description, item.note, item.repairDescription, item.symptom].filter(Boolean).join(' · ') || 'نیازمند پیگیری' }))
       ];
       alertsNode.innerHTML = alerts.length ? alerts.slice(0, 6).map(item => `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${item.icon} ${escapeHtml(item.title)}</div><div class="mini-row-meta">${escapeHtml(item.detail)}</div></div></div>`).join('') : '<div class="empty-state">هشدار باز یا سرویس نزدیک موعدی در داده‌های فعلی پیدا نشد.</div>';
     }
@@ -859,7 +879,7 @@
       if (month !== 'all' && eventPersianMonthKey(event) !== month) return false;
       if (actor !== 'all' && String(event.actor || 'من') !== actor) return false;
       if (text) {
-        const haystack = [event.id, event.title, event.description, event.note, event.actor, event.serviceLabel, event.componentName, event.expenseCategory, event.fineLocation, event.ticketNumber, event.odometerKm, event.liters].join(' ').toLocaleLowerCase('fa');
+        const haystack = [event.id, event.title, event.description, event.note, event.repairDescription, event.symptom, event.diagnosis, event.resolution, event.repairAction, event.actor, event.serviceLabel, event.componentName, event.brand, event.model, event.partNumber, event.expenseCategory, event.fineLocation, event.ticketNumber, event.paymentReference, event.odometerKm, event.liters, event.costRial].join(' ').toLocaleLowerCase('fa');
         if (!haystack.includes(text)) return false;
       }
       return true;
@@ -869,25 +889,92 @@
     renderJournal();
   }
   function fuelEstimateForOdometerEvent(event) {
-    if (!event || event.type !== 'odometer' || !(Number(event.deltaSincePreviousKm) > 0)) return null;
-    if (event.fuelEstimateLiters !== null && event.fuelEstimateLiters !== undefined && Number.isFinite(Number(event.fuelEstimateLiters))) {
-      return {
-        fuelLiters: Number(event.fuelEstimateLiters),
-        costToman: event.fuelEstimateCostRial == null ? null : Number(event.fuelEstimateCostRial) / 10,
-        consumptionLPer100: Number(event.fuelEstimateLPer100),
-        confidenceKey: event.fuelEstimateConfidence || 'low',
-        confidenceLabel: event.fuelEstimateConfidenceLabel || 'برآورد اولیه',
-        sampleRefuels: Number(event.fuelEstimateSampleRefuels) || 0,
-        sampleIntervals: Number(event.fuelEstimateSampleIntervals) || 0,
-        sampleDistanceKm: Number(event.fuelEstimateSampleDistanceKm) || 0,
-        priceTomanPerLiter: event.fuelEstimatePriceTomanPerLiter == null ? null : Number(event.fuelEstimatePriceTomanPerLiter)
-      };
-    }
-    if (!state.fuelEngine?.estimateFuelTrip) return null;
-    const at = eventEpoch(event);
-    const prior = state.events.filter(item => item.type === 'fuel' && eventEpoch(item) <= at);
-    return state.fuelEngine.estimateFuelTrip(prior, Number(event.deltaSincePreviousKm), { at });
+    if (!event || event.type !== 'odometer' || !state.fuelEngine?.estimateFuelTrip) return null;
+    const purchaseKm = Number(state.config?.ownership?.purchaseOdometerKm ?? 428000);
+    const dynamicDistance = state.costEngine?.calculateCurrentOdometerDelta
+      ? state.costEngine.calculateCurrentOdometerDelta(state.events, event.id, purchaseKm)
+      : Number(event.deltaSincePreviousKm);
+    if (!(Number(dynamicDistance) > 0)) return null;
+    // Always rebuild from the current refuel ledger. Older stored estimates are
+    // deliberately ignored so a corrected/added fuel record updates every trip.
+    return state.fuelEngine.estimateFuelTrip(state.events, Number(dynamicDistance));
   }
+
+  function eventDescriptionBlocks(event) {
+    const fields = [
+      ['شرح', event.description],
+      ['یادداشت تکمیلی', event.note],
+      ['شرح تعمیر', event.repairDescription],
+      ['علائم', event.symptom || event.symptoms],
+      ['تشخیص', event.diagnosis],
+      ['اقدام انجام‌شده', event.resolution || event.repairAction || event.workDone],
+      ['توضیحات سرویس', event.serviceDetails || event.maintenanceNote],
+      ['توضیحات خرابی', event.issueDetails || event.details],
+      ['دلیل ثبت', event.reason || event.comment],
+      ['توضیحات فاکتور', event.invoiceDescription || event.receiptDescription],
+      ['نام جایگاه سوخت', event.stationName],
+      ['متن ثبت اولیه', event.sourceText || event.sourceMessage]
+    ];
+    const seen = new Set();
+    return fields.filter(([label, value]) => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text || seen.has(text) || text === String(event.title || '').trim()) return false;
+      seen.add(text); return true;
+    }).map(([label, value]) => `<div class="event-entry-description-row"><b>${escapeHtml(label)}:</b><span>${escapeHtml(String(value).trim())}</span></div>`).join('');
+  }
+
+  function eventStructuredDetails(event) {
+    const rows = [];
+    const add = (label, value) => { if (value !== null && value !== undefined && value !== '') rows.push(`<span><b>${escapeHtml(label)}:</b> ${escapeHtml(String(value))}</span>`); };
+    add('سرویس', event.serviceLabel);
+    add('شناسه سرویس', event.serviceKey || event.serviceCatalogKey);
+    add('قطعه', event.componentName || event.componentKey);
+    add('گروه قطعه', event.componentCategory);
+    add('نوع ثبت قطعه', event.componentMode);
+    add('قطعه تعویض‌شده', event.componentReplaced === true ? 'بله' : null);
+    add('برند', event.brand);
+    add('مدل', event.model);
+    add('کد فنی', event.partNumber);
+    add('تعداد', event.quantity);
+    add('دسته هزینه', event.expenseCategory);
+    add('وضعیت', event.status === 'fixed' ? 'رفع‌شده' : event.status === 'open' ? 'باز' : event.status);
+    add('وضعیت پرداخت', event.type === 'fine' ? (event.paid ? 'پرداخت‌شده' : 'پرداخت‌نشده') : null);
+    add('شماره قبض', event.ticketNumber);
+    add('محل جریمه', event.fineLocation);
+    add('شناسه پرداخت', event.paymentReference);
+    add('تاریخ پرداخت', event.paymentDate || event.paidAt);
+    const amountToman = (rial, toman) => Number(rial) > 0 ? Number(rial) / 10 : Number(toman) > 0 ? Number(toman) : null;
+    const officialFine = amountToman(event.officialCurrentAmountRial, event.officialCurrentAmountToman);
+    const paidAmount = amountToman(event.paidAmountRial, event.paidAmountToman);
+    const repairAmount = amountToman(event.repairCostRial, event.repairCostToman);
+    const recordedAmount = amountToman(event.costRial || event.amountRial, event.costToman || event.amountToman);
+    add('مبلغ رسمی جریمه', officialFine == null ? null : `${moneyText(officialFine)} تومان`);
+    add('مبلغ پرداختی', paidAmount == null ? null : `${moneyText(paidAmount)} تومان`);
+    add('هزینه تعمیر', repairAmount == null ? null : `${moneyText(repairAmount)} تومان`);
+    add('مبلغ ثبت‌شده', recordedAmount == null ? null : `${moneyText(recordedAmount)} تومان`);
+    add('راننده مسافت', event.distanceActor);
+    add('لیتر سوخت', event.liters);
+    add('باک کامل', event.type === 'fuel' ? (event.fullTank ? 'بله' : 'خیر / جزئی') : null);
+    add('کیلومتر به‌صورت خودکار ثبت شد', event.odometerAutoAssigned ? 'بله' : null);
+    add('زمان رفع خرابی', event.resolvedAt);
+    if (event.specs && typeof event.specs === 'object') {
+      for (const [key, value] of Object.entries(event.specs)) add(`مشخصات ${key}`, value);
+    }
+    return rows.length ? `<div class="event-entry-structured-details">${rows.join('')}</div>` : '';
+  }
+  function ownershipTripForOdometerEvent(event) {
+    if (!event || event.type !== 'odometer' || !state.costEngine?.calculateVehicleCostModel || !state.costEngine?.calculateCurrentOdometerDelta) return null;
+    const purchaseKm = Number(state.config?.ownership?.purchaseOdometerKm ?? 428000);
+    const distanceKm = state.costEngine.calculateCurrentOdometerDelta(state.events, event.id, purchaseKm);
+    if (!(Number(distanceKm) > 0)) return null;
+    const model = state.costEngine.calculateVehicleCostModel(state.events, {
+      purchaseOdometerKm: purchaseKm,
+      currentOdometerKm: calculateOdometer(state.events),
+      tripDistanceKm: distanceKm
+    });
+    return model?.trip ? { model, trip: model.trip, distanceKm } : null;
+  }
+
   function renderJournal() {
     const node = $('#eventList'); if (!node) return;
     const rows = (state.filtered || state.events).slice(0, state.shown);
@@ -895,10 +982,14 @@
     const icons = { odometer: '⌁', trip: '↗', fuel: '⛽', service: '⚙', part: '🔩', expense: '◈', fine: '🚦', wash: '✦', issue: '⚠', repair: '🔧', note: '≡' };
     node.innerHTML = rows.length ? rows.map(event => {
       const date = event.jalaliDate || eventDateKey(event) || 'تاریخ نامشخص';
-      const detail = event.description || event.note || event.componentName || event.serviceLabel || 'بدون توضیح';
+      const descriptions = eventDescriptionBlocks(event) || '<div class="event-entry-description-row"><b>شرح:</b><span>بدون توضیح ثبت‌شده</span></div>';
+      const structured = eventStructuredDetails(event);
       const metrics = [];
       if (event.odometerKm != null) metrics.push(`${formatNumber(event.odometerKm)} km`);
-      if (event.deltaSincePreviousKm != null && Number(event.deltaSincePreviousKm) > 0) metrics.push(`${formatNumber(event.deltaSincePreviousKm)} km از ثبت قبلی · راننده: ${event.distanceActor || event.actor || 'من'}`);
+      const dynamicDelta = event.type === 'odometer' && state.costEngine?.calculateCurrentOdometerDelta
+        ? state.costEngine.calculateCurrentOdometerDelta(state.events, event.id, Number(state.config?.ownership?.purchaseOdometerKm ?? 428000))
+        : Number(event.deltaSincePreviousKm);
+      if (dynamicDelta != null && Number(dynamicDelta) > 0) metrics.push(`${formatNumber(dynamicDelta)} km از ثبت قبلی · راننده: ${event.distanceActor || event.actor || 'من'}`);
       if (event.distanceKm != null && Number(event.distanceKm) > 0) metrics.push(`${formatNumber(event.distanceKm, 1)} km مسافت`);
       if (event.liters != null && Number(event.liters) > 0) metrics.push(`${formatNumber(event.liters, 1)} لیتر`);
       const amount = expenseAmount(event);
@@ -907,8 +998,12 @@
       if (event.paid === false && event.type === 'fine') metrics.push('پرداخت‌نشده');
       const fuelEstimate = fuelEstimateForOdometerEvent(event);
       const fuelBasis = `${formatNumber(fuelEstimate?.sampleRefuels || 0)} سوخت‌گیری · ${formatNumber(fuelEstimate?.sampleIntervals || 0)} بازه${fuelEstimate?.sampleDistanceKm ? ` · ${formatNumber(fuelEstimate.sampleDistanceKm)} km داده` : ''}`;
-      const fuelEstimateCard = fuelEstimate ? `<div class="event-fuel-estimate confidence-${escapeAttr(fuelEstimate.confidenceKey || 'low')}"><span class="event-fuel-estimate-icon">⛽</span><div class="event-fuel-estimate-copy"><b>برآورد سوخت این پیمایش</b><small>${formatNumber(fuelEstimate.consumptionLPer100, 2)} لیتر/۱۰۰ km · ${escapeHtml(fuelEstimate.confidenceLabel || 'برآورد اولیه')}</small><small>${escapeHtml(fuelBasis)}</small></div><strong>${formatNumber(fuelEstimate.fuelLiters, 2)} لیتر</strong>${fuelEstimate.costToman == null ? '' : `<span class="event-fuel-estimate-cost">≈ ${moneyText(fuelEstimate.costToman)} تومان${fuelEstimate.priceTomanPerLiter ? `<small>${formatNumber(fuelEstimate.priceTomanPerLiter)} تومان/لیتر</small>` : ''}</span>`}</div>` : '';
-      return `<article class="event-entry" data-event-id="${escapeAttr(event.id)}"><div class="event-entry-icon">${icons[event.type] || '•'}</div><div class="event-entry-main"><div class="event-entry-head"><b>${escapeHtml(eventTitle(event))}</b><span class="event-type-pill">${escapeHtml(labels[event.type] || event.type || 'رویداد')}</span></div><p>${escapeHtml(detail)}</p><small>${escapeHtml(date)}${event.time ? ` · ${escapeHtml(event.time)}` : ''} · ${escapeHtml(String(event.id || '').slice(0, 8))}</small><div class="event-entry-metrics">${metrics.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div>${fuelEstimateCard}</div></article>`;
+      const fuelEstimateCard = fuelEstimate ? `<div class="event-fuel-estimate confidence-${escapeAttr(fuelEstimate.confidenceKey || 'low')}"><span class="event-fuel-estimate-icon">⛽</span><div class="event-fuel-estimate-copy"><b>هزینهٔ بنزین این پیمایش · باز‌محاسبه‌شده</b><small>${formatNumber(fuelEstimate.consumptionLPer100, 2)} لیتر/۱۰۰ km · ${escapeHtml(fuelEstimate.confidenceLabel || 'برآورد اولیه')}</small><small>${escapeHtml(fuelBasis)}</small></div><strong>${formatNumber(fuelEstimate.fuelLiters, 2)} لیتر</strong>${fuelEstimate.costToman == null ? '' : `<span class="event-fuel-estimate-cost">≈ ${moneyText(fuelEstimate.costToman)} تومان${fuelEstimate.priceTomanPerLiter ? `<small>${formatNumber(fuelEstimate.priceTomanPerLiter)} تومان/لیتر</small>` : ''}</span>`}</div>` : '';
+      const ownershipEstimate = ownershipTripForOdometerEvent(event);
+      const ownershipTrip = ownershipEstimate?.trip;
+      const ownershipFmt = value => value == null ? '—' : `${moneyText(value)} تومان`;
+      const ownershipCostCard = ownershipTrip ? `<div class="event-ownership-cost confidence-${escapeAttr(ownershipTrip.fuelConfidenceKey || 'low')}"><div class="event-ownership-cost-heading"><b>هزینهٔ جامع این سفر · بنزین + استهلاک + جاری</b><small>${formatNumber(ownershipEstimate.distanceKm)} km · برآورد بر پایهٔ کل سوابق فعلی</small></div><div class="event-ownership-cost-parts"><span>⛽ بنزین: ${ownershipFmt(ownershipTrip.fuelCostToman)}</span><span>🛠️ ذخیرهٔ استهلاک: ${ownershipFmt(ownershipTrip.wearReserveToman)}</span><span>◈ سایر هزینه‌های جاری: ${ownershipFmt(ownershipTrip.otherRunningReserveToman)}</span></div><div class="event-ownership-cost-total"><small>جمع برآورد هزینهٔ عملیاتی سفر · بدون جریمه</small><strong>${ownershipFmt(ownershipTrip.estimatedOperatingCostToman)}</strong><small>${ownershipTrip.estimatedOperatingCostPerKmToman == null ? 'هزینهٔ هر کیلومتر: دادهٔ کافی نیست' : `${ownershipFmt(ownershipTrip.estimatedOperatingCostPerKmToman)} به‌ازای هر کیلومتر`}</small></div></div>` : '';
+      return `<article class="event-entry" data-event-id="${escapeAttr(event.id)}"><div class="event-entry-icon">${icons[event.type] || '•'}</div><div class="event-entry-main"><div class="event-entry-head"><b>${escapeHtml(eventTitle(event))}</b><span class="event-type-pill">${escapeHtml(labels[event.type] || event.type || 'رویداد')}</span></div><div class="event-entry-descriptions">${descriptions}</div>${structured}<small>${escapeHtml(date)}${event.time ? ` · ${escapeHtml(event.time)}` : ''} · ${escapeHtml(String(event.id || '').slice(0, 8))}</small><div class="event-entry-metrics">${metrics.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div>${fuelEstimateCard}${ownershipCostCard}</div></article>`;
     }).join('') : '<div class="empty-state">با فیلتر فعلی رویدادی پیدا نشد. فیلترها را تغییر بده یا داده‌های تلگرام را بررسی کن.</div>';
     const more = $('#loadMoreButton'); if (more) more.hidden = rows.length >= (state.filtered || state.events).length;
   }
@@ -992,7 +1087,43 @@
       catNode.innerHTML = catRows.length ? catRows.slice(0, 12).map(([name, value]) => `<div class="category-breakdown-row"><div><b>${escapeHtml(name)}</b><span>${moneyText(value)} تومان</span></div><div class="category-track"><i style="width:${(value / max * 100).toFixed(1)}%"></i></div></div>`).join('') : '<div class="empty-state">با ثبت هزینه‌ها دسته‌ها نمایش داده می‌شوند.</div>';
     }
     const list = $('#expenseEventList');
-    if (list) list.innerHTML = rows.length ? rows.slice(0, 20).map(event => `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(eventTitle(event))}</div><div class="mini-row-desc">${escapeHtml(event.description || event.note || '')}</div><div class="mini-row-meta">${escapeHtml(event.jalaliDate || expenseDate(event))} · ${escapeHtml(event.expenseCategory || event.actor || '—')}</div></div><div class="mini-row-value">${moneyText(expenseAmount(event) / 10)} تومان</div></div>`).join('') : '<div class="empty-state">هزینه‌ای ثبت نشده است.</div>';
+    if (list) list.innerHTML = rows.length ? rows.slice(0, 20).map(event => `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(eventTitle(event))}</div><div class="mini-row-desc">${escapeHtml([event.description, event.note].filter(Boolean).join(' · '))}</div><div class="mini-row-meta">${escapeHtml(event.jalaliDate || expenseDate(event))} · ${escapeHtml(event.expenseCategory || event.actor || '—')}</div></div><div class="mini-row-value">${moneyText(expenseAmount(event) / 10)} تومان</div></div>`).join('') : '<div class="empty-state">هزینه‌ای ثبت نشده است.</div>';
+    renderOwnershipCostModel();
+  }
+
+  function renderOwnershipCostModel() {
+    if (!$('#ownershipCostPerKm')) return;
+    const distanceInput = Number($('#ownershipTripDistanceInput')?.value);
+    const tripDistance = Number.isFinite(distanceInput) && distanceInput > 0 ? Math.min(distanceInput, 5000) : 100;
+    const model = state.costEngine?.calculateVehicleCostModel
+      ? state.costEngine.calculateVehicleCostModel(state.events, {
+          purchaseOdometerKm: Number(state.config?.ownership?.purchaseOdometerKm ?? 428000),
+          currentOdometerKm: calculateOdometer(state.events),
+          tripDistanceKm: tripDistance
+        }) : null;
+    if (!model) return;
+    const fmt = value => value == null ? '—' : `${moneyText(value)} تومان`;
+    safeText('#ownershipCostTotal', fmt(model.totalRecordedToman));
+    safeText('#ownershipCostPerKm', model.operatingCostPerKmToman == null ? '—' : `${moneyText(model.operatingCostPerKmToman)} تومان/km`);
+    safeText('#ownershipRecordedCostPerKm', model.recordedOperatingCostPerKmToman == null ? '—' : `${moneyText(model.recordedOperatingCostPerKmToman)} تومان/km`);
+    safeText('#ownershipWearPerKm', fmt(model.wearCostPerKmToman));
+    safeText('#ownershipAllRecordedCostPerKm', model.allRecordedCostPerKmToman == null ? '—' : `${moneyText(model.allRecordedCostPerKmToman)} تومان/km`);
+    safeText('#ownershipCostDistance', `${formatNumber(model.distanceKm, 1)} km · ${model.distanceBasis}`);
+    safeText('#ownershipFuelHistorical', fmt(model.totalFuelToman));
+    safeText('#ownershipWearHistorical', fmt(model.totalWearToman));
+    safeText('#ownershipOtherHistorical', fmt(model.totalOtherToman));
+    safeText('#ownershipFinesHistorical', fmt(model.totalPaidFinesToman));
+    safeText('#ownershipFinesUnpaid', fmt(model.unpaidFinesToman));
+    safeText('#ownershipCostCoverage', `${formatNumber(model.includedCostCount)} مبلغ وارد محاسبه · ${formatNumber(model.unpricedEventCount)} رویداد بدون مبلغ · ${formatNumber(model.skippedGroupedSummaryCount)} جمع تکراری گروه تعمیر حذف شد`);
+    safeText('#ownershipTripHeading', `${formatNumber(tripDistance)} کیلومتر`);
+    safeText('#ownershipTripFuel', model.trip?.fuelCostToman == null ? 'دادهٔ سوخت کافی نیست' : fmt(model.trip.fuelCostToman));
+    safeText('#ownershipTripWear', model.trip?.wearReserveToman == null ? '—' : fmt(model.trip.wearReserveToman));
+    safeText('#ownershipTripOther', model.trip?.otherRunningReserveToman == null ? '—' : fmt(model.trip.otherRunningReserveToman));
+    safeText('#ownershipTripTotal', model.trip?.estimatedOperatingCostToman == null ? '—' : fmt(model.trip.estimatedOperatingCostToman));
+    safeText('#ownershipTripPerKm', model.trip?.estimatedOperatingCostPerKmToman == null ? 'برای محاسبه دادهٔ بیشتری لازم است' : `${fmt(model.trip.estimatedOperatingCostPerKmToman)} به‌ازای هر کیلومتر`);
+    const price = model.trip?.fuelPriceTomanPerLiter;
+    safeText('#ownershipFuelRate', price == null ? 'نرخ ثبت‌شده پیدا نشد' : `${formatNumber(price, 0)} تومان/لیتر · نرخ موزون سوخت‌گیری‌های اخیر`);
+    safeText('#ownershipCostFormula', `بنزین هر km = ${model.fuelCostPerKmToman == null ? '—' : fmt(model.fuelCostPerKmToman)} (${model.fuelCostPerKmBasis})؛ استهلاک/نگهداری هر km = ${fmt(model.wearCostPerKmToman)}؛ هزینهٔ عملیاتی مدل‌شده هر km = ${(model.operatingCostPerKmToman == null ? '—' : fmt(model.operatingCostPerKmToman))}. میانگین واقعی پرداخت‌های ثبت‌شده هر km جداست. جریمه‌های پرداخت‌شده در تاریخچه می‌آیند اما در سفر پیش‌بینی‌شده سرشکن نمی‌شوند.`);
   }
   function renderTrafficDetails() {
     const unpaid = state.events.filter(event => event.type === 'fine' && !event.paid).sort((a, b) => eventEpoch(b) - eventEpoch(a));
@@ -1190,7 +1321,7 @@
       .map(({ event }) => ({
         id: String(event.id || ''),
         title: String(eventTitle(event) || event.type || 'رویداد'),
-        description: String(event.description || event.note || event.componentName || event.serviceLabel || ''),
+        description: [event.description, event.note, event.repairDescription, event.symptom, event.diagnosis].filter(Boolean).join(' · ') || String(event.componentName || event.serviceLabel || ''),
         actor: String(event.actor || 'من'),
         type: String(typeLabels[event.type] || event.type || 'رویداد'),
         date: String(event.jalaliDate || eventDateKey(event) || ''),

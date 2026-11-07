@@ -73,3 +73,16 @@ test('invalid odometer spans and implausible partial-fill rates are excluded', (
   assert.equal(model.hasEstimate, false);
   assert.equal(estimateFuelTrip(events, 50), null);
 });
+
+
+test('weighted fuel price also supports imported Toman-denominated refuel records', () => {
+  const events = [
+    { id: 'a', type: 'fuel', occurredAt: '2026-10-01T10:00:00+03:30', odometerKm: 1000, liters: 40, costToman: 60000 },
+    { id: 'b', type: 'fuel', occurredAt: '2026-10-10T10:00:00+03:30', odometerKm: 1200, liters: 40, amountToman: 64000 }
+  ];
+  const model = calculateFuelModel(events);
+  assert.equal(model.priceTomanPerLiter, 1550);
+  const trip = estimateFuelTrip(events, 100);
+  assert.equal(trip.priceTomanPerLiter, 1550);
+  assert.equal(trip.costToman, trip.fuelLiters * 1550);
+});

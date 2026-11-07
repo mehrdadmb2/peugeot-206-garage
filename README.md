@@ -169,6 +169,7 @@ flowchart TD
 | `/note` | 📝 ثبت یادداشت خودرو | `/note inspect tires next visit` |
 | `/latest` | 🧾 نمایش آخرین رویدادها | `/latest` |
 | `/fuelstats` | ⛽ گزارش مصرف و هزینهٔ سوخت | `/fuelstats` |
+| `/costs` | 💳 هزینهٔ مالکیت، استهلاک و هزینهٔ واقعی/مدل‌شدهٔ هر کیلومتر | `/costs 100` |
 | `/detail` | 🔎 مشاهدهٔ جزئیات رویداد و دکمه‌های مدیریت | `/detail a1b2c3d4` |
 | `/edit` | ✏️ ویرایش فیلدهای پشتیبانی‌شده | `/edit a1b2c3d4 شخص=بابام \| توضیح=سفر` |
 | `/annotate` | 🗒 افزودن/اصلاح توضیح تکمیلی | `/annotate a1b2c3d4 سفر خانوادگی` |
@@ -575,7 +576,7 @@ npm run check
 - Record a breakdown without an odometer, e.g. `ماشین خراب شد و روشن نمی‌شود`. When a previous odometer exists, the Worker attaches the latest known reading and labels it as automatically inherited in the confirmation. Correct it if the actual failure mileage differs.
 - Measure real fuel economy with two consecutive full-tank records and odometer readings. The dashboard charts every valid full-to-full segment and shows the weighted L/100 km average. Intermediate partial refuels are included in the liters total between full-tank anchors.
 - The analytics page contains a stacked timeline chart of mileage by driver for the selected time buckets. Historical mileage without a reliable timestamp is not fabricated into a specific hour/day.
-- Run `/fuelstats` for the detailed fuel report.
+- Run `/fuelstats` for the fuel-only report and `/costs 100` for total ownership cost, wear reserve, dynamic fuel pricing and a 100 km trip estimate.
 
 
 ## 🧠 نسخهٔ 3.9.0 · فهم بهتر پیام و دیکشنری تعمیرگاه
@@ -609,3 +610,46 @@ npm run check
 ## Private Vehicle Documents (v3.13.0)
 
 Vehicle registration, driving-license, plate, insurance and technical-inspection data are served from a private Cloudflare KV namespace. Do not add raw ID photos, national IDs, engine/chassis numbers, policy numbers or the private seed JSON to this public repository. Set `DOCUMENTS_ACCESS_TOKEN` and `VEHICLE_DOCUMENTS_JSON` as Worker secrets and bind `GARAGE_PRIVATE_KV`. The dashboard asks for the access token and does not persist it in localStorage. Telegram `/documents` and `/insurance` are restricted by `ALLOWED_TELEGRAM_USER_ID` and only return sensitive details in a private one-to-one chat; group chats receive no document data. The license categories and the historical plate printed on the technical-inspection report are kept as separate source fields. The insurance photo was not present in the supplied archive, so policy details remain blank until entered from the actual policy.
+
+## 🚀 نسخهٔ 3.18.0 · Journal Detail & Ownership Cost Intelligence
+
+### دفتر وقایع کامل‌تر
+
+- شرح اصلی، یادداشت تکمیلی، شرح تعمیر، علائم، تشخیص، اقدام انجام‌شده، اطلاعات فاکتور و فیلدهای تکمیلی هر رویداد به‌صورت جداگانه نمایش داده می‌شوند؛ وجود `description` عمومی دیگر باعث پنهان‌شدن `note` یا `repairDescription` نمی‌شود.
+- جزئیات ساختاریافته مانند راننده، کیلومتر، فاصلهٔ بازه، لیتر، باک کامل/جزئی، قطعه، برند، مدل، کد فنی، تعداد، وضعیت تعمیر و وضعیت پرداخت در کارت رویداد دیده می‌شوند.
+- برآورد هر رویداد کیلومتر از کل سوابق فعلی دوباره محاسبه می‌شود؛ مقادیر تخمینی قدیمی ذخیره‌شده، مبنای قطعی قرار نمی‌گیرند.
+
+### مدل هزینه و استهلاک
+
+- موتور مشترک `assets/js/vehicle-cost-intelligence.mjs` در داشبورد، Snapshot گیت‌هاب، و Worker استفاده می‌شود تا فرمول‌ها در هر سه مسیر یکسان باشند.
+- مبالغ خام ریال‌اند و در نمایش به تومان تبدیل می‌شوند. فیلدهای واردشده با ریال یا تومان (از جمله `cost`, `amount`, `repairCost` و مبلغ پرداختی جریمه) نرمال می‌شوند.
+- **مصرف باک‌کامل:** از مجموع لیترهای سوخت‌گیری‌شده بین دو نقطهٔ باک‌کامل، با احتساب توقف‌های جزئی، تقسیم بر اختلاف کیلومترشمار و ضرب در ۱۰۰ محاسبه می‌شود. سوخت‌گیری‌های میان این دو نقطه دوباره‌شماری نمی‌شوند.
+- **مصرف تخمینی جزئی:** وقتی دو نقطهٔ باک‌کامل وجود ندارد، از لیتر ثبت‌شده در سوخت‌گیری متوالی و اختلاف کیلومتر استفاده می‌شود. این تخمین به‌دلیل نامشخص‌بودن سطح اولیه/نهایی باک، با اطمینان پایین‌تر نمایش داده می‌شود.
+- **قیمت خودکار بنزین:** میانگین وزنی حداکثر پنج سوخت‌گیری قیمت‌دار اخیر است: `مجموع مبلغ سوخت‌گیری‌ها ÷ مجموع لیترها`. اگر هیچ قیمت معتبری ثبت نشده باشد، سیستم نرخ فرضی تولید نمی‌کند.
+- **هزینهٔ بنزین هر کیلومتر:** `مصرف مدل‌شده (L/100km) × نرخ تومان/لیتر ÷ 100`.
+- **ذخیرهٔ استهلاک عملیاتی هر کیلومتر:** جمع هزینه‌های قطعه، سرویس، تعمیر و اجرت ثبت‌شده تقسیم بر مسافت از کیلومتر خرید تا کیلومتر فعلی.
+- **سایر هزینه‌های جاری هر کیلومتر:** مجموع مخارج جاریِ پرداخت‌شدهٔ ثبت‌شده تقسیم بر همان مسافت.
+- **هزینهٔ عملیاتی مدل‌شده هر کیلومتر:** هزینهٔ بنزین مدل‌شده + ذخیرهٔ استهلاک/نگهداری + سایر هزینه‌های جاری.
+- **برآورد هزینهٔ سفر:** `مسافت سفر × هزینهٔ عملیاتی مدل‌شده هر کیلومتر`. کارت قدیمیِ بنزین‌تنها نیز مستقل باقی است.
+- **میانگین واقعی مخارج عملیاتی هر کیلومتر** جدا از مدل پیش‌بینی نمایش داده می‌شود. همچنین کل پرداخت‌های تاریخی با احتساب جریمه‌های پرداخت‌شده، نرخ جداگانه دارد.
+- جریمهٔ پرداخت‌شده در تاریخچهٔ کل پرداخت‌ها حساب می‌شود، اما در هزینهٔ سفر آینده سرشکن نمی‌شود. جریمهٔ پرداخت‌نشده به‌عنوان بدهی جدا می‌ماند.
+- در مراجعهٔ تعمیرگاهیِ چندردیفی، اگر هزینهٔ ریز قطعات/اجرت موجود باشد، مبلغ جمعِ ردیف والد دوباره شمرده نمی‌شود.
+- سوابق بدون مبلغ حذف یا با عدد حدسی پر نمی‌شوند؛ تعداد آن‌ها به‌عنوان «رویداد بدون مبلغ» گزارش می‌شود تا بعداً قابل تکمیل باشند.
+
+### محدودیت‌های تفسیر عددها
+
+- این مدل «استهلاک عملیاتی» را از مخارج واقعی ثبت‌شده می‌سازد؛ افت ارزش بازار خودرو نیست. برای محاسبهٔ افت ارزش بازار، قیمت خرید و ارزش روز معتبر خودرو لازم است.
+- مخارج تاریخی با مبلغ اسمی ثبت‌شده جمع می‌شوند و فعلاً تعدیل تورمی ندارند؛ بنابراین نرخ نگهداری هر کیلومتر میانگین تاریخی است، نه پیش‌بینی قیمت قطعه در بازار امروز.
+- دقت مصرف جزئی به سطح بنزین داخل باک وابسته است. ثبت چند نوبت باک‌کامل، کیفیت مدل را افزایش می‌دهد.
+
+### گزارش تلگرام
+
+- `/costs` گزارش کل هزینهٔ مالکیت، تفکیک سوخت/استهلاک/سایر هزینه‌ها، میانگین‌های هر کیلومتر، جریمه‌های پرداخت‌شده و بدهی باز را می‌فرستد.
+- `/costs 100` هزینهٔ یک سفر ۱۰۰ کیلومتری را برآورد می‌کند؛ عدد را می‌توان مثلاً با `/costs 350` تغییر داد.
+- `/fuelstats` گزارش مستقل و قبلیِ مصرف و هزینهٔ بنزین را حفظ می‌کند.
+
+### بازسازی خودکار محاسبات
+
+- هر بار که سوابق خام تغییر کنند، workflow ساخت داشبورد Snapshot را با `calculationVersion: 4` از نو می‌سازد.
+- اگر Snapshot قدیمی باشد، مرورگر آن را رد می‌کند و از داده‌های خام دوباره محاسبه می‌کند؛ داشبورد در زمان بازگشت به تب و به‌صورت دوره‌ای نیز داده‌ها را تازه‌سازی می‌کند.
+- Worker در اجرای `/costs` و پاسخ ثبت کیلومتر، کل سوابق موجود را دوباره می‌خواند و موتور مشترک را اجرا می‌کند.

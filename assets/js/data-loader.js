@@ -153,8 +153,8 @@
         !Array.isArray(snapshot.computed.distanceEntries)) {
       throw new Error('محاسبات داخل dashboard.json ناقص یا ناسازگار است.');
     }
-    if (Number(snapshot.computed.calculationVersion) !== 2) {
-      throw new Error('نسخهٔ محاسبات Snapshot قدیمی است؛ نسخهٔ فعلی باید ۲ باشد. دادهٔ خام دوباره محاسبه می‌شود.');
+    if (Number(snapshot.computed.calculationVersion) !== 4) {
+      throw new Error('نسخهٔ محاسبات Snapshot قدیمی است؛ نسخهٔ فعلی باید ۳ باشد. دادهٔ خام دوباره محاسبه می‌شود.');
     }
     if (!snapshot.months.every(month => /^\d{4}-\d{2}$/.test(String(month)))) {
       throw new Error('فهرست ماه‌ها در dashboard.json نامعتبر است.');

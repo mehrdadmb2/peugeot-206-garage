@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import * as fuelEngine from '../../assets/js/fuel-intelligence.mjs';
+import * as costEngine from '../../assets/js/vehicle-cost-intelligence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const appSource = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
@@ -29,7 +30,7 @@ class FakeElement {
     this.style = {};
     this.classList = new FakeClassList();
     this.attributes = {};
-    this.value = selector === '#searchInput' ? '' : selector === '#fuelTripDistanceInput' ? '40' : 'all';
+    this.value = selector === '#searchInput' ? '' : (selector === '#fuelTripDistanceInput' || selector === '#ownershipTripDistanceInput') ? '40' : 'all';
     this.hidden = false;
     this.tagName = selector.startsWith('#') ? 'DIV' : String(selector).toUpperCase();
     this.textContent = '';
@@ -78,7 +79,7 @@ test('real project snapshot boots the app and all dashboard sections render with
     document, location: { href: 'https://garage.test/' },
     navigator: { onLine: true, language: 'fa-IR' },
     GarageDataLoader: { load: async () => dataset },
-    __fuelEngine: fuelEngine,
+    __fuelEngine: fuelEngine, __costEngine: costEngine,
     GarageDiagnostics: {
       log: (...entry) => diagnosticEntries.push(entry),
       setContext: context => diagnosticEntries.push(['context', context])
@@ -95,7 +96,7 @@ test('real project snapshot boots the app and all dashboard sections render with
     matchMedia: () => ({ matches: false }), requestAnimationFrame: callback => callback()
   };
 
-  const appWithFuelEngine = appSource.replace("await import('./fuel-intelligence.mjs')", 'window.__fuelEngine');
+  const appWithFuelEngine = appSource.replace("await import('./fuel-intelligence.mjs')", 'window.__fuelEngine').replace("await import('./vehicle-cost-intelligence.mjs')", 'window.__costEngine');
   vm.runInNewContext(appWithFuelEngine, sandbox, { filename: 'assets/js/app.js' });
   listeners.get('DOMContentLoaded')?.();
   await new Promise(resolveWait => setTimeout(resolveWait, 20));
@@ -112,11 +113,11 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelOnlyChart')?.innerHTML || '', /۳۵/);
   assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
   assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۷۸۷ km/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳۲۵ km از تعویض/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۶۷۵ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۴۱۳ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۲۱۳ km مانده/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۸۷۷ km/);
+  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۴۱۵ km از تعویض/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۵۸۵ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۳۲۳ km مانده/);
+  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۱۲۳ km مانده/);
   assert.doesNotMatch(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۴۱۶ km عبور از موعد/);
   assert.ok((elements.get('#componentCatalog')?.innerHTML || '').length > 1000, 'part catalog should be populated');
   assert.ok((elements.get('#serviceCatalogGrid')?.innerHTML || '').length > 500, 'service catalog should be populated');
@@ -126,9 +127,14 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelEstimateRate')?.textContent || '', /۹٫۱۹ L\/100km/);
   assert.match(elements.get('#fuelEstimateLiters')?.textContent || '', /۳٫۶۷ لیتر/);
   assert.match(elements.get('#fuelEstimateCost')?.textContent || '', /۵٬۵۱۲ تومان/);
-  assert.match(elements.get('#eventList')?.innerHTML || '', /برآورد سوخت این پیمایش/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /هزینهٔ بنزین این پیمایش/);
   assert.match(elements.get('#eventList')?.innerHTML || '', /۳٫۶۷ لیتر/);
   assert.match(elements.get('#eventList')?.innerHTML || '', /۵٬۵۱۲ تومان/);
+  assert.match(elements.get('#eventList')?.innerHTML || '', /event-ownership-cost/);
+  assert.ok((elements.get('#ownershipCostTotal')?.textContent || '').includes('تومان'), 'ownership costs must be recalculated from actual costs');
+  assert.ok((elements.get('#ownershipAllRecordedCostPerKm')?.textContent || '').includes('تومان'), 'all paid costs including fines must have a separate historical per-km metric');
+  assert.ok((elements.get('#ownershipTripTotal')?.textContent || '').includes('تومان'), 'trip calculator must render an estimated total');
+  assert.ok((elements.get('#ownershipRecordedCostPerKm')?.textContent || '').includes('تومان/km'), 'historical paid cost per kilometre must be shown separately from the modeled rate');
   assert.match(elements.get('#specVehicleNameHero')?.textContent || '', /Peugeot 206 SD/);
   assert.match(elements.get('#specEngineIdentity')?.textContent || '', /TU3/);
   assert.match(elements.get('#eventList')?.innerHTML || '', /km داده/);
@@ -142,4 +148,11 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.equal(window.GarageApp.openEvent(String(sampleEvent.id)), true, 'global search result should open the matching journal event');
   assert.equal(elements.get('#searchInput')?.value, String(sampleEvent.id));
   assert.match(elements.get('#eventList')?.innerHTML || '', new RegExp(`data-event-id=\"${String(sampleEvent.id)}\"`));
+
+  const eventWithNote = snapshot.events.find(event => typeof event.note === 'string' && event.note.trim());
+  assert.ok(eventWithNote, 'the real dataset must contain an event with a separate explanatory note');
+  assert.equal(window.GarageApp.openEvent(String(eventWithNote.id)), true, 'an event with a note must be directly navigable');
+  const noteJournal = elements.get('#eventList')?.innerHTML || '';
+  assert.match(noteJournal, /یادداشت تکمیلی/);
+  assert.ok(noteJournal.includes(eventWithNote.note), 'journal must render the actual note, not replace it with the generic description');
 });

@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.17.0");
+ assert.equal(body.version, "3.18.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.17.0");
+ assert.equal(body.version, "3.18.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -1127,4 +1127,51 @@ test("scheduled private-document expiry reminders notify once per 30/14/7-day st
   const second=await call(); const secondBody=await second.json();
   assert.equal(secondBody.ok,true); assert.equal(secondBody.documentSent,0); assert.equal(sent.length,1);
  } finally { globalThis.fetch=originalFetch; }
+});
+
+test("/costs calculates comprehensive ownership cost and a trip while keeping the fuel rate dynamic", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: "2026-11-07T10:00:00+03:30", months: ["2026-11"] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 431000, defaultActor: "من" }, people: [], serviceIntervals: {} })],
+  ["data/logs/2026-11.json", JSON.stringify({ schemaVersion: 1, month: "2026-11", events: [
+   { id: "odo-cost-0001", type: "odometer", odometerKm: 431500, occurredAt: "2026-11-01T08:00:00+03:30", date: "2026-11-01" },
+   { id: "fuel-cost-0001", type: "fuel", liters: 20, costRial: 3000000, odometerKm: 431100, fullTank: false, occurredAt: "2026-11-01T09:00:00+03:30", date: "2026-11-01" },
+   { id: "fuel-cost-0002", type: "fuel", liters: 20, costRial: 4000000, odometerKm: 431300, fullTank: false, occurredAt: "2026-11-03T09:00:00+03:30", date: "2026-11-03" },
+   { id: "part-cost-0001", type: "part", componentName: "باتری", costRial: 5000000, occurredAt: "2026-11-04T09:00:00+03:30", date: "2026-11-04" },
+   { id: "service-cost-0001", type: "service", serviceLabel: "سرویس", costRial: 1000000, occurredAt: "2026-11-05T09:00:00+03:30", date: "2026-11-05" },
+   { id: "fine-open-0001", type: "fine", paid: false, costRial: 9000000, occurredAt: "2026-11-05T10:00:00+03:30", date: "2026-11-05" }
+  ] })]
+ ]);
+ const sentMessages = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.github.com") {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   const content = files.get(path);
+   if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sentMessages.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sentMessages.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response(`unexpected upstream ${url.hostname}${url.pathname}`, { status: 500 });
+ };
+ try {
+  const response = await worker.fetch(new Request("https://unit.test/telegram", {
+   method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "test-secret" },
+   body: JSON.stringify({ update_id: 999, message: { message_id: 9, date: Math.floor(Date.now()/1000), text: "/costs 100", from: { id: 42 }, chat: { id: 101 } } })
+  }), { TELEGRAM_WEBHOOK_SECRET: "test-secret", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-telegram-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
+  assert.equal(response.status, 200);
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0].text, /گزارش جامع هزینه و استهلاک خودرو/);
+  assert.match(sentMessages[0].text, /هزینه عملیاتی مدل‌شده \(سوخت \+ نگهداری \+ سایر\)/);
+  assert.match(sentMessages[0].text, /برآورد سفر ۱۰۰ کیلومتری/);
+  assert.match(sentMessages[0].text, /ذخیره استهلاک و نگهداری/);
+  assert.match(sentMessages[0].text, /نرخ بنزین مبنا/);
+  assert.match(sentMessages[0].text, /هزینه‌های بدون مبلغ وارد جمع نشده‌اند/);
+ } finally {
+  globalThis.fetch = originalFetch;
+ }
 });

@@ -52,9 +52,9 @@ function payloadFor(url) {
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
   assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.14\.0-private-documents/);
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.14\.0-private-documents/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.17\.0/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.14\.0-private-documents/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.18\.0/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.18\.0/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.18\.0/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
@@ -139,7 +139,7 @@ test('browser data loader ignores a stale Action snapshot and recalculates curre
 
 test('browser data loader rejects an old calculator snapshot and recalculates raw source data', async () => {
   const oldSnapshot = freshSnapshot();
-  delete oldSnapshot.computed.calculationVersion;
+  oldSnapshot.computed.calculationVersion = 3;
   const loader = createLoader(async url => {
     if (new URL(url).pathname.endsWith('/data/dashboard.json')) return jsonResponse(oldSnapshot);
     return jsonResponse(payloadFor(url));
