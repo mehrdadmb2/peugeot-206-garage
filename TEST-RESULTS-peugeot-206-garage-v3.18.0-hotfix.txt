@@ -1,0 +1,28 @@
+Peugeot 206 Garage v3.18.0 — CI Hotfix Validation
+Date: 2026-11-07
+Runtime: Node.js v22
+
+Root cause:
+The dashboard-render smoke test hard-coded mileage values from an older dashboard snapshot. The build workflow regenerated the snapshot to 431,903 km (3,903 km since purchase), then failed the stale assertion expecting 3,877 km. Additional hard-coded assertions for distance since replacement and service-remaining distances were stale as well.
+
+Fixes:
+- Derive driven-since-purchase from snapshot currentOdometerKm minus configured purchase baseline.
+- Derive distance since latest replaced part from the current snapshot event timeline.
+- Derive engine oil, air filter, and spark plug service remaining distances from actual intervals and latest valid service/replacement events.
+- Trigger Build Dashboard workflow when worker/tests/** or worker/test/** changes.
+- Regenerated data/dashboard.json from source logs.
+
+Validation:
+- JavaScript syntax checks: PASS
+- npm run check --prefix worker: PASS
+- npm test --prefix worker: PASS (89 passed, 0 failed)
+- node worker/test/smoke.mjs: PASS
+- Snapshot validation: PASS
+
+Snapshot:
+- Events: 45
+- Months: 2
+- Current odometer: 431,903 km
+- Part catalog items: 62
+
+No Worker source code, API behavior, secrets, KV bindings, or Wrangler configuration were changed. Cloudflare redeployment is not required for this CI-only hotfix.

@@ -113,11 +113,60 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelOnlyChart')?.innerHTML || '', /۳۵/);
   assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
   assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۳٬۸۷۷ km/);
-  assert.match(elements.get('#serviceReconciliation')?.textContent || '', /۴۱۵ km از تعویض/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱۹٬۵۸۵ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۹٬۳۲۳ km مانده/);
-  assert.match(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۱۲۳ km مانده/);
+  const purchaseOdometerKm = Number(
+    snapshot.config?.ownership?.purchaseOdometerKm ??
+    snapshot.config?.ownership?.baselineOdometerKm ??
+    snapshot.config?.vehicle?.purchaseOdometerKm ??
+    428000
+  );
+  const currentOdometerKm = Number(snapshot.computed?.currentOdometerKm);
+  const drivenSincePurchaseKm = currentOdometerKm - purchaseOdometerKm;
+  assert.ok(Number.isFinite(drivenSincePurchaseKm) && drivenSincePurchaseKm >= 0,
+    'snapshot must provide a valid current odometer at or above the purchase baseline');
+  const expectedDrivenLabel = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(drivenSincePurchaseKm);
+  assert.ok(
+    (elements.get('#serviceReconciliation')?.textContent || '').includes(`${expectedDrivenLabel} km`),
+    `service reconciliation must reflect the current snapshot distance (${expectedDrivenLabel} km)`
+  );
+  const snapshotEventEpoch = event => {
+    const value = event?.occurredAt || (event?.date ? `${String(event.date).slice(0, 10)}T${event?.time || '12:00'}:00+03:30` : event?.createdAt);
+    const parsed = Date.parse(value || '');
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const latestReplacement = snapshot.events
+    .filter(event => event.type === 'part' && event.componentReplaced === true && event.odometerKm !== null && event.odometerKm !== undefined && Number.isFinite(Number(event.odometerKm)))
+    .sort((a, b) => snapshotEventEpoch(b) - snapshotEventEpoch(a))[0];
+  assert.ok(latestReplacement, 'snapshot must contain at least one recorded replacement for the reconciliation test');
+  const kmSinceLatestReplacement = Math.max(0, currentOdometerKm - Number(latestReplacement.odometerKm));
+  const expectedReplacementDistance = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(kmSinceLatestReplacement);
+  assert.ok(
+    (elements.get('#serviceReconciliation')?.textContent || '').includes(`${expectedReplacementDistance} km از تعویض`),
+    `service reconciliation must calculate distance since the latest actual replacement (${expectedReplacementDistance} km)`
+  );
+  const serviceGridHtml = elements.get('#serviceGrid')?.innerHTML || '';
+  const remainingServiceKm = key => {
+    const service = snapshot.config?.serviceIntervals?.[key];
+    assert.ok(service, `service interval ${key} must exist in the real vehicle configuration`);
+    const matchingEvents = snapshot.events.filter(event => {
+      const matches = [event.serviceKey, event.componentKey, event.serviceCatalogKey].filter(Boolean).includes(key);
+      if (!matches) return false;
+      if (event.type === 'service') return true;
+      if (event.type === 'part') return event.componentReplaced === true;
+      if (event.type === 'repair') return event.status !== 'open';
+      if (event.type === 'issue') return event.status === 'fixed' && Boolean(event.componentReplaced || event.componentKey || event.serviceKey || event.serviceCatalogKey);
+      return false;
+    }).sort((a, b) => snapshotEventEpoch(b) - snapshotEventEpoch(a));
+    const rawReferenceOdometer = matchingEvents[0]?.odometerKm;
+    const referenceOdometer = rawReferenceOdometer !== null && rawReferenceOdometer !== undefined && Number.isFinite(Number(rawReferenceOdometer))
+      ? Number(rawReferenceOdometer)
+      : purchaseOdometerKm;
+    return Math.round(referenceOdometer + Number(service.intervalKm || 0) - currentOdometerKm);
+  };
+  for (const key of ['spark_plugs', 'air_filter', 'engine_oil']) {
+    const expectedRemaining = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(remainingServiceKm(key));
+    assert.ok(serviceGridHtml.includes(`${expectedRemaining} km مانده`),
+      `${key} card must reflect the latest event and current odometer (${expectedRemaining} km remaining)`);
+  }
   assert.doesNotMatch(elements.get('#serviceGrid')?.innerHTML || '', /۱٬۴۱۶ km عبور از موعد/);
   assert.ok((elements.get('#componentCatalog')?.innerHTML || '').length > 1000, 'part catalog should be populated');
   assert.ok((elements.get('#serviceCatalogGrid')?.innerHTML || '').length > 500, 'service catalog should be populated');
