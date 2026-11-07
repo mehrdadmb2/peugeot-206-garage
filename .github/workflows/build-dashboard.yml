@@ -11,6 +11,7 @@ on:
       - 'index.html'
       - 'assets/js/app.js'
       - 'assets/js/fuel-intelligence.mjs'
+      - 'assets/js/vehicle-cost-intelligence.mjs'
       - 'worker/src/index.js'
       - 'assets/js/persian-calendar.cjs'
       - 'scripts/build-dashboard.test.mjs'
@@ -58,6 +59,7 @@ jobs:
         run: |
           node --check assets/js/app.js
           node --check assets/js/fuel-intelligence.mjs
+          node --check assets/js/vehicle-cost-intelligence.mjs
           node --check assets/js/experience.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
