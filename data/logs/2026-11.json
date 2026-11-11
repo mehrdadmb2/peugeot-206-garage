@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-11T19:12:00+03:30",
+  "updatedAt": "2026-11-11T19:13:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -954,8 +954,8 @@
       "description": "بنزین 24.89 لیتر قیمت 1500 تومان km 431995",
       "actor": "من",
       "note": "",
-      "updatedAt": "2026-11-11T19:12:00+03:30",
-      "revision": 2,
+      "updatedAt": "2026-11-11T19:13:00+03:30",
+      "revision": 3,
       "editHistory": [
         {
           "at": "2026-11-11T19:12:00+03:30",
@@ -965,6 +965,16 @@
           },
           "after": {
             "odometerKm": 431955
+          }
+        },
+        {
+          "at": "2026-11-11T19:13:00+03:30",
+          "by": "telegram",
+          "before": {
+            "costRial": 15000
+          },
+          "after": {
+            "costRial": 373350
           }
         }
       ],
@@ -976,7 +986,7 @@
       "odometerKm": 431955,
       "distanceKm": null,
       "liters": 24.89,
-      "costRial": 15000,
+      "costRial": 373350,
       "serviceKey": null,
       "serviceLabel": null,
       "serviceCatalogKey": null,
