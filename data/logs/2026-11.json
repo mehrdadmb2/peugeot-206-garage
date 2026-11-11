@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-11T05:48:00+03:30",
+  "updatedAt": "2026-11-11T17:32:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -946,6 +946,56 @@
       "fuelEstimateSampleIntervals": 1,
       "fuelEstimateSampleDistanceKm": 381,
       "fuelEstimateMethod": "partial-refuel-estimate"
+    },
+    {
+      "id": "b1762239-9e3e-4ef7-a1be-4167b6cc4b23",
+      "type": "fuel",
+      "title": "سوخت‌گیری",
+      "description": "بنزین 24.89 لیتر قیمت 1500 تومان km 431995",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-11T14:02:44.257Z",
+      "occurredAt": "2026-11-11T17:32:00+03:30",
+      "date": "2026-11-11",
+      "time": "17:32",
+      "jalaliDate": "۱۴۰۵/۰۸/۲۰",
+      "odometerKm": 431992,
+      "distanceKm": null,
+      "liters": 24.89,
+      "costRial": 15000,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "59b9db7e7016c1dbe7c8eebb4c20dad52861d331fa93242fc2e1f9a3d6995acd"
+      },
+      "odometerAutoAssigned": true
     }
   ]
 }
