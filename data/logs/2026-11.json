@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-19T16:06:00+03:30",
+  "updatedAt": "2026-11-19T16:07:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -1521,8 +1521,8 @@
       "description": "سوخت گیری 35 لیتر km 432193 قیمت 1050000",
       "actor": "من",
       "note": "",
-      "updatedAt": "2026-11-19T16:06:00+03:30",
-      "revision": 2,
+      "updatedAt": "2026-11-19T16:07:00+03:30",
+      "revision": 3,
       "editHistory": [
         {
           "at": "2026-11-19T16:06:00+03:30",
@@ -1532,6 +1532,16 @@
           },
           "after": {
             "odometerKm": 432193
+          }
+        },
+        {
+          "at": "2026-11-19T16:07:00+03:30",
+          "by": "telegram",
+          "before": {
+            "costRial": 10500000
+          },
+          "after": {
+            "costRial": 1050000
           }
         }
       ],
@@ -1543,7 +1553,7 @@
       "odometerKm": 432193,
       "distanceKm": null,
       "liters": 35,
-      "costRial": 10500000,
+      "costRial": 1050000,
       "serviceKey": null,
       "serviceLabel": null,
       "serviceCatalogKey": null,
