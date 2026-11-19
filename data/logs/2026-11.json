@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-18T18:27:00+03:30",
+  "updatedAt": "2026-11-19T14:30:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -1513,6 +1513,56 @@
       "fuelEstimateSampleIntervals": 2,
       "fuelEstimateSampleDistanceKm": 755,
       "fuelEstimateMethod": "partial-refuel-estimate"
+    },
+    {
+      "id": "a6b867d9-d70d-4e04-922d-e5854885b028",
+      "type": "fuel",
+      "title": "سوخت‌گیری",
+      "description": "سوخت گیری 35 لیتر km 432193 قیمت 1050000",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-19T11:00:58.128Z",
+      "occurredAt": "2026-11-19T14:30:00+03:30",
+      "date": "2026-11-19",
+      "time": "14:30",
+      "jalaliDate": "۱۴۰۵/۰۸/۲۸",
+      "odometerKm": 432182,
+      "distanceKm": null,
+      "liters": 35,
+      "costRial": 10500000,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "fineLocation": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "a2ec9417f4375abac7de935d32b973b11c89969933e325ece5fcda0d415d8789"
+      },
+      "odometerAutoAssigned": true
     }
   ]
 }
