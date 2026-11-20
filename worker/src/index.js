@@ -1,6 +1,8 @@
 import { calculateFuelModel, estimateFuelTrip } from "../../assets/js/fuel-intelligence.mjs";
 import { calculateFineTimeline } from "../../assets/js/fine-intelligence.mjs";
 import { calculateVehicleCostModel } from "../../assets/js/vehicle-cost-intelligence.mjs";
+import OdometerIntelligence from "../../assets/js/odometer-intelligence.js";
+import PersianCalendar from "../../assets/js/persian-calendar.js";
 const API_VERSION = "2022-11-28";
 const TZ = "Asia/Tehran";
 const FILE_INDEX = "data/index.json";
@@ -49,7 +51,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.20.0",
+        version: "3.22.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -74,7 +76,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.20.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.22.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN),
@@ -449,7 +451,7 @@ async function handleTelegramUpdate(update, env, options = {}) {
       const duplicate = officialFineSms ? null : await findMessageDuplicate(text, env);
       if (duplicate) {
         const token = await savePendingDuplicate({ kind: "message", text: message.text, message: { date: message.date, message_id: message.message_id, text: message.text, from: { id: message.from?.id }, chat: { id: chatId } }, existingEventIds: [duplicate.event.id] }, env);
-        await sendText(env, chatId, `🟡 <b>احتمال ثبت تکراری</b>\n\nاین پیام با سابقهٔ قبلی شباهت دقیق دارد. هیچ رویداد تازه‌ای ذخیره نشده است.\n\nعنوان قبلی: ${duplicate.event.title || eventTypeLabel(duplicate.event.type)}\nشناسهٔ قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nتاریخ: ${duplicate.event.jalaliDate || duplicate.event.date || "—"}\n\nاگر واقعاً عملیات جدیدی است، ثبت را تأیید کن؛ در غیر این صورت انصراف بده.`, duplicateConfirmationKeyboard(token));
+        await sendText(env, chatId, `🟡 <b>احتمال ثبت تکراری</b>\n\nاین پیام با سابقهٔ قبلی شباهت دقیق دارد. هیچ رویداد تازه‌ای ذخیره نشده است.\n\nعنوان قبلی: ${duplicate.event.title || eventTypeLabel(duplicate.event.type)}\nشناسهٔ قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nتاریخ: ${eventDateLabel(duplicate.event)}\n\nاگر واقعاً عملیات جدیدی است، ثبت را تأیید کن؛ در غیر این صورت انصراف بده.`, duplicateConfirmationKeyboard(token));
         return;
       }
       const anomalies = officialFineSms ? [] : await detectMessageAnomalies(text, env);
@@ -643,7 +645,7 @@ async function openIssuesReport(env) {
   const issues = (await loadAllEvents(env)).filter(e => e.type === 'issue' && e.status !== 'fixed').sort((a,b) => eventTimestampForReport(b)-eventTimestampForReport(a));
   if (!issues.length) return { text: '✅ خرابی باز ثبت‌شده‌ای وجود ندارد.\nاگر مشکلی باقی مانده، آن را با متن طبیعی ثبت کن؛ مثلاً «ماشین روشن نمی‌شود».', keyboard: false };
   const messages = issues.slice(0,15).map(event => ({
-    text: `⚠️ <b>${escapeTelegramText(event.title || 'خرابی خودرو')}</b>\n<blockquote>${escapeTelegramText(event.description || 'شرح ثبت نشده')}</blockquote>\n👤 شخص: <code>${escapeTelegramText(event.actor || 'من')}</code>\n⌁ کیلومتر: <code>${event.odometerKm == null ? 'ثبت نشده' : `${formatNum(event.odometerKm)} km`}</code>\n📅 تاریخ: ${escapeTelegramText(event.jalaliDate || event.date || '—')}\n🧾 شناسه: <code>${escapeTelegramText(String(event.id).slice(0,8))}</code>\n${event.note ? `📝 توضیح: <blockquote>${escapeTelegramText(event.note)}</blockquote>\n` : ''}برای بستن، دکمه سبز را بزن.`,
+    text: `⚠️ <b>${escapeTelegramText(event.title || 'خرابی خودرو')}</b>\n<blockquote>${escapeTelegramText(event.description || 'شرح ثبت نشده')}</blockquote>\n👤 شخص: <code>${escapeTelegramText(event.actor || 'من')}</code>\n⌁ کیلومتر: <code>${event.odometerKm == null ? 'ثبت نشده' : `${formatNum(event.odometerKm)} km`}</code>\n📅 تاریخ: ${escapeTelegramText(eventDateLabel(event))}\n🧾 شناسه: <code>${escapeTelegramText(String(event.id).slice(0,8))}</code>\n${event.note ? `📝 توضیح: <blockquote>${escapeTelegramText(event.note)}</blockquote>\n` : ''}برای بستن، دکمه سبز را بزن.`,
     markup: issueActionKeyboard(event.id)
   }));
   return { messages: [{ text: `🧰 <b>خرابی‌های باز خودرو</b>\nتعداد: <code>${formatNum(issues.length)}</code>\n\nهر مورد در پیام جداگانه با دکمه بستن/جزئیات نمایش داده می‌شود.`, markup: false }, ...messages] };
@@ -1229,7 +1231,7 @@ async function purchaseOdometerCommand(raw, env) {
     const events = await loadAllEvents(env);
     const current = calculateCurrentOdometer(events);
     const driven = current !== null && current >= existing.purchaseOdometerKm ? current - existing.purchaseOdometerKm : null;
-    return `🚘 مبنای مالکیت پژو ۲۰۶\nکیلومتر هنگام خرید: ${formatNum(existing.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${current === null ? "ثبت نشده" : `${formatNum(current)} km`}\nپیمایش محاسبه‌شده از زمان خرید: ${driven === null ? "قابل محاسبه نیست؛ کیلومتر فعلی را بررسی کن" : `${formatNum(driven)} km`}\nتاریخ خرید: ${existing.purchaseDate || "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nتنظیم کیلومتر خرید: /purchasekm 428000\nتنظیم همراه تاریخ خرید: /purchasekm 428000 date=2025-11-14\nعدد پیمایش از تفریق کیلومتر واقعی محاسبه می‌شود؛ هیچ برآورد حدسی دخیل نیست.`;
+    return `🚘 مبنای مالکیت پژو ۲۰۶\nکیلومتر هنگام خرید: ${formatNum(existing.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${current === null ? "ثبت نشده" : `${formatNum(current)} km`}\nپیمایش محاسبه‌شده از زمان خرید: ${driven === null ? "قابل محاسبه نیست؛ کیلومتر فعلی را بررسی کن" : `${formatNum(driven)} km`}\nتاریخ خرید: ${existing.purchaseDate ? jalaliDateLabel(existing.purchaseDate) : "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nتنظیم کیلومتر خرید: /purchasekm 428000\nتنظیم همراه تاریخ خرید: /purchasekm 428000 date=2025-11-14\nعدد پیمایش از تفریق کیلومتر واقعی محاسبه می‌شود؛ هیچ برآورد حدسی دخیل نیست.`;
   }
   const km = parseFirstNumber(raw);
   if (!(km >= 10000 && km < 1000000)) return `نمونه: /purchasekm 428000\nکیلومتر خرید باید یک مقدار معتبر کیلومترشمار باشد.`;
@@ -1246,7 +1248,7 @@ async function purchaseOdometerCommand(raw, env) {
   });
   const currentOdo = calculateCurrentOdometer(await loadAllEvents(env));
   const actual = currentOdo !== null && currentOdo >= saved.ownership.purchaseOdometerKm ? currentOdo - saved.ownership.purchaseOdometerKm : null;
-  return `✅ مبنای مالکیت ذخیره شد\nکیلومتر خرید: ${formatNum(saved.ownership.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nپیمایش واقعی از خرید: ${actual === null ? "—" : `${formatNum(actual)} km`}\nتاریخ خرید: ${saved.ownership.purchaseDate || "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nبرآورد فرضی در محاسبات استفاده نمی‌شود.`;
+  return `✅ مبنای مالکیت ذخیره شد\nکیلومتر خرید: ${formatNum(saved.ownership.purchaseOdometerKm)} km\nآخرین کیلومتر معتبر: ${currentOdo === null ? "ثبت نشده" : `${formatNum(currentOdo)} km`}\nپیمایش واقعی از خرید: ${actual === null ? "—" : `${formatNum(actual)} km`}\nتاریخ خرید: ${saved.ownership.purchaseDate ? jalaliDateLabel(saved.ownership.purchaseDate) : "ثبت نشده؛ سن تقویمی از خرید محاسبه نمی‌شود"}\n\nبرآورد فرضی در محاسبات استفاده نمی‌شود.`;
 }
 
 function buildAnalysisBuckets(period) {
@@ -1334,7 +1336,7 @@ async function createAnalysisReply(rawPeriod, env) {
 🛒 پیمایش واقعی از زمان خرید
 کیلومتر خرید: ${formatNum(ownership.purchaseOdometerKm)} km
 تفریق کیلومتر فعلی منهای کیلومتر خرید: ${ownershipKm === null ? "قابل محاسبه نیست" : `${formatNum(ownershipKm)} km`}
-تاریخ خرید: ${ownership.purchaseDate || "ثبت نشده؛ پیمایش به زمان ساختگی نسبت داده نمی‌شود"}
+تاریخ خرید: ${ownership.purchaseDate ? jalaliDateLabel(ownership.purchaseDate) : "ثبت نشده؛ پیمایش به زمان ساختگی نسبت داده نمی‌شود"}
 
 📈 چهار نمودار تصویری در پیام‌های بعدی ارسال می‌شوند: هزینه، سوخت، مسافت و سهم راننده.`;
   try {
@@ -1487,7 +1489,7 @@ async function componentInventoryReport(env) {
     const item=config.partCatalog?.items?.[event.componentKey] || {};
     const elapsedDays=daysBetween(String(event.date||event.occurredAt||"").slice(0,10),nowTehran().date);
     const elapsedKm=odo!=null && event.odometerKm!=null && odo>=Number(event.odometerKm) ? odo-Number(event.odometerKm) : null;
-    return `${item.icon || "🔩"} <b>${event.componentName || item.label || event.componentKey}</b>\nگروه: ${event.componentCategory || item.category || "—"} · آخرین نصب: ${event.jalaliDate || event.date}\nکارکرد هنگام نصب: ${event.odometerKm==null?"ثبت نشده":`${formatNum(event.odometerKm)} km`} · عمر فعلی: ${elapsedKm==null?"—":`${formatNum(elapsedKm)} km`} / ${elapsedDays==null?"—":`${formatNum(elapsedDays)} روز`}\nبرند: ${event.brand || "ثبت نشده"} · مدل: ${event.model || "ثبت نشده"}\nشناسه: <code>${event.id.slice(0,8)}</code>`;
+    return `${item.icon || "🔩"} <b>${event.componentName || item.label || event.componentKey}</b>\nگروه: ${event.componentCategory || item.category || "—"} · آخرین نصب: ${eventDateLabel(event)}\nکارکرد هنگام نصب: ${event.odometerKm==null?"ثبت نشده":`${formatNum(event.odometerKm)} km`} · عمر فعلی: ${elapsedKm==null?"—":`${formatNum(elapsedKm)} km`} / ${elapsedDays==null?"—":`${formatNum(elapsedDays)} روز`}\nبرند: ${event.brand || "ثبت نشده"} · مدل: ${event.model || "ثبت نشده"}\nشناسه: <code>${event.id.slice(0,8)}</code>`;
   });
   for (let start=0;start<lines.length;start+=8) results.push({ text: `🔩 قطعات نصب‌شده و عمر کارکرد\n${start+1}-${Math.min(start+8,lines.length)} از ${lines.length}\n\n${lines.slice(start,start+8).join("\n\n")}` });
   return results;
@@ -1837,7 +1839,7 @@ async function duplicateReviewMessages(env) {
   for (const group of duplicates.slice(0, 15)) {
     const keeper = group[0];
     for (const duplicate of group.slice(1, 4)) {
-      const summary = event => `${event.title || eventTypeLabel(event.type)} · ${event.jalaliDate || event.date || "—"} · ${event.actor || "من"} · ${event.costRial != null ? formatMoneyToman(event.costRial) : "بدون مبلغ"}`;
+      const summary = event => `${event.title || eventTypeLabel(event.type)} · ${eventDateLabel(event)} · ${event.actor || "من"} · ${event.costRial != null ? formatMoneyToman(event.costRial) : "بدون مبلغ"}`;
       messages.push({ text: `⚠️ جفت احتمالی تکراری\n\nنسخه پیشنهادی برای نگه‌داشتن:\n${summary(keeper)}\nشناسه: <code>${keeper.id.slice(0, 8)}</code>\n\nنسخه احتمالی تکراری:\n${summary(duplicate)}\nشناسه: <code>${duplicate.id.slice(0, 8)}</code>\n\nادغام، فیلدهای خالی نسخهٔ اصلی را تکمیل و نسخهٔ دوم را آرشیو می‌کند. حذف، نسخهٔ دوم را بدون ادغام آرشیو می‌کند.`, markup: { inline_keyboard: [[{ text: "🧩 ادغام در نسخه اول", callback_data: `dupmerge:${keeper.id.slice(0, 8)}:${duplicate.id.slice(0, 8)}` }, { text: "🗑 حذف نسخه دوم", callback_data: `dupdelete:${duplicate.id.slice(0, 8)}` }], [{ text: "🔎 جزئیات اول", callback_data: `evt:${keeper.id.slice(0, 8)}:detail` }, { text: "🔎 جزئیات دوم", callback_data: `evt:${duplicate.id.slice(0, 8)}:detail` }]] } });
     }
   }
@@ -1922,8 +1924,9 @@ async function saveEvent(input, env) {
   const eventsBefore = await loadAllEvents(env);
   const latestOdo = calculateCurrentOdometer(eventsBefore);
   const config = await readConfig(env);
-  const occurredEpoch = Date.parse((input.occurredAt ? parseOccurredInput(input.occurredAt) : nowTehran()).iso);
-  const previousOdometerEvent = input.type === "odometer" ? eventsBefore.filter(item => item.type === "odometer" && Number.isFinite(Number(item.odometerKm)) && Date.parse(item.occurredAt || item.createdAt || "") <= occurredEpoch).sort((a,b) => Date.parse(a.occurredAt || a.createdAt || "") - Date.parse(b.occurredAt || b.createdAt || "" )).slice(-1)[0] : null;
+  const occurredEpoch = Date.parse(occurred.iso);
+  const priorOdometerState = input.type === "odometer" ? OdometerIntelligence.getOdometerState(eventsBefore, { asOf: occurredEpoch }) : null;
+  const previousOdometerEvent = priorOdometerState?.acceptedOdometerEvents?.at(-1) || null;
   const explicitOdo = Number.isFinite(input.odometerKm) && input.odometerKm > 0 ? Math.round(input.odometerKm) : null;
   const metaSource = String(input.description || input.sourceText || "");
   const parsedMeta = extractEventMetadata(metaSource, input.actor, input.note, config.people || []);
@@ -2012,6 +2015,18 @@ async function saveEvent(input, env) {
       event.deltaSincePreviousKm = delta;
     }
   }
+  if (event.type === "odometer") {
+    const checkedState = OdometerIntelligence.getOdometerState([...eventsBefore, event], { asOf: Infinity });
+    const rejected = checkedState.rejectedOdometerEvents.find(item => String(item.event.id) === String(event.id));
+    event.odometerValidation = rejected
+      ? { accepted: false, reason: rejected.reason, previousKm: rejected.previousKm ?? null }
+      : { accepted: true, sequence: checkedState.acceptedOdometerEvents.find(item => String(item.id) === String(event.id))?._garageOdometerSequence ?? 0 };
+    if (rejected) {
+      delete event.previousOdometerKm;
+      delete event.deltaSincePreviousKm;
+      event.note = [event.note, "قرائت کیلومتر به‌علت ناسازگاری با سابقه در محاسبه کارکرد جاری پذیرفته نشد؛ برای اصلاح، رویداد را بررسی کن."].filter(Boolean).join(" · ");
+    }
+  }
   if (event.type === "odometer" && event.deltaSincePreviousKm > 0) {
     const estimate = estimateFuelTrip(eventsBefore, event.deltaSincePreviousKm, { ...(config.fuelModel || {}), at: occurredEpoch });
     if (estimate) {
@@ -2037,7 +2052,7 @@ async function saveEvent(input, env) {
   if (event.type === "fine") {
     const duplicate = findDuplicateFineEvent(event, eventsBefore);
     if (duplicate) {
-      return `🟡 این جریمه قبلاً ثبت شده و مورد جدیدی ایجاد نشد.\n\nشناسه قبض: ${event.ticketNumber || duplicate.ticketNumber || "—"}\nشناسه رکورد قبلی: <code>${String(duplicate.id).slice(0, 8)}</code>\nتاریخ و ساعت تخلف: ${duplicate.jalaliDate || duplicate.ticketDate || "—"} · ${duplicate.time || "—"}\nشرح: ${duplicate.violationDescription || duplicate.description || "—"}\nمبلغ ثبت‌شده: ${formatMoneyToman(duplicate.costRial || 0)}\n\nبرای مشاهده: /fineinfo ${String(duplicate.id).slice(0, 8)}`;
+      return `🟡 این جریمه قبلاً ثبت شده و مورد جدیدی ایجاد نشد.\n\nشناسه قبض: ${event.ticketNumber || duplicate.ticketNumber || "—"}\nشناسه رکورد قبلی: <code>${String(duplicate.id).slice(0, 8)}</code>\nتاریخ و ساعت تخلف: ${eventDateLabel({ ...duplicate, occurredAt: duplicate.occurredAt || duplicate.ticketDate || duplicate.date })} · ${duplicate.time || "—"}\nشرح: ${duplicate.violationDescription || duplicate.description || "—"}\nمبلغ ثبت‌شده: ${formatMoneyToman(duplicate.costRial || 0)}\n\nبرای مشاهده: /fineinfo ${String(duplicate.id).slice(0, 8)}`;
     }
   }
   const month = event.date.slice(0, 7);
@@ -2057,7 +2072,7 @@ async function saveEvent(input, env) {
     return current;
   });
   const id = event.id.slice(0, 8);
-  const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `دسته: ${eventTypeLabel(event.type)} · تاریخ: ${event.jalaliDate}، ساعت ${event.time}`, `انجام‌دهنده: ${event.actor || "من"}`];
+  const lines = [`✅ ثبت شد: ${event.title}`, `شناسه: ${id}`, `دسته: ${eventTypeLabel(event.type)} · تاریخ: ${eventDateLabel(event)}، ساعت ${event.time}`, `انجام‌دهنده: ${event.actor || "من"}`];
   if (event.odometerKm !== null) lines.push(`کیلومتر ثبت‌شده: ${formatNum(event.odometerKm)} km${event.odometerAutoAssigned ? " · خودکار از آخرین کیلومتر معتبر" : ""}`);
   else if (event.type === "issue" || event.type === "repair") lines.push("⚠️ کیلومتر قبلی معتبری پیدا نشد؛ بعد از بررسی صفحه کیلومتر، با /km عدد فعلی را ثبت کن.");
   if (event.deltaSincePreviousKm != null) lines.push(`مسافت از آخرین کیلومتر ثبت‌شده: ${formatNum(event.deltaSincePreviousKm)} km · راننده: ${event.distanceActor || event.actor || "من"}`);
@@ -2081,7 +2096,7 @@ async function saveEvent(input, env) {
   if (event.repairGroupId) lines.push(`شناسه مراجعه: ${String(event.repairGroupId).slice(0,8)}`);
   if (event.type === "fine") {
     const fine = fineTimeline(event);
-    lines.push(`وضعیت جریمه: ${fine.statusLabel}`, `تاریخ جریمه: ${fine.ticketDate || "—"} · گذشت زمان: ${fine.elapsedDays == null ? "—" : `${formatNum(fine.elapsedDays)} روز`}`, `مهلت پیگیری/پرداخت: ${fine.deadlineDate || "نیازمند بررسی"}${fine.daysToDeadline != null ? ` · ${fine.daysToDeadline < 0 ? `${formatNum(Math.abs(fine.daysToDeadline))} روز از مهلت گذشته` : `${formatNum(fine.daysToDeadline)} روز باقی‌مانده`}` : ""}`);
+    lines.push(`وضعیت جریمه: ${fine.statusLabel}`, `تاریخ جریمه: ${fine.ticketDate ? jalaliDateLabel(fine.ticketDate) : "—"} · گذشت زمان: ${fine.elapsedDays == null ? "—" : `${formatNum(fine.elapsedDays)} روز`}`, `مهلت پیگیری/پرداخت: ${fine.deadlineDate ? jalaliDateLabel(fine.deadlineDate) : "نیازمند بررسی"}${fine.daysToDeadline != null ? ` · ${fine.daysToDeadline < 0 ? `${formatNum(Math.abs(fine.daysToDeadline))} روز از مهلت گذشته` : `${formatNum(fine.daysToDeadline)} روز باقی‌مانده`}` : ""}`);
     if (event.ticketNumber) lines.push(`شناسه قبض: <code>${event.ticketNumber}</code>`);
     if (event.ticketSerialNumber) lines.push(`شماره سریال: <code>${event.ticketSerialNumber}</code>`);
     if (event.ticketPaymentId) lines.push(`شناسه پرداخت قبض: <code>${event.ticketPaymentId}</code>`);
@@ -2128,7 +2143,7 @@ async function operationsReport(raw, env) {
     const first = groupIndex * 7 + 1;
     const content = group.map((event, index) => {
       const id = String(event.id || "").slice(0,8);
-      const date = event.jalaliDate || event.date || "—";
+      const date = eventDateLabel(event);
       const amount = Number(event.costRial) > 0 ? `\nهزینه: ${formatMoneyToman(event.costRial)}` : "";
       const value = event.odometerKm != null ? `\nکیلومترشمار: ${formatNum(event.odometerKm)} km` : event.liters != null ? `\nسوخت: ${formatNum(event.liters,1)} لیتر` : event.distanceKm != null ? `\nمسافت: ${formatNum(event.distanceKm)} km` : "";
       const note = event.note ? `\nتوضیح تکمیلی: ${String(event.note).slice(0,90)}` : "";
@@ -2239,7 +2254,7 @@ function eventTypeEmoji(type) {
   return ({ odometer: "⌁", trip: "↗️", fuel: "⛽", service: "🧰", part: "🔩", expense: "💳", fine: "🚦", wash: "🫧", issue: "⚠️", repair: "🛠️", note: "📝" })[type] || "🚘";
 }
 function formatEventDetails(event) {
-  const lines = [`${eventTypeEmoji(event.type)} جزئیات رویداد خودرو`, `عنوان: ${event.title || eventTypeLabel(event.type)}`, `شناسه: ${event.id}`, `دسته: ${eventTypeLabel(event.type)}`, `تاریخ: ${event.jalaliDate || event.date || "—"} · ساعت ${event.time || "—"}`, `انجام‌دهنده: ${event.actor || "من"}`];
+  const lines = [`${eventTypeEmoji(event.type)} جزئیات رویداد خودرو`, `عنوان: ${event.title || eventTypeLabel(event.type)}`, `شناسه: ${event.id}`, `دسته: ${eventTypeLabel(event.type)}`, `تاریخ: ${eventDateLabel(event)} · ساعت ${event.time || "—"}`, `انجام‌دهنده: ${event.actor || "من"}`];
   if (event.description) lines.push(`شرح عملیات: ${event.description}`);
   if (event.note) lines.push(`توضیح تکمیلی: ${event.note}`);
   if (event.odometerKm != null) lines.push(`کیلومترشمار: ${formatNum(event.odometerKm)} km`);
@@ -2254,7 +2269,7 @@ function formatEventDetails(event) {
   if (Number(event.costRial) > 0) lines.push(`مبلغ: ${formatMoneyToman(event.costRial)}`);
   if (event.type === "fine") {
     const timeline = fineTimeline(event);
-    lines.push(`وضعیت جریمه: ${timeline.statusLabel}`, `تاریخ جریمه: ${timeline.ticketDate || "—"} · ${timeline.elapsedDays == null ? "—" : `${formatNum(timeline.elapsedDays)} روز گذشته`}`, `مهلت محاسباتی: ${timeline.deadlineDate || "نامشخص"}`);
+    lines.push(`وضعیت جریمه: ${timeline.statusLabel}`, `تاریخ جریمه: ${timeline.ticketDate ? jalaliDateLabel(timeline.ticketDate) : "—"} · ${timeline.elapsedDays == null ? "—" : `${formatNum(timeline.elapsedDays)} روز گذشته`}`, `مهلت محاسباتی: ${timeline.deadlineDate ? jalaliDateLabel(timeline.deadlineDate) : "نامشخص"}`);
     if (event.ticketNumber) lines.push(`شناسه قبض: <code>${event.ticketNumber}</code>`);
     if (event.ticketSerialNumber) lines.push(`شماره سریال قبض: <code>${event.ticketSerialNumber}</code>`);
     if (event.ticketPaymentId) lines.push(`شناسه پرداخت قبض: <code>${event.ticketPaymentId}</code>`);
@@ -2473,28 +2488,19 @@ async function loadAllEvents(env) {
     if (!event?.id || seen.has(event.id)) return false;
     seen.add(event.id);
     return true;
-  }).sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  }).sort((a, b) => OdometerIntelligence.eventTimelineEpoch(a) - OdometerIntelligence.eventTimelineEpoch(b) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
 }
 
-function calculateCurrentOdometer(events) {
-  let current = null;
-  const timeline = [...events].filter(e => e.type === "odometer" || e.type === "trip").sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)) || String(a.createdAt).localeCompare(String(b.createdAt)));
-  for (const event of timeline) {
-    if (event.type === "odometer" && Number.isFinite(event.odometerKm)) current = Math.round(event.odometerKm);
-    else if (event.type === "trip" && Number.isFinite(event.distanceKm) && event.distanceKm >= 0 && current !== null) current = Math.round((current + event.distanceKm) * 10) / 10;
-  }
-  return current;
+function calculateCurrentOdometer(events, options = {}) {
+  return OdometerIntelligence.calculateCurrentOdometer(events, { asOf: Date.now(), ...options });
 }
 
 function calculateDistanceEntries(events, ownershipConfig = null) {
-  const allOdometers = [...events].filter(e => e.type === "odometer" && e.odometerKm !== null && e.odometerKm !== undefined && Number.isFinite(Number(e.odometerKm)))
-    .sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)) || String(a.createdAt).localeCompare(String(b.createdAt)));
-  // Treat a newer lower reading as a correction checkpoint so impossible prior deltas do not remain in totals.
-  let correctionIndex = 0;
-  for (let i = 1; i < allOdometers.length; i++) if (Number(allOdometers[i].odometerKm) < Number(allOdometers[i - 1].odometerKm)) correctionIndex = i;
-  const odometers = allOdometers.slice(correctionIndex);
+  const odometerState = OdometerIntelligence.getOdometerState(events, { asOf: Infinity });
+  const odometers = odometerState.acceptedOdometerEvents;
   const coveredTrips = new Set();
   const result = [];
+  const eventEpoch = event => OdometerIntelligence.eventTimelineEpoch(event);
   const ownership = { purchaseOdometerKm: Number(ownershipConfig?.purchaseOdometerKm ?? ownershipConfig?.baselineOdometerKm ?? DEFAULT_PURCHASE_ODOMETER_KM), purchaseDate: ownershipConfig?.purchaseDate || null, defaultActor: String(ownershipConfig?.historicalActor || ownershipConfig?.defaultActor || "من") };
   const first = odometers[0];
   if (first && Number.isFinite(ownership.purchaseOdometerKm) && ownership.purchaseOdometerKm > 0) {
@@ -2503,8 +2509,8 @@ function calculateDistanceEntries(events, ownershipConfig = null) {
     const baselineDistance = endKm - startKm;
     if (baselineDistance > 0) {
       const purchaseTime = ownership.purchaseDate ? Date.parse(`${ownership.purchaseDate}T00:00:00+03:30`) : NaN;
-      const firstTime = Date.parse(first.occurredAt || first.createdAt || "");
-      const historicalTrips = events.filter(trip => trip.type === "trip" && Number(trip.distanceKm) > 0 && Number.isFinite(Date.parse(trip.occurredAt || "")) && Date.parse(trip.occurredAt) <= firstTime && (!Number.isFinite(purchaseTime) || Date.parse(trip.occurredAt) >= purchaseTime) && (correctionIndex === 0 || Date.parse(trip.occurredAt) >= firstTime));
+      const firstTime = eventEpoch(first);
+      const historicalTrips = events.filter(trip => trip.type === "trip" && Number(trip.distanceKm) > 0 && eventEpoch(trip) <= firstTime && (!Number.isFinite(purchaseTime) || eventEpoch(trip) >= purchaseTime));
       const tripTotal = historicalTrips.reduce((sum, trip) => sum + Number(trip.distanceKm || 0), 0);
       if (tripTotal > 0 && tripTotal <= baselineDistance) {
         for (const trip of historicalTrips) {
@@ -2518,27 +2524,22 @@ function calculateDistanceEntries(events, ownershipConfig = null) {
   }
   for (let i = 1; i < odometers.length; i++) {
     const previous = odometers[i - 1], current = odometers[i];
+    if (previous._garageOdometerSequence !== current._garageOdometerSequence) continue;
     const delta = Number(current.odometerKm) - Number(previous.odometerKm);
     if (delta <= 0 || delta > 5000) continue;
-    const start = Date.parse(previous.occurredAt), end = Date.parse(current.occurredAt);
-    const trips = events.filter(trip => trip.type === "trip" && Date.parse(trip.occurredAt) > start && Date.parse(trip.occurredAt) <= end && Number(trip.distanceKm) > 0)
-      .sort((a,b)=>String(a.occurredAt).localeCompare(String(b.occurredAt)));
+    const start = eventEpoch(previous), end = eventEpoch(current);
+    const trips = events.filter(trip => trip.type === "trip" && eventEpoch(trip) > start && eventEpoch(trip) <= end && Number(trip.distanceKm) > 0)
+      .sort((a, b) => eventEpoch(a) - eventEpoch(b));
     const tripDistance = trips.reduce((sum, trip) => sum + Number(trip.distanceKm || 0), 0);
     trips.forEach(trip => coveredTrips.add(trip.id));
     if (trips.length && tripDistance <= delta) {
       for (const trip of trips) result.push({ date: trip.date || String(trip.occurredAt).slice(0, 10), occurredAt: trip.occurredAt, distanceKm: Number(trip.distanceKm), actor: String(trip.actor || "من").trim() || "من", source: "trip_within_odometer", eventId: trip.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
       const residual = delta - tripDistance;
       if (residual > 0) result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: residual, actor: String(current.actor || "من").trim() || "من", source: "odometer_residual", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
-    } else {
-      result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: delta, actor: String(current.actor || "من").trim() || "من", source: "odometer_delta", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
-    }
+    } else result.push({ date: current.date || String(current.occurredAt).slice(0, 10), occurredAt: current.occurredAt, distanceKm: delta, actor: String(current.actor || "من").trim() || "من", source: "odometer_delta", fromId: previous.id, toId: current.id, fromOdometerKm: Number(previous.odometerKm), toOdometerKm: Number(current.odometerKm) });
   }
-  for (const event of events) {
-    if (event.type === "trip" && !coveredTrips.has(event.id) && Number(event.distanceKm) > 0) {
-      result.push({ date: event.date || String(event.occurredAt).slice(0, 10), occurredAt: event.occurredAt, distanceKm: Number(event.distanceKm), actor: String(event.actor || "من").trim() || "من", source: "trip", eventId: event.id });
-    }
-  }
-  return result.sort((a, b) => (Date.parse(a.occurredAt || "") || 0) - (Date.parse(b.occurredAt || "") || 0));
+  for (const event of events) if (event.type === "trip" && !coveredTrips.has(event.id) && Number(event.distanceKm) > 0) result.push({ date: event.date || String(event.occurredAt).slice(0, 10), occurredAt: event.occurredAt, distanceKm: Number(event.distanceKm), actor: String(event.actor || "من").trim() || "من", source: "trip", eventId: event.id });
+  return result.sort((a, b) => eventEpoch(a) - eventEpoch(b));
 }
 
 async function dueReport(env) {
@@ -2948,7 +2949,7 @@ async function summaryReport(text, env) {
 async function latestReport(env) {
   const events = (await loadAllEvents(env)).slice(-10).reverse();
   if (!events.length) return "هنوز رویدادی ثبت نشده. با /help نمونه‌ها را ببین.";
-  return "🧾 آخرین رویدادها\n\n" + events.map(e => `${e.jalaliDate || e.date} ${e.time || ""} · ${eventTypeLabel(e.type)}\n${e.title}\n${(e.description || "").slice(0, 120)}\nID: ${e.id.slice(0, 8)}${e.odometerKm ? ` · ${formatNum(e.odometerKm)} km` : ""}${e.costRial ? ` · ${formatMoneyToman(e.costRial)}` : ""}`).join("\n\n");
+  return "🧾 آخرین رویدادها\n\n" + events.map(e => `${eventDateLabel(e)} ${e.time || ""} · ${eventTypeLabel(e.type)}\n${e.title}\n${(e.description || "").slice(0, 120)}\nID: ${e.id.slice(0, 8)}${e.odometerKm ? ` · ${formatNum(e.odometerKm)} km` : ""}${e.costRial ? ` · ${formatMoneyToman(e.costRial)}` : ""}`).join("\n\n");
 }
 
 function normalizeFlexibleDate(value) {
@@ -3079,7 +3080,7 @@ async function fineInfoCommand(raw, env) {
     const target = all.find(e => String(e.id).startsWith(id));
     if (!target) return "جریمه‌ای با این شناسه پیدا نشد. از /fines شناسه را بردار.";
     const t = fineTimeline(target);
-    const lines = [`🚦 جزئیات جریمه`, `شناسه: <code>${target.id}</code>`, `شرح: ${target.description || "—"}`, `مبلغ درج‌شده در ثبت: ${formatMoneyToman(target.costRial || 0)}`, `وضعیت: ${t.statusLabel}`, `تاریخ جریمه: ${t.ticketDate || "—"}`, `مدت گذشته از ثبت جریمه: ${t.elapsedDays == null ? "—" : `${formatNum(t.elapsedDays)} روز`}`, `مهلت محاسباتی: ${t.deadlineDate || "خودکار ندارد؛ وضعیت رسمی قبض را بررسی کن"}`, `قاعده دیرکرد: ${t.eligibilityLabel}`];
+    const lines = [`🚦 جزئیات جریمه`, `شناسه: <code>${target.id}</code>`, `شرح: ${target.description || "—"}`, `مبلغ درج‌شده در ثبت: ${formatMoneyToman(target.costRial || 0)}`, `وضعیت: ${t.statusLabel}`, `تاریخ جریمه: ${t.ticketDate ? jalaliDateLabel(t.ticketDate) : "—"}`, `مدت گذشته از ثبت جریمه: ${t.elapsedDays == null ? "—" : `${formatNum(t.elapsedDays)} روز`}`, `مهلت محاسباتی: ${t.deadlineDate ? jalaliDateLabel(t.deadlineDate) : "خودکار ندارد؛ وضعیت رسمی قبض را بررسی کن"}`, `قاعده دیرکرد: ${t.eligibilityLabel}`];
     if (t.daysToDeadline != null) lines.push(t.daysToDeadline < 0 ? `⏳ مهلت ${formatNum(Math.abs(t.daysToDeadline))} روز پیش گذشته است.` : `⏳ ${formatNum(t.daysToDeadline)} روز تا مهلت محاسباتی باقی مانده است.`);
     if (target.ticketNumber) lines.push(`شناسه قبض: <code>${target.ticketNumber}</code>`);
     if (target.ticketSerialNumber) lines.push(`شماره سریال: <code>${target.ticketSerialNumber}</code>`);
@@ -3091,10 +3092,10 @@ async function fineInfoCommand(raw, env) {
     if (target.vehiclePlate) lines.push(`پلاک: ${target.vehiclePlate}`);
     if (target.speedLimitKph != null || target.recordedSpeedKph != null) lines.push(`سرعت مجاز/ثبت‌شده: ${target.speedLimitKph ?? "—"} / ${target.recordedSpeedKph ?? "—"} km/h`);
     if (target.cameraCode) lines.push(`کد دوربین: <code>${target.cameraCode}</code>`);
-    if (target.reportedUnpaidFineBalanceRial != null) lines.push(`مانده تجمیعی جریمه‌های پرداخت‌نشده در پیامک: ${formatMoneyToman(target.reportedUnpaidFineBalanceRial)} تا ${target.reportedBalanceDate || "—"}؛ این عدد به مبلغ همین قبض اضافه نشده است.`);
+    if (target.reportedUnpaidFineBalanceRial != null) lines.push(`مانده تجمیعی جریمه‌های پرداخت‌نشده در پیامک: ${formatMoneyToman(target.reportedUnpaidFineBalanceRial)} تا ${target.reportedBalanceDate ? jalaliDateLabel(target.reportedBalanceDate) : "—"}؛ این عدد به مبلغ همین قبض اضافه نشده است.`);
     if (target.amountCurrency) lines.push(`واحد مبلغ پیامک: ${target.amountCurrency}`);
     if (target.fineSource === "road-police-sms") lines.push("منبع: پیامک راهور · متن اصلی و کامل پیامک عیناً در توضیحات رکورد نگهداری شده است.");
-    if (target.paid) lines.push(`تاریخ ثبت پرداخت: ${target.paidAt || "ثبت نشده"}`, `مبلغ پرداختی ثبت‌شده: ${target.paidAmountRial ? formatMoneyToman(target.paidAmountRial) : "از مبلغ جریمه استفاده شده/مشخص نشده"}`, `کد پیگیری: ${target.paymentReference || "ثبت نشده"}`);
+    if (target.paid) lines.push(`تاریخ ثبت پرداخت: ${target.paidAt ? PersianCalendar.formatDateTime(target.paidAt) : "ثبت نشده"}`, `مبلغ پرداختی ثبت‌شده: ${target.paidAmountRial ? formatMoneyToman(target.paidAmountRial) : "از مبلغ جریمه استفاده شده/مشخص نشده"}`, `کد پیگیری: ${target.paymentReference || "ثبت نشده"}`);
     if (t.potentialAmountRial != null) lines.push(`برآورد هشدار (نه مبلغ رسمی): ${formatMoneyToman(t.potentialAmountRial)} در صورت شمول قاعده دوبرابری؛ استعلام رسمی لازم است.`);
     lines.push("برای ثبت پرداخت: /paid " + target.id.slice(0,8) + " date=1405/08/03 amount=... تومان ref=...", "مهلت‌ها و مبلغ نهایی را از وضعیت رسمی قبض/راهور تأیید کن؛ این محاسبه حکم قطعی قانونی نیست.");
     return lines.join("\n");
@@ -3102,7 +3103,7 @@ async function fineInfoCommand(raw, env) {
   const unpaid = all.filter(e=>!e.paid);
   const total = all.reduce((n,e)=>n+(Number(e.costRial)||0),0);
   const unpaidAmount = unpaid.reduce((n,e)=>n+(Number(e.costRial)||0),0);
-  return `🚦 دفتر مدیریت جریمه\n\nکل: ${formatNum(all.length)} مورد · ${formatMoneyToman(total)}\nپرداخت‌نشده: ${formatNum(unpaid.length)} مورد · ${formatMoneyToman(unpaidAmount)}\n\n` + all.slice(0,20).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate||"—"} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${String(e.id).slice(0,8)}</code>`;}).join("\n\n") + "\n\nبرای جزئیات یک مورد: /fineinfo شناسه";
+  return `🚦 دفتر مدیریت جریمه\n\nکل: ${formatNum(all.length)} مورد · ${formatMoneyToman(total)}\nپرداخت‌نشده: ${formatNum(unpaid.length)} مورد · ${formatMoneyToman(unpaidAmount)}\n\n` + all.slice(0,20).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate ? jalaliDateLabel(t.ticketDate) : "—"} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${String(e.id).slice(0,8)}</code>`;}).join("\n\n") + "\n\nبرای جزئیات یک مورد: /fineinfo شناسه";
 }
 
 async function finesReport(env) {
@@ -3114,7 +3115,7 @@ async function finesReport(env) {
   const paidRial = paid.reduce((sum,e)=>sum+(Number(e.paidAmountRial ?? e.costRial)||0),0);
   const unpaidRial = unpaid.reduce((sum,e)=>sum+(Number(e.costRial)||0),0);
   const overdue = unpaid.filter(e=>{const t=fineTimeline(e);return t.daysToDeadline != null && t.daysToDeadline < 0;});
-  return `🚦 گزارش جامع جریمه‌ها\n\n📋 تعداد کل: ${formatNum(events.length)} مورد\n💰 مجموع مبلغ تمام جریمه‌ها: ${formatMoneyToman(totalRial)}\n✅ مجموع پرداخت‌شده: ${formatMoneyToman(paidRial)} (${formatNum(paid.length)} مورد)\n🔴 بدهی پرداخت‌نشده: ${formatMoneyToman(unpaidRial)} (${formatNum(unpaid.length)} مورد)\n⚠️ مهلت محاسباتی گذشته: ${formatNum(overdue.length)} مورد\n\n🧾 آخرین سوابق\n` + events.slice(0,25).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate||e.date||"—"} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${e.id.slice(0,8)}</code>`;}).join("\n\n") + "\n\nجزئیات یک مورد: /fineinfo شناسه\nثبت پرداخت: /paid شناسه date=1405/08/03 amount=... تومان ref=...\n⚠️ مهلت‌های محاسبه‌شده یادآوری هستند؛ مبلغ قطعی را از سامانه رسمی بررسی کن.";
+  return `🚦 گزارش جامع جریمه‌ها\n\n📋 تعداد کل: ${formatNum(events.length)} مورد\n💰 مجموع مبلغ تمام جریمه‌ها: ${formatMoneyToman(totalRial)}\n✅ مجموع پرداخت‌شده: ${formatMoneyToman(paidRial)} (${formatNum(paid.length)} مورد)\n🔴 بدهی پرداخت‌نشده: ${formatMoneyToman(unpaidRial)} (${formatNum(unpaid.length)} مورد)\n⚠️ مهلت محاسباتی گذشته: ${formatNum(overdue.length)} مورد\n\n🧾 آخرین سوابق\n` + events.slice(0,25).map(e=>{const t=fineTimeline(e);return `${t.statusLabel} · ${formatMoneyToman(e.costRial||0)}\n${e.description||"جریمه"}\nتاریخ: ${t.ticketDate ? jalaliDateLabel(t.ticketDate) : jalaliDateLabel(e.occurredAt || e.date)} · ${t.elapsedDays==null?"—":`${formatNum(t.elapsedDays)} روز گذشته`} · ID <code>${e.id.slice(0,8)}</code>`;}).join("\n\n") + "\n\nجزئیات یک مورد: /fineinfo شناسه\nثبت پرداخت: /paid شناسه date=1405/08/03 amount=... تومان ref=...\n⚠️ مهلت‌های محاسبه‌شده یادآوری هستند؛ مبلغ قطعی را از سامانه رسمی بررسی کن.";
 }
 
 async function markFinePaid(input, env) {
@@ -3254,7 +3255,7 @@ ${item.method === "full-to-full" ? "مصرف دقیق باک‌به‌باک" : 
 بازهٔ قابل دفاع: ${formatNum(model.consumptionMinLPer100, 2)} تا ${formatNum(model.consumptionMaxLPer100, 2)} لیتر/۱۰۰ km
 روش: ${model.method === "full-to-full" ? "باک‌به‌باک دقیق" : "موازنهٔ سوخت باک با دو یا چند سوخت‌گیری جزئی"}
 مبنای نمونه: ${formatNum(model.sampleDistanceKm)} km · ${formatNum(model.sampleIntervals)} بازه · ${formatNum(model.refuelCount)} سوخت‌گیری
-کیفیت: ${model.confidenceLabel}${model.priceTomanPerLiter == null ? "" : `\nقیمت موزون ${formatNum(5)} خرید قیمت‌دار اخیر: ${formatNum(model.priceTomanPerLiter, 0)} تومان/لیتر`}`
+کیفیت: ${model.confidenceLabel}\nتله‌متری کارکرد: ${formatNum(model.odometerReadingCount)} قرائت معتبر · ${formatNum(model.odometerReadingsInFuelWindow)} قرائت در بازهٔ سوخت · ${formatNum(model.odometerDistanceKm)} km پیمایش ثبت‌شده${model.inferredRefuelOdometerCount ? `\nکیلومتر سوخت‌گیری استنباط‌شده از قرائت نزدیک: ${formatNum(model.inferredRefuelOdometerCount)} مورد` : ""}${model.priceTomanPerLiter == null ? "" : `\nقیمت موزون ${formatNum(5)} خرید قیمت‌دار اخیر: ${formatNum(model.priceTomanPerLiter, 0)} تومان/لیتر`}`
     : `هنوز تخمین قابل استفاده ساخته نشده است. حداقل دو سوخت‌گیری با مقدار لیتر و کیلومتر معتبر، و حداقل ۱۰۰ کیلومتر فاصله لازم است. پرکردن کامل باک اجباری نیست.`;
   return `⛽ گزارش کامل سوخت پژو ۲۰۶
 
@@ -3593,9 +3594,10 @@ function jalaliToGregorian(jy, jm, jd) {
   return [gy, gm + 1, gDays + 1];
 }
 function jalaliDateLabel(dateStr) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const fmt = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
-  return fmt.format(new Date(Date.UTC(y, m - 1, d, 9)));
+  return PersianCalendar.formatDate(dateStr) || "—";
+}
+function eventDateLabel(event) {
+  return PersianCalendar.eventDateLabel(event) || "—";
 }
 function addDaysToDate(date, days) {
   const [y, m, d] = date.split("-").map(Number);

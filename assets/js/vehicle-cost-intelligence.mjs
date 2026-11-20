@@ -197,13 +197,18 @@ export function calculateVehicleCostModel(events, options = {}) {
 }
 
 export function calculateCurrentOdometerDelta(events, eventId, purchaseOdometerKm = null) {
-  const odometers = (Array.isArray(events) ? events : [])
+  const api = globalThis.GarageOdometerIntelligence;
+  const state = api?.getOdometerState ? api.getOdometerState(events, { asOf: Infinity }) : null;
+  const odometers = state?.acceptedOdometerEvents || (Array.isArray(events) ? events : [])
     .filter(event => event?.type === 'odometer' && positive(event.odometerKm) > 0)
     .sort((a, b) => eventTimestamp(a) - eventTimestamp(b) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
   const index = odometers.findIndex(event => String(event.id) === String(eventId));
   if (index < 0) return null;
-  const current = Number(odometers[index].odometerKm);
-  const previous = index > 0 ? Number(odometers[index - 1].odometerKm) : positive(purchaseOdometerKm);
+  const currentEvent = odometers[index];
+  const previousEvent = index > 0 ? odometers[index - 1] : null;
+  if (previousEvent && currentEvent._garageOdometerSequence !== undefined && previousEvent._garageOdometerSequence !== currentEvent._garageOdometerSequence) return null;
+  const current = Number(currentEvent.odometerKm);
+  const previous = previousEvent ? Number(previousEvent.odometerKm) : positive(purchaseOdometerKm);
   if (!(previous > 0) || current <= previous) return null;
   const delta = current - previous;
   return delta <= 5000 ? delta : null;

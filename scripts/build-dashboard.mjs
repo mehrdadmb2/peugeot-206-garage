@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { calculateVehicleCostModel } from '../assets/js/vehicle-cost-intelligence.mjs';
 const require = createRequire(import.meta.url);
 const PersianCalendar = require('../assets/js/persian-calendar.cjs');
+const OdometerIntelligence = require('../assets/js/odometer-intelligence.js');
 
 const DEFAULT_PURCHASE_KM = 428000;
 const TIME_ZONE = 'Asia/Tehran';
@@ -16,17 +17,11 @@ function readJson(filePath, label) {
 }
 
 function localDateString(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.filter(item => item.type !== 'literal').map(item => [item.type, item.value]));
-  return `${values.year}-${values.month}-${values.day}`;
+  return PersianCalendar.gregorianDateKey(date);
 }
 
 function eventEpoch(event) {
-  const value = event?.occurredAt || (event?.date ? `${String(event.date).slice(0, 10)}T${event?.time || '12:00'}:00+03:30` : event?.createdAt);
-  const timestamp = Date.parse(value || '');
-  return Number.isFinite(timestamp) ? timestamp : 0;
+  return OdometerIntelligence.eventTimelineEpoch(event);
 }
 
 function daysBetween(from, to) {
@@ -47,18 +42,8 @@ function sum(rows, selector) {
   return rows.reduce((total, row) => total + (Number(selector(row)) || 0), 0);
 }
 
-export function calculateCurrentOdometer(events) {
-  let current = null;
-  const timeline = events.filter(event => event.type === 'odometer' || event.type === 'trip')
-    .sort((a, b) => eventEpoch(a) - eventEpoch(b) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-  for (const event of timeline) {
-    if (event.type === 'odometer' && event.odometerKm !== null && event.odometerKm !== undefined && Number.isFinite(Number(event.odometerKm))) {
-      current = Number(event.odometerKm);
-    } else if (event.type === 'trip' && Number.isFinite(Number(event.distanceKm)) && current !== null) {
-      current += Number(event.distanceKm);
-    }
-  }
-  return current === null ? null : Math.round(current * 10) / 10;
+export function calculateCurrentOdometer(events, options = {}) {
+  return OdometerIntelligence.calculateCurrentOdometer(events, options);
 }
 
 export function calculateDueItems(events, config, currentOdo, today = localDateString()) {
@@ -150,19 +135,14 @@ function expenseAmount(event) {
 }
 
 function expenseDate(event) {
-  if (event.type === 'fine' && event.paid && event.paidAt) return String(event.paidAt).slice(0, 10);
-  if (event.type === 'issue' && event.resolvedAt && (Number(event.repairCostRial) > 0 || Number(event.repairCostToman) > 0)) return String(event.resolvedAt).slice(0, 10);
-  return String(event.occurredAt || event.date || event.createdAt || '').slice(0, 10);
+  if (event.type === 'fine' && event.paid && event.paidAt) return PersianCalendar.gregorianDateKey(event.paidAt);
+  if (event.type === 'issue' && event.resolvedAt && (Number(event.repairCostRial) > 0 || Number(event.repairCostToman) > 0)) return PersianCalendar.gregorianDateKey(event.resolvedAt);
+  return PersianCalendar.gregorianDateKey(event.occurredAt || event.date || event.createdAt || '');
 }
 
 function calculateDistanceEntries(events, ownership = {}) {
-  const allOdometers = events.filter(event => event.type === 'odometer' && event.odometerKm !== null && event.odometerKm !== undefined && Number.isFinite(Number(event.odometerKm)))
-    .sort((a, b) => eventEpoch(a) - eventEpoch(b));
-  let correctionIndex = 0;
-  for (let index = 1; index < allOdometers.length; index++) {
-    if (Number(allOdometers[index].odometerKm) < Number(allOdometers[index - 1].odometerKm)) correctionIndex = index;
-  }
-  const odometers = allOdometers.slice(correctionIndex);
+  const odometerState = OdometerIntelligence.getOdometerState(events, { asOf: Infinity });
+  const odometers = odometerState.acceptedOdometerEvents.slice();
   const coveredTrips = new Set();
   const result = [];
   const purchaseKm = Number(ownership.purchaseOdometerKm ?? ownership.baselineOdometerKm ?? DEFAULT_PURCHASE_KM);
@@ -175,7 +155,7 @@ function calculateDistanceEntries(events, ownership = {}) {
       const purchaseTime = purchaseDate ? Date.parse(`${purchaseDate}T00:00:00+03:30`) : NaN;
       const firstTime = eventEpoch(first);
       const historicalTrips = events.filter(trip => trip.type === 'trip' && Number(trip.distanceKm) > 0 && eventEpoch(trip) <= firstTime &&
-        (!Number.isFinite(purchaseTime) || eventEpoch(trip) >= purchaseTime) && (correctionIndex === 0 || eventEpoch(trip) >= firstTime));
+        (!Number.isFinite(purchaseTime) || eventEpoch(trip) >= purchaseTime) && true);
       const tripTotal = sum(historicalTrips, trip => trip.distanceKm);
       if (tripTotal > 0 && tripTotal <= baselineDistance) {
         for (const trip of historicalTrips) {
@@ -263,7 +243,8 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
   const currentMonthEvents = asOfEvents.filter(event => PersianCalendar.monthKey(event.occurredAt || event.date || event.createdAt) === currentMonth);
   const currentMonthCosts = asOfEvents.filter(event => expenseAmount(event) > 0 && PersianCalendar.monthKey(expenseDate(event)) === currentMonth);
   const currentMonthFuel = currentMonthEvents.filter(event => event.type === 'fuel');
-  const currentOdometerKm = calculateCurrentOdometer(asOfEvents);
+  const odometerState = OdometerIntelligence.getOdometerState(asOfEvents, { asOf: asOfEpoch });
+  const currentOdometerKm = odometerState.currentOdometerKm;
   const dueItems = calculateDueItems(asOfEvents, config, currentOdometerKm, today);
   const eventTypes = {};
   for (const event of events) eventTypes[event.type] = (eventTypes[event.type] || 0) + 1;
@@ -297,10 +278,21 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     latestFuelUnitPriceToman: fullVehicleCostModel.latestFuelUnitPriceToman,
     fuelModel: {
       consumptionLPer100: fullVehicleCostModel.fuelModel.consumptionLPer100,
+      consumptionMinLPer100: fullVehicleCostModel.fuelModel.consumptionMinLPer100,
+      consumptionMaxLPer100: fullVehicleCostModel.fuelModel.consumptionMaxLPer100,
+      hasEstimate: fullVehicleCostModel.fuelModel.hasEstimate,
+      method: fullVehicleCostModel.fuelModel.method,
+      tankCapacityLiters: fullVehicleCostModel.fuelModel.tankCapacityLiters,
+      rejectedOdometerReadingCount: fullVehicleCostModel.fuelModel.rejectedOdometerReadingCount,
       priceTomanPerLiter: fullVehicleCostModel.fuelModel.priceTomanPerLiter,
       confidenceKey: fullVehicleCostModel.fuelModel.confidenceKey,
       confidenceLabel: fullVehicleCostModel.fuelModel.confidenceLabel,
       refuelCount: fullVehicleCostModel.fuelModel.refuelCount,
+      odometerReadingCount: fullVehicleCostModel.fuelModel.odometerReadingCount,
+      odometerReadingsInFuelWindow: fullVehicleCostModel.fuelModel.odometerReadingsInFuelWindow,
+      inferredRefuelOdometerCount: fullVehicleCostModel.fuelModel.inferredRefuelOdometerCount,
+      lastOdometerKm: fullVehicleCostModel.fuelModel.lastOdometerKm,
+      odometerDistanceKm: fullVehicleCostModel.fuelModel.odometerDistanceKm,
       sampleIntervals: fullVehicleCostModel.fuelModel.sampleIntervals,
       sampleDistanceKm: fullVehicleCostModel.fuelModel.sampleDistanceKm
     },
@@ -318,9 +310,17 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
-      calculationVersion: 6,
+      calculationVersion: 9,
       eventCount: events.length,
       currentOdometerKm,
+      odometerDiagnostics: {
+        acceptedReadingCount: odometerState.odometerReadingCount,
+        rejectedReadingCount: odometerState.rejectedOdometerCount,
+        acceptedTripCount: odometerState.tripCount,
+        rejectedTripCount: odometerState.rejectedTripCount,
+        lastValidReadingAt: odometerState.lastValidReadingAt,
+        rejectedReasons: odometerState.rejectedReasons
+      },
       currentMonth,
       currentMonthEventCount: currentMonthEvents.length,
       currentMonthCostRial: sum(currentMonthCosts, expenseAmount),

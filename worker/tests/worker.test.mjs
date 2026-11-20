@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.20.0");
+ assert.equal(body.version, "3.22.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.20.0");
+ assert.equal(body.version, "3.22.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -1289,7 +1289,7 @@ test("Telegram imports both official Road Police fine SMS formats and blocks sem
   assert.equal(seatbeltDetails.status, 200);
   const seatbeltDetailsText = sent.at(-1).text;
   assert.match(seatbeltDetailsText, /نوع قبض:<\/b> دوبرگی/);
-  assert.match(seatbeltDetailsText, /مهلت محاسباتی:<\/b> 2027-01-18/);
+  assert.match(seatbeltDetailsText, /مهلت محاسباتی:<\/b> ۱۴۰۵\/۱۰\/۲۸/);
   assert.match(seatbeltDetailsText, /مشمول پیگیری دیرکرد/);
  } finally {
   globalThis.fetch = originalFetch;

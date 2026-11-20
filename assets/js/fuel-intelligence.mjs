@@ -21,11 +21,63 @@ const MAX_INTERVAL_KM = 5000;
 const MAX_CONSUMPTION_L_PER_100 = 30;
 const RAPID_REFUEL_MAX_HOURS = 6;
 const RAPID_REFUEL_MAX_DISTANCE_KM = 30;
+const ODOMETER_INFERENCE_MAX_HOURS = 36;
+const ODOMETER_INFERENCE_MAX_DISTANCE_KM = 100;
 
+function odometerApi() { return globalThis.GarageOdometerIntelligence || null; }
 function epochOf(event) {
+  const api = odometerApi();
+  if (api?.eventTimelineEpoch) return api.eventTimelineEpoch(event);
   const value = event?.occurredAt || (event?.date ? `${String(event.date).slice(0, 10)}T${event?.time || '12:00'}:00+03:30` : event?.createdAt);
   const timestamp = Date.parse(value || '');
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function enrichRefuelsWithOdometer(sourceEvents, odoState, cutoff) {
+  const readings = (odoState?.acceptedOdometerEvents || []).filter(event => epochOf(event) <= cutoff);
+  const enriched = [];
+  const adjustments = [];
+  let inferredCount = 0;
+  for (const event of (Array.isArray(sourceEvents) ? sourceEvents : []).filter(row => row?.type === 'fuel' && epochOf(row) <= cutoff)) {
+    const eventEpoch = epochOf(event);
+    const nearby = readings.map(reading => ({ reading, deltaMs: epochOf(reading) - eventEpoch }))
+      .filter(item => Math.abs(item.deltaMs) <= ODOMETER_INFERENCE_MAX_HOURS * 3600000)
+      .sort((a, b) => Math.abs(a.deltaMs) - Math.abs(b.deltaMs));
+    const before = nearby.filter(item => item.deltaMs <= 0).sort((a, b) => b.deltaMs - a.deltaMs)[0];
+    const after = nearby.filter(item => item.deltaMs > 0).sort((a, b) => a.deltaMs - b.deltaMs)[0];
+    const nearest = before || after;
+    const originalKm = finitePositive(event.odometerKm);
+    let effectiveKm = originalKm;
+    let inference = null;
+
+    // Auto-assigned odometers are only provisional. If a trusted contemporaneous
+    // reading is nearby and the provisional value is materially behind it,
+    // anchor the model to the odometer record without altering the source event.
+    if (event.odometerAutoAssigned === true && nearest && originalKm !== null) {
+      const candidateKm = finitePositive(nearest.reading.odometerKm);
+      const difference = candidateKm === null ? 0 : candidateKm - originalKm;
+      const sameLocalDay = String(event.date || '').slice(0, 10) === String(nearest.reading.date || '').slice(0, 10);
+      if (candidateKm !== null && difference > 0 && difference <= ODOMETER_INFERENCE_MAX_DISTANCE_KM && sameLocalDay && nearest.deltaMs <= 0) {
+        effectiveKm = candidateKm;
+        inference = { sourceEventId: nearest.reading.id, originalKm, inferredKm: candidateKm, reason: 'nearby-odometer-corrected-auto-assigned' };
+      }
+    }
+    if (effectiveKm === null && nearest) {
+      const candidateKm = finitePositive(nearest.reading.odometerKm);
+      if (candidateKm !== null) {
+        effectiveKm = candidateKm;
+        inference = { sourceEventId: nearest.reading.id, originalKm: null, inferredKm: candidateKm, reason: 'missing-refuel-odometer-inferred' };
+      }
+    }
+    if (effectiveKm !== null && inference) {
+      inferredCount += 1;
+      adjustments.push({ eventId: event.id, ...inference });
+      enriched.push({ ...event, odometerKm: effectiveKm, odometerInferred: true, odometerInferenceSourceId: inference.sourceEventId, odometerOriginalKm: inference.originalKm });
+    } else {
+      enriched.push({ ...event, odometerKm: effectiveKm });
+    }
+  }
+  return { events: enriched, inferredCount, adjustments };
 }
 
 function finitePositive(value) {
@@ -54,7 +106,8 @@ function median(values) {
 }
 
 function dateLabel(event) {
-  return event?.jalaliDate || event?.date || String(event?.occurredAt || '').slice(0, 10) || '—';
+  const calendar = globalThis.GaragePersianCalendar;
+  return calendar?.eventDateLabel?.(event) || event?.jalaliDate || event?.date || String(event?.occurredAt || '').slice(0, 10) || '—';
 }
 
 function intervalBase(from, to, refuelCount, method) {
@@ -91,13 +144,14 @@ function validateRefuelSequence(sourceEvents, capacity) {
   const all = (Array.isArray(sourceEvents) ? sourceEvents : [])
     .filter(event => event?.type === 'fuel')
     .map(event => ({ event, liters: finitePositive(event.liters), odometer: finitePositive(event.odometerKm), timestamp: epochOf(event) }))
-    .filter(item => item.liters !== null && item.odometer !== null)
-    .sort((a, b) => a.timestamp - b.timestamp || a.odometer - b.odometer || String(a.event.id || '').localeCompare(String(b.event.id || '')));
+    .sort((a, b) => a.timestamp - b.timestamp || (a.odometer ?? Infinity) - (b.odometer ?? Infinity) || String(a.event.id || '').localeCompare(String(b.event.id || '')));
 
   const valid = [];
   const rejected = [];
   let previous = null;
   for (const item of all) {
+    if (item.liters === null) { rejected.push({ event: item.event, reason: 'invalid-refuel-liters' }); continue; }
+    if (item.odometer === null) { rejected.push({ event: item.event, reason: 'missing-refuel-odometer' }); continue; }
     if (item.liters > capacity) {
       rejected.push({ event: item.event, reason: 'refuel-exceeds-tank-capacity' });
       continue;
@@ -367,7 +421,11 @@ export function calculateFuelModel(events, options = {}) {
     rapidRefuelMaxDistanceKm: Math.min(200, Math.max(1, finitePositive(options.rapidRefuelMaxDistanceKm) || RAPID_REFUEL_MAX_DISTANCE_KM))
   };
   const sourceEvents = Array.isArray(events) ? events : [];
-  const eligibleEvents = sourceEvents.filter(event => event && event.type === 'fuel' && epochOf(event) <= cutoff);
+  const odometerState = odometerApi()?.getOdometerState
+    ? odometerApi().getOdometerState(sourceEvents, { asOf: cutoff })
+    : { acceptedOdometerEvents: sourceEvents.filter(event => event?.type === 'odometer' && finitePositive(event.odometerKm)).sort((a, b) => epochOf(a) - epochOf(b)), rejectedOdometerEvents: [] };
+  const enrichedRefuels = enrichRefuelsWithOdometer(sourceEvents, odometerState, cutoff);
+  const eligibleEvents = enrichedRefuels.events;
   const { valid: validated, rejected: invalidRefuels } = validateRefuelSequence(eligibleEvents, capacity);
 
   // A backwards odometer value is a hard segment boundary. Never interpolate
@@ -392,10 +450,15 @@ export function calculateFuelModel(events, options = {}) {
   }
 
   const exactFiltered = filterExactOutliers(exactRaw);
-  const acceptedExact = exactFiltered.accepted.map(item => ({ ...item, outlier: false }));
-  const rejectedExact = exactFiltered.rejected;
-  const acceptedPartial = partialRaw.filter(item => item.valid);
-  const rejectedPartial = partialRaw.filter(item => !item.valid);
+  const acceptedOdometerRows = odometerState.acceptedOdometerEvents || [];
+  const addOdometerTelemetry = interval => ({
+    ...interval,
+    intermediateOdometerReadingCount: acceptedOdometerRows.filter(row => epochOf(row) > epochOf(interval.from) && epochOf(row) <= epochOf(interval.to)).length
+  });
+  const acceptedExact = exactFiltered.accepted.map(item => ({ ...addOdometerTelemetry(item), outlier: false }));
+  const rejectedExact = exactFiltered.rejected.map(addOdometerTelemetry);
+  const acceptedPartial = partialRaw.filter(item => item.valid).map(addOdometerTelemetry);
+  const rejectedPartial = partialRaw.filter(item => !item.valid).map(addOdometerTelemetry);
 
   // Exact full-to-full windows dominate a point estimate. Partial windows remain
   // visible as supplementary bounds but are not double-counted with exact spans.
@@ -433,6 +496,15 @@ export function calculateFuelModel(events, options = {}) {
   }
   const unmeasuredRefuelCount = Math.max(0, allValidRefuels.length - includedEvents.size);
   const intervalRows = [...selectedIntervals, ...rejectedExact, ...rejectedPartial].sort((a, b) => epochOf(a.to) - epochOf(b.to));
+  const acceptedOdometers = acceptedOdometerRows;
+  const odometerDistanceKm = acceptedOdometers.slice(1).reduce((total, row, index) => {
+    const previous = acceptedOdometers[index];
+    const delta = Number(row.odometerKm) - Number(previous.odometerKm);
+    return total + (delta > 0 && delta <= 5000 ? delta : 0);
+  }, 0);
+  const firstRefuelEpoch = validated.length ? validated[0].timestamp : Infinity;
+  const lastRefuelEpoch = validated.length ? validated[validated.length - 1].timestamp : -Infinity;
+  const odometerReadingsInFuelWindow = acceptedOdometers.filter(row => epochOf(row) >= firstRefuelEpoch && epochOf(row) <= lastRefuelEpoch);
 
   return {
     consumptionLPer100,
@@ -444,6 +516,13 @@ export function calculateFuelModel(events, options = {}) {
     rawIntervals: [...exactRaw, ...partialRaw],
     rejectedIntervals: [...rejectedExact, ...rejectedPartial],
     refuelCount: allValidRefuels.length,
+    odometerReadingCount: acceptedOdometers.length,
+    rejectedOdometerReadingCount: (odometerState.rejectedOdometerEvents || []).length,
+    odometerDistanceKm: Math.round(odometerDistanceKm * 10) / 10,
+    lastOdometerKm: odometerState.currentOdometerKm ?? null,
+    odometerReadingsInFuelWindow: odometerReadingsInFuelWindow.length,
+    inferredRefuelOdometerCount: enrichedRefuels.inferredCount,
+    refuelOdometerAdjustments: enrichedRefuels.adjustments,
     sampleIntervals: selectedIntervals.length,
     exactIntervals: acceptedExact.length,
     estimatedIntervals: acceptedPartial.length,
@@ -500,6 +579,8 @@ export function estimateFuelTrip(events, distanceKm, options = {}) {
     sampleRefuels: model.refuelCount,
     sampleIntervals: model.sampleIntervals,
     sampleDistanceKm: model.sampleDistanceKm,
+    odometerReadingCount: model.odometerReadingCount,
+    odometerReadingsInFuelWindow: model.odometerReadingsInFuelWindow,
     sampleMinLiters: model.sampleMinLiters,
     sampleMaxLiters: model.sampleMaxLiters,
     method: model.method,
