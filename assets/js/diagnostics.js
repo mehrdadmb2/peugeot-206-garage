@@ -74,7 +74,7 @@
   function log(level, scope, message, details) {
     const entry = {
       id: ++sequence,
-      at: new Date().toISOString(),
+      at: (root.GarageClock?.nowDate?.() || new Date()).toISOString(),
       level: ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'info',
       scope: redact(scope || 'app'),
       message: redact(message || ''),
@@ -104,7 +104,7 @@
         })) : [];
     return {
       diagnosticsVersion: VERSION,
-      capturedAt: new Date().toISOString(),
+      capturedAt: (root.GarageClock?.nowDate?.() || new Date()).toISOString(),
       page: `${root.location?.origin || ''}${root.location?.pathname || ''}`,
       userAgent: nav.userAgent || 'unknown',
       language: nav.language || 'unknown',
@@ -139,7 +139,7 @@
     const blob = new Blob([JSON.stringify(report(), null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = root.document.createElement('a');
-    a.href = url; a.download = `206-garage-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.href = url; a.download = `206-garage-diagnostics-${(root.GarageClock?.nowDate?.() || new Date()).toISOString().replace(/[:.]/g, '-')}.json`;
     root.document.body.appendChild(a); a.click(); a.remove();
     root.setTimeout(() => URL.revokeObjectURL(url), 1500);
     log('info', 'diagnostics.export', 'گزارش فنی JSON ساخته شد.');
@@ -217,7 +217,7 @@
       <div><b>${entries.length}</b><small>رویداد</small></div>`;
     count.textContent = String(entries.length);
     const recent = entries.slice(-80).reverse();
-    list.innerHTML = recent.length ? recent.map(item => `<article class="garage-diag-entry level-${item.level}"><div><b>${escapeHtml(item.scope)}</b><time>${escapeHtml(new Date(item.at).toLocaleTimeString())}</time><span>${escapeHtml(item.level.toUpperCase())}</span></div><p>${escapeHtml(item.message)}</p>${item.details ? `<pre>${escapeHtml(JSON.stringify(item.details, null, 2).slice(0, 1500))}</pre>` : ''}</article>`).join('') : '<div class="empty-state">هنوز خطایی ثبت نشده است. «آزمایش کامل منابع» را اجرا کن.</div>';
+    list.innerHTML = recent.length ? recent.map(item => `<article class="garage-diag-entry level-${item.level}"><div><b>${escapeHtml(item.scope)}</b><time>${escapeHtml(new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(item.at)))}</time><span>${escapeHtml(item.level.toUpperCase())}</span></div><p>${escapeHtml(item.message)}</p>${item.details ? `<pre>${escapeHtml(JSON.stringify(item.details, null, 2).slice(0, 1500))}</pre>` : ''}</article>`).join('') : '<div class="empty-state">هنوز خطایی ثبت نشده است. «آزمایش کامل منابع» را اجرا کن.</div>';
   }
 
   function escapeHtml(value) {

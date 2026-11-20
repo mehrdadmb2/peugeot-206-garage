@@ -10,7 +10,12 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.22.0");
+ assert.equal(body.version, "3.23.0");
+ assert.ok(Number.isFinite(body.epochMs));
+ assert.equal(body.timezone, "Asia/Tehran");
+ assert.equal(response.headers.get("access-control-allow-origin"), "*");
+ assert.equal(body.configured.telegramBotToken, false);
+ assert.equal(body.configured.githubToken, false);
 });
 
 test("GET / returns API guide", async () => {
@@ -19,6 +24,15 @@ test("GET / returns API guide", async () => {
  const body = await response.json();
  assert.equal(body.service, "206 Garage API");
  assert.ok(body.endpoints.telegramWebhook);
+});
+
+
+test("Telegram webhook registrar subscribes to both messages and callback buttons and verifies the webhook", () => {
+ const script = readFileSync(new URL("../scripts/set-webhook.mjs", import.meta.url), "utf8");
+ assert.match(script, /allowed_updates:\s*\["message",\s*"callback_query"\]/);
+ assert.match(script, /telegram\("getWebhookInfo"/);
+ assert.match(script, /last_error_message/);
+ assert.match(script, /drop_pending_updates:\s*false/);
 });
 
 test("unknown route returns 404", async () => {
@@ -39,7 +53,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.22.0");
+ assert.equal(body.version, "3.23.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);

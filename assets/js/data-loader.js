@@ -26,7 +26,10 @@
     try { root.GarageDiagnostics?.log(level, scope, message, details); } catch (_) {}
   };
 
-  function todayInTehran(now = new Date()) {
+  function trustedNow() { return root.GarageClock?.nowDate?.() || new Date(); }
+  function trustedNowEpoch() { return root.GarageClock?.nowEpoch?.() ?? Date.now(); }
+
+  function todayInTehran(now = trustedNow()) {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit'
     }).formatToParts(now);
@@ -177,8 +180,10 @@
       reasons.push(`تاریخ محاسبات ${snapshot.generatedForLocalDate} است؛ امروز ${today} است.`);
     }
     const generatedAt = Date.parse(snapshot.generatedAt || '');
-    if (!Number.isFinite(generatedAt) || Date.now() - generatedAt > 36 * 60 * 60 * 1000) {
+    if (!Number.isFinite(generatedAt) || trustedNowEpoch() - generatedAt > 36 * 60 * 60 * 1000) {
       reasons.push('زمان تولید فایل محاسبات نامعتبر یا قدیمی‌تر از ۳۶ ساعت است.');
+    } else if (generatedAt > trustedNowEpoch() + 5 * 60 * 1000) {
+      reasons.push('زمان تولید Snapshot از ساعت مرجع سرور جلوتر است.');
     }
     if (index) {
       const indexTime = Date.parse(index.updatedAt || '');
@@ -231,7 +236,7 @@
     try {
       if (!root.localStorage || !dataset || !dataset.config || !Array.isArray(dataset.events) || !Array.isArray(dataset.months)) return false;
       const payload = {
-        schemaVersion: 1, savedAt: new Date().toISOString(), updatedAt: dataset.updatedAt || null,
+        schemaVersion: 1, savedAt: trustedNow().toISOString(), updatedAt: dataset.updatedAt || null,
         config: dataset.config, events: dataset.events, months: dataset.months,
         failedMonths: dataset.failedMonths || [], warnings: dataset.warnings || []
       };
@@ -261,7 +266,7 @@
         precomputed: null, generatedAt: cached.savedAt || null, updatedAt: cached.updatedAt || null,
         failedMonths: Array.isArray(cached.failedMonths) ? cached.failedMonths : [],
         warnings: [...(Array.isArray(cached.warnings) ? cached.warnings : []),
-          `تمام منابع آنلاین در دسترس نبودند؛ آخرین دادهٔ ذخیره‌شده در این مرورگر از ${cached.savedAt ? new Date(cached.savedAt).toLocaleString('fa-IR') : 'زمان نامشخص'} نمایش داده می‌شود.`],
+          `تمام منابع آنلاین در دسترس نبودند؛ آخرین دادهٔ ذخیره‌شده در این مرورگر از ${cached.savedAt ? new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(cached.savedAt)) : 'زمان نامشخص'} نمایش داده می‌شود.`],
         source: 'local-browser-cache'
       };
     } catch (_) { return null; }

@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage v3.15.0 — command palette, personalization and workspace utilities */
+/* Peugeot 206 Garage v3.23.0 — command palette, personalization and workspace utilities */
 (() => {
   'use strict';
 
@@ -239,14 +239,18 @@
     const clock = $('#garageClock');
     if (!clock) return;
     const update = () => {
-      const now = new Date();
+      const now = window.GarageClock?.nowDate?.() || new Date();
       const time = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
       const date = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', day: 'numeric', month: 'short' }).format(now);
       const b = clock.querySelector('b');
       if (b) b.textContent = time;
-      clock.title = `تهران · ${date}`;
+      const synced = Boolean(window.GarageClock?.isSynced);
+      clock.dataset.timeSource = synced ? 'worker' : 'device-fallback';
+      clock.title = `تهران · ${date} · ${synced ? 'زمان همگام با سرور' : 'همگام‌سازی سرور در دسترس نیست؛ زمان دستگاه استفاده می‌شود'}`;
     };
     update();
+    window.GarageClockReady?.then?.(update).catch?.(() => {});
+    window.addEventListener('garageclockchange', update);
     window.setInterval(update, 30000);
   }
 

@@ -51,7 +51,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.22.0",
+        version: "3.23.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -76,12 +76,33 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.22.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      const configured = {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
+        telegramBotToken: Boolean(env.TELEGRAM_BOT_TOKEN),
+        telegramWebhookSecret: Boolean(env.TELEGRAM_WEBHOOK_SECRET),
+        allowedTelegramUserId: Boolean(env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
+        githubToken: Boolean(env.GITHUB_TOKEN),
+        githubOwner: Boolean(env.GITHUB_OWNER),
+        githubRepo: Boolean(env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN),
-        privateDocuments: Boolean(env.DOCUMENTS_ACCESS_TOKEN && env.GARAGE_PRIVATE_KV)
-      }, scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required", scheduledReminders: String(env.SCHEDULE_TRIGGER_SECRET || "").length >= 32 });
+        privateDocuments: Boolean(env.DOCUMENTS_ACCESS_TOKEN && env.GARAGE_PRIVATE_KV),
+        documentsAccessToken: Boolean(env.DOCUMENTS_ACCESS_TOKEN),
+        privateKvBinding: Boolean(env.GARAGE_PRIVATE_KV)
+      };
+      return corsResponse(json({
+        ok: true,
+        service: "206 Garage API",
+        version: "3.23.0",
+        time: nowTehran().iso,
+        serverTime: new Date().toISOString(),
+        epochMs: Date.now(),
+        timezone: TZ,
+        mode: "request-driven",
+        configured,
+        scheduler: "GitHub Actions calls /scheduled/reminders daily; no Worker cron required",
+        scheduledReminders: String(env.SCHEDULE_TRIGGER_SECRET || "").length >= 32
+      }));
     }
     if (url.pathname === "/scheduled/reminders" && request.method === "POST") {
       const expected = String(env.SCHEDULE_TRIGGER_SECRET || "");
@@ -201,7 +222,7 @@ function safePublicError(error) {
 
 async function handleExternalApi(request, url, env) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
-  if (request.method === "GET" && path === "/api/v1/health") return json({ ok: true, time: nowTehran().iso, timezone: TZ, mode: "request-driven" });
+  if (request.method === "GET" && path === "/api/v1/health") return corsResponse(json({ ok: true, time: nowTehran().iso, serverTime: new Date().toISOString(), epochMs: Date.now(), timezone: TZ, mode: "request-driven" }));
   if (request.method === "GET" && path === "/api/v1/overview") {
     const [events, config, index] = await Promise.all([loadAllEvents(env), readConfig(env), readJsonFile(FILE_INDEX, env, { months: [], updatedAt: null })]);
     const currentOdo = calculateCurrentOdometer(events);

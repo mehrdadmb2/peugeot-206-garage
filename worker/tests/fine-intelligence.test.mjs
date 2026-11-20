@@ -43,3 +43,16 @@ test('appeal follow-up deadline is only generated for a two-sheet fine', () => {
   assert.equal(timeline.deadlineBasis, 'two-sheet-appeal-decision-plus-20-days');
   assert.equal(timeline.potentialAmountRial, null, 'doubling is only a warning after the follow-up deadline passes');
 });
+
+
+test('fine timeline default date follows the synchronized Tehran clock across a UTC date boundary', () => {
+  const previous = globalThis.GarageClock;
+  globalThis.GarageClock = { nowDate: () => new Date('2026-11-20T21:30:00.000Z') };
+  try {
+    const timeline = calculateFineTimeline({ ticketType: 'دوبرگی', ticketDate: '2026-11-20', costRial: 100000, paid: false });
+    assert.equal(timeline.elapsedDays, 1, '21:30 UTC is already the next date in Tehran');
+  } finally {
+    if (previous === undefined) delete globalThis.GarageClock;
+    else globalThis.GarageClock = previous;
+  }
+});

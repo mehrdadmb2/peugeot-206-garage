@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage · private vehicle documents UI · v3.14.0 */
+/* Peugeot 206 Garage · private vehicle documents UI · v3.23.0 */
 (() => {
   'use strict';
   const WORKER = 'https://peugeot-206-garage-bot.game-developer-mb.workers.dev';
@@ -34,7 +34,7 @@
   function daysUntil(jalali){
     const m=faDigits(jalali).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);if(!m)return null;
     const [gy,gm,gd]=jalaliToGregorian(+m[1],+m[2],+m[3]);
-    const todayParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const todayParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(window.GarageClock?.nowDate?.() || new Date());
     const t=Object.fromEntries(todayParts.filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
     const now=Date.UTC(+t.year,+t.month-1,+t.day), target=Date.UTC(gy,gm-1,gd);
     return Math.round((target-now)/86400000);

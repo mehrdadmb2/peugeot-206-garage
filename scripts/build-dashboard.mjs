@@ -351,10 +351,34 @@ function isDirectExecution() {
   return invoked && import.meta.url === pathToFileURL(invoked).href;
 }
 
+async function resolveAuthoritativeBuildTime() {
+  const healthUrl = 'https://peugeot-206-garage-bot.game-developer-mb.workers.dev/health';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch(healthUrl, { cache: 'no-store', headers: { accept: 'application/json' }, signal: controller.signal });
+    if (!response.ok) throw new Error(`Worker health returned HTTP ${response.status}`);
+    const payload = await response.json();
+    const epoch = Number(payload?.epochMs) || Date.parse(payload?.serverTime || '') || Date.parse(payload?.time || '');
+    if (payload?.ok !== true || !Number.isFinite(epoch)) throw new Error('Worker did not provide a valid server time.');
+    return new Date(epoch);
+  } catch (error) {
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.warn(`Worker time is temporarily unavailable (${error.message}); using the GitHub-hosted runner clock.`);
+      return new Date();
+    }
+    throw new Error(`ساعت مرجع Worker قابل دریافت نیست؛ برای جلوگیری از تولید تاریخ اشتباه، Snapshot ساخته نشد. اتصال اینترنت و مسیر /health را بررسی کن. جزئیات: ${error.message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 if (isDirectExecution()) {
   try {
-    const result = buildDashboardFile(process.cwd());
+    const authoritativeNow = await resolveAuthoritativeBuildTime();
+    const result = buildDashboardFile(process.cwd(), authoritativeNow);
     console.log(`Dashboard snapshot generated: ${result.outputPath}`);
+    console.log(`Reference time: ${authoritativeNow.toISOString()} · Tehran date: ${result.snapshot.generatedForLocalDate}`);
     console.log(`Events: ${result.snapshot.computed.eventCount} | Months: ${result.snapshot.months.length} | Odometer: ${result.snapshot.computed.currentOdometerKm ?? 'unknown'} km | Due items: ${result.snapshot.computed.dueCount}`);
     console.log(`Output size: ${(result.bytes / 1024).toFixed(1)} KiB`);
   } catch (error) {

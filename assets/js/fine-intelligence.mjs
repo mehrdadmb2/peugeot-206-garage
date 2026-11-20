@@ -27,6 +27,15 @@ function daysBetween(from, to) {
   return Math.round((Date.parse(`${end}T12:00:00.000Z`) - Date.parse(`${start}T12:00:00.000Z`)) / 86_400_000);
 }
 
+function currentTehranDate() {
+  const date = globalThis.GarageClock?.nowDate?.() || new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date);
+  const fields = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  return `${fields.year}-${fields.month}-${fields.day}`;
+}
+
 function normalizeType(value) {
   return String(value || '')
     .normalize('NFKC')
@@ -50,7 +59,7 @@ export function isDoubleSheetFine(event) {
  * unknown ticket types never receive an automatic 60-day deadline or doubling.
  * Explicit user-entered deadlines remain reminders but do not imply doubling.
  */
-export function calculateFineTimeline(event, nowDate = new Date().toISOString().slice(0, 10)) {
+export function calculateFineTimeline(event, nowDate = currentTehranDate()) {
   const ticketDate = dateFromEvent(event);
   const appealDate = validIsoDate(event?.appealDecisionDate);
   const explicitDeadline = validIsoDate(event?.deadlineDate);

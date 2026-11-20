@@ -21,10 +21,11 @@ async function telegram(method, payload) {
   return data.result;
 }
 
+const identity = await telegram("getMe", {});
 const result = await telegram("setWebhook", {
   url: `${workerUrl}/telegram`,
   secret_token: secret,
-  allowed_updates: ["message"],
+  allowed_updates: ["message", "callback_query"],
   drop_pending_updates: false,
   max_connections: 20
 });
@@ -45,4 +46,16 @@ await telegram("setMyCommands", {
     { command: "latest", description: "آخرین رویدادهای ثبت‌شده" }
   ]
 });
-console.log(JSON.stringify({ ok: true, webhookUrl: result.url, pendingUpdateCount: result.pending_update_count, allowedUpdates: result.allowed_updates }, null, 2));
+const verification = await telegram("getWebhookInfo", {});
+if (verification.url !== `${workerUrl}/telegram`) throw new Error(`Webhook URL verification failed: ${verification.url || "empty URL"}`);
+console.log(JSON.stringify({
+  ok: true,
+  bot: { id: identity.id, username: identity.username, firstName: identity.first_name },
+  webhook: {
+    url: verification.url,
+    pendingUpdateCount: verification.pending_update_count,
+    allowedUpdates: verification.allowed_updates,
+    lastErrorDate: verification.last_error_date || null,
+    lastErrorMessage: verification.last_error_message || null
+  }
+}, null, 2));

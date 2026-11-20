@@ -4,6 +4,9 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null, fuelEngine: null, costEngine: null, fineEngine: null };
   const PersianCalendar = window.GaragePersianCalendar || null;
+  const GarageClock = window.GarageClock || null;
+  const garageNow = () => GarageClock?.nowDate?.() || new Date();
+  const garageNowEpoch = () => GarageClock?.nowEpoch?.() ?? Date.now();
   const OdometerIntelligence = window.GarageOdometerIntelligence || null;
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
@@ -108,6 +111,7 @@
     if (dashboardLoadInFlight) return;
     dashboardLoadInFlight = true;
     const loadStartedAt = Date.now();
+    try { await GarageClock?.sync?.(); } catch (_) { /* The UI can still load with the device clock as a fallback. */ }
     window.GarageDiagnostics?.log('info', 'app.load', 'بارگذاری داشبورد آغاز شد.', { userInitiated: Boolean(userInitiated), loaderAvailable: Boolean(window.GarageDataLoader?.load) });
     const refreshButton = $('#refreshButton');
     try {
@@ -143,7 +147,7 @@
       state.dataMode = dataset.mode || 'unknown';
       state.dataWarnings = Array.isArray(dataset.warnings) ? dataset.warnings : [];
       state.failedMonths = Array.isArray(dataset.failedMonths) ? dataset.failedMonths : [];
-      state.refreshedAt = new Date();
+      state.refreshedAt = garageNow();
       lastDashboardLoadAt = Date.now();
 
       populateMonthFilter();
@@ -291,7 +295,7 @@
     const monthCostEvents = all.filter(event => isActualExpense(event) && persianMonthKey(expenseDate(event)) === monthKey);
     const cost = cached ? Number(cached.currentMonthCostRial) || 0 : sum(monthCostEvents, expenseAmount);
     $('#statOdometer').textContent = currentOdo == null ? '—' : formatNumber(currentOdo);
-    const odometerDiagnostics = state.precomputed?.odometerDiagnostics || (OdometerIntelligence?.getOdometerState ? OdometerIntelligence.getOdometerState(all, { asOf: Date.now() }) : null);
+    const odometerDiagnostics = state.precomputed?.odometerDiagnostics || (OdometerIntelligence?.getOdometerState ? OdometerIntelligence.getOdometerState(all, { asOf: garageNowEpoch() }) : null);
     const rejectedOdometers = Number(odometerDiagnostics?.rejectedReadingCount ?? odometerDiagnostics?.rejectedOdometerCount) || 0;
     $('#statOdometerFoot').textContent = currentOdo == null ? 'ابتدا /km را در تلگرام ثبت کن' : `${formatNumber(odometerDiagnostics?.acceptedReadingCount ?? odometerDiagnostics?.odometerReadingCount ?? countOdometerSources(all))} ثبت معتبر${rejectedOdometers ? ` · ${formatNumber(rejectedOdometers)} قرائت مشکوک نادیده گرفته شد` : ''}`;
     $('#statCost').textContent = currentOdo == null && !monthEvents.length ? '—' : compactMoney(cost / 10);
@@ -372,7 +376,7 @@
       const remainingKm = intervalKm > 0 && currentOdo != null && referenceKm != null ? Math.round(referenceKm + intervalKm - currentOdo) : null;
       const referenceDate = reference.date || String(reference.occurredAt || '').slice(0, 10) || null;
       const dueDate = intervalDays > 0 && referenceDate ? addDays(referenceDate, intervalDays) : null;
-      const remainingDays = dueDate ? daysBetween(localDateString(new Date()), dueDate) : null;
+      const remainingDays = dueDate ? daysBetween(localDateString(garageNow()), dueDate) : null;
       const hasInterval = intervalKm > 0 || intervalDays > 0;
       const stage = hasInterval ? maintenanceStage(remainingKm, remainingDays, intervalKm, intervalDays) : 'monitor';
       const status = `${maintenanceStageLabel(stage)}${baseline ? ' · بدون سابقه' : ''}`;
@@ -455,7 +459,7 @@
       const refKm = numberOrNull(reference.odometerKm);
       const kmSince = currentOdo != null && refKm != null ? Number(currentOdo) - refKm : null;
       const referenceDate = reference.date || String(reference.occurredAt || '').slice(0,10) || null;
-      const daysSince = referenceDate ? Math.max(0, daysBetween(referenceDate, localDateString(new Date()))) : null;
+      const daysSince = referenceDate ? Math.max(0, daysBetween(referenceDate, localDateString(garageNow()))) : null;
       const intervalKm = Number(item.intervalKm) || 0;
       const intervalDays = Number(item.intervalDays) || 0;
       const hasInterval = item.mode === 'periodic' && (intervalKm > 0 || intervalDays > 0);
@@ -496,7 +500,7 @@
       serviceKeys.add(key);
       const category = categories[service.category] || { label: service.category || 'سرویس', icon: '🧰', theme: '#4ade80' };
       const kmSince = currentOdo != null && latest.odometerKm != null ? Math.max(0, Number(currentOdo)-Number(latest.odometerKm)) : null;
-      const daysSince = latest.date ? Math.max(0, daysBetween(latest.date, localDateString(new Date()))) : null;
+      const daysSince = latest.date ? Math.max(0, daysBetween(latest.date, localDateString(garageNow()))) : null;
       cards.push({ rank: 4, sortKm: Infinity, key: `service-${key}`, html: `<article class="service-card installed-lifetime-card maintenance-monitor" style="--service-glow:rgba(93,230,176,.07);--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.icon || category.icon || '🧰')} ${escapeHtml(service.label || key)}</span><span class="service-status ok">🧾 آخرین سرویس ثبت‌شده</span></div><p class="service-description">${escapeHtml(service.note || 'شرح و نتیجهٔ عملیات را در دفتر وقایع بررسی کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${kmSince == null ? '—' : `${formatNumber(kmSince)} km`}</strong><small>از آخرین سرویس</small></div><div class="service-metric"><strong>${daysSince == null ? '—' : `${formatNumber(daysSince)} روز`}</strong><small>از تاریخ ثبت</small></div></div><div class="service-foot">تاریخ: ${escapeHtml(formatEventDate(latest))} · ${latest.odometerKm != null ? `کیلومتر: ${formatNumber(latest.odometerKm)} km · ` : ''}شناسه <code>${escapeHtml(String(latest.id).slice(0,8))}</code></div></article>` });
     }
     cards.sort((a,b)=>a.rank-b.rank || a.sortKm-b.sortKm || a.key.localeCompare(b.key));
@@ -526,7 +530,7 @@
       const technical = [latest?.brand ? `برند ${latest.brand}` : '', latest?.model ? `مدل ${latest.model}` : '', latest?.partNumber ? `کد ${latest.partNumber}` : ''].filter(Boolean).join(' · ');
       const modeLabel = isPeriodic ? 'مصرفی / موعدمحور' : 'عمرمحور / بازدیدمحور';
       const latestDetails = latest && latest.odometerKm != null && calculateOdometer(state.events) != null ? Math.max(0, calculateOdometer(state.events) - Number(latest.odometerKm)) : null;
-      const tracking = latest ? (isPeriodic ? `آخرین تعویض ثبت شده${latestDetails != null ? ` · ${formatNumber(latestDetails)} km پیموده‌شده` : ''}` : `مدت ثبت‌شده از نصب: ${formatNumber(daysBetween(latest.date || String(latest.occurredAt).slice(0,10), localDateString(new Date())))} روز${latestDetails != null ? ` · ${formatNumber(latestDetails)} km` : ''}`) : 'برای شروع پایش، نصب/تعویض را ثبت کن';
+      const tracking = latest ? (isPeriodic ? `آخرین تعویض ثبت شده${latestDetails != null ? ` · ${formatNumber(latestDetails)} km پیموده‌شده` : ''}` : `مدت ثبت‌شده از نصب: ${formatNumber(daysBetween(latest.date || String(latest.occurredAt).slice(0,10), localDateString(garageNow())))} روز${latestDetails != null ? ` · ${formatNumber(latestDetails)} km` : ''}`) : 'برای شروع پایش، نصب/تعویض را ثبت کن';
       return `<article class="component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="component-card-top"><span class="component-icon">${escapeHtml(item.icon || category.icon || '🔩')}</span><span class="component-category-pill">${escapeHtml(category.label || item.category || 'سایر')}</span></div><h3>${escapeHtml(item.label || key)}</h3><div class="component-mode-badge ${isPeriodic ? 'periodic' : 'condition'}">${modeLabel}</div><p class="component-note">${escapeHtml(item.note || 'شرح تخصصی در صورت نیاز تکمیل شود.')}</p><div class="component-interval"><span>◷</span><b>${escapeHtml(interval)}</b></div><div class="component-track-status">${escapeHtml(fitment)}</div><div class="component-track-status">${escapeHtml(tracking)}</div>${technical ? `<div class="component-technical">${escapeHtml(technical)}</div>` : ''}<div class="component-card-actions"><button type="button" class="component-command-copy" data-component-command="/part ${key} تعویض شد km=${calculateOdometer(state.events) || ''}">نمونه ثبت ↗</button><span class="component-key">${escapeHtml(key)}</span></div></article>`;
     }).join('');
   }
@@ -543,13 +547,13 @@
     root.innerHTML = rows.map(({key,event,item}) => {
       const category = state.config?.partCatalog?.categories?.[item.category] || {label:item.category || 'سایر',icon:'🔩',theme:'#36c7e8'};
       const kmSince = currentOdo != null && event.odometerKm != null ? currentOdo - Number(event.odometerKm) : null;
-      const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(new Date()))) : null;
+      const daysSince = event.date ? Math.max(0,daysBetween(event.date,localDateString(garageNow()))) : null;
       const age = [kmSince != null && kmSince >= 0 ? `${formatNumber(kmSince)} km` : '',daysSince != null ? `${formatNumber(daysSince)} روز` : ''].filter(Boolean).join(' · ');
       const intervalKm = Number(item.intervalKm)||0;
       const intervalDays = Number(item.intervalDays)||0;
       const remainingKm = item.mode === 'periodic' && intervalKm > 0 && kmSince != null ? intervalKm-kmSince : null;
       const dueDate = item.mode === 'periodic' && intervalDays > 0 && event.date ? addDays(event.date,intervalDays) : null;
-      const remainingDays = dueDate ? daysBetween(localDateString(new Date()),dueDate) : null;
+      const remainingDays = dueDate ? daysBetween(localDateString(garageNow()),dueDate) : null;
       const status = item.mode === 'periodic' ? ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0) ? 'موعد گذشته' : 'یادآور موعد') : 'عمر ثبت‌شده · سلامت نیازمند بازدید';
       const specs = event.specs && typeof event.specs === 'object' ? Object.entries(event.specs).map(([k,v])=>`${k}: ${v}`).join(' · ') : '';
       return `<article class="installed-component-card" style="--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="installed-component-heading"><span>${escapeHtml(item.icon || category.icon || '🔩')}</span><div><b>${escapeHtml(item.label || event.componentName || key)}</b><small>${escapeHtml(category.label || item.category || 'قطعه')}</small></div><em>${escapeHtml(status)}</em></div><div class="installed-component-age">${age ? `از نصب: ${escapeHtml(age)}` : 'زمان/کیلومتر نصب کامل نیست'}</div><div class="installed-component-meta">نصب: ${escapeHtml(formatEventDate(event))}${event.odometerKm != null ? ` · ${formatNumber(event.odometerKm)} km` : ''}</div>${event.brand ? `<div class="installed-component-meta">برند: ${escapeHtml(event.brand)}${event.model ? ` · مدل: ${escapeHtml(event.model)}` : ''}</div>` : ''}${specs ? `<div class="installed-component-meta">${escapeHtml(specs)}</div>` : ''}${item.mode === 'periodic' ? `<div class="installed-component-meta">${remainingKm != null ? (remainingKm <= 0 ? `${formatNumber(Math.abs(remainingKm))} km عبور از بازه` : `${formatNumber(remainingKm)} km تا بازه`) : ''}${remainingDays != null ? ` · ${remainingDays < 0 ? `${formatNumber(Math.abs(remainingDays))} روز از موعد گذشته` : `${formatNumber(remainingDays)} روز باقی‌مانده`}` : ''}</div>` : ''}<div class="installed-component-foot">شناسه <code>${escapeHtml(String(event.id).slice(0,8))}</code> · عمر/موعد تخمینی جایگزین بازدید قطعه نیست.</div></article>`;
@@ -583,7 +587,7 @@
     const ownership = config?.ownership || {};
     const purchaseKm = numberOrNull(ownership.purchaseOdometerKm ?? ownership.baselineOdometerKm ?? config?.vehicle?.purchaseOdometerKm) ?? 428000;
     const purchaseDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ownership.purchaseDate || '')) ? ownership.purchaseDate : null;
-    const today = localDateString(new Date());
+    const today = localDateString(garageNow());
     for (const [key, service] of Object.entries(config?.serviceIntervals || {})) {
       const latest = latestMaintenanceForKey(events, key, config?.partCatalog?.items?.[key] || null);
       const baseline = !latest;
@@ -687,7 +691,7 @@
     if ($('#fineCountAll')) $('#fineCountAll').textContent = `${formatNumber(fines.length)} مورد ثبت‌شده`;
     $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e => {
       const timeline = state.fineEngine?.calculateFineTimeline
-        ? state.fineEngine.calculateFineTimeline(e, localDateString(new Date()))
+        ? state.fineEngine.calculateFineTimeline(e, localDateString(garageNow()))
         : { ticketDate: String(e.ticketDate || e.date || e.occurredAt || '').slice(0, 10) || null, elapsedDays: null, deadlineDate: e.deadlineDate || null, daysToDeadline: null, potentialAmountRial: null, eligibilityLabel: 'موتور مهلت در دسترس نیست؛ دیرکرد خودکار اعمال نشده است' };
       const ticketDate = timeline.ticketDate;
       const age = timeline.elapsedDays == null ? null : Math.max(0, timeline.elapsedDays);
@@ -734,13 +738,13 @@
     if (!rows.length) { showToast('با فیلتر فعلی داده‌ای برای خروجی وجود ندارد.'); return; }
     const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','fuelEstimateLiters','fuelEstimateCostRial','fuelEstimateMinCostRial','fuelEstimateMaxCostRial','fuelEstimateConfidenceLabel','fuelEstimateLPer100','fuelEstimateMinLPer100','fuelEstimateMaxLPer100','fuelEstimateMinLiters','fuelEstimateMaxLiters','fuelEstimatePriceTomanPerLiter','fuelEstimateConfidence','fuelEstimateSampleRefuels','fuelEstimateSampleIntervals','fuelEstimateSampleDistanceKm','fuelEstimateMethod','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','ticketSerialNumber','ticketPaymentId','ticketType','fineLocation','vehicleDescription','vehiclePlate','violationDescription','ticketDateJalali','speedLimitKph','recordedSpeedKph','cameraCode','reportedUnpaidFineBalanceRial','reportedBalanceDate','amountCurrency','fineSource','originalSms','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
-    downloadBlob(`206-garage-${localDateString(new Date())}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8');
+    downloadBlob(`206-garage-${localDateString(garageNow())}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8');
     showToast('خروجی CSV آماده شد.');
   }
   function exportJson() {
     const rows = state.filtered.slice();
     if (!rows.length) { showToast('هنوز داده‌ای برای خروجی وجود ندارد.'); return; }
-    downloadBlob(`206-garage-${localDateString(new Date())}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), vehicle: state.config?.vehicle || {}, events: rows }, null, 2), 'application/json;charset=utf-8');
+    downloadBlob(`206-garage-${localDateString(garageNow())}.json`, JSON.stringify({ exportedAt: garageNow().toISOString(), vehicle: state.config?.vehicle || {}, events: rows }, null, 2), 'application/json;charset=utf-8');
     showToast('خروجی JSON آماده شد.');
   }
   function downloadBlob(filename, content, type) {
@@ -769,9 +773,9 @@
   }
   function calculateOdometer(events) {
     if (events === state.events && state.precomputed?.currentOdometerKm != null && Number.isFinite(Number(state.precomputed.currentOdometerKm))) return Number(state.precomputed.currentOdometerKm);
-    if (OdometerIntelligence?.calculateCurrentOdometer) return OdometerIntelligence.calculateCurrentOdometer(events, { asOf: Date.now() });
+    if (OdometerIntelligence?.calculateCurrentOdometer) return OdometerIntelligence.calculateCurrentOdometer(events, { asOf: garageNowEpoch() });
     let current = null;
-    const timeline = events.filter(e=>(e.type==='odometer'||e.type==='trip') && eventEpoch(e) <= Date.now()).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
+    const timeline = events.filter(e=>(e.type==='odometer'||e.type==='trip') && eventEpoch(e) <= garageNowEpoch()).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
     let lastAbsolute = null;
     for (const event of timeline) {
       if (event.type==='odometer' && event.odometerKm !== null && event.odometerKm !== undefined && Number.isFinite(Number(event.odometerKm))) {
@@ -787,7 +791,7 @@
   function calculateDistanceEntries(events, ownershipConfig = null) {
     if (events === state.events && Array.isArray(state.precomputed?.distanceEntries)) return state.precomputed.distanceEntries;
     const odoState = OdometerIntelligence?.getOdometerState
-      ? OdometerIntelligence.getOdometerState(events, { asOf: Date.now() })
+      ? OdometerIntelligence.getOdometerState(events, { asOf: garageNowEpoch() })
       : null;
     const odometers = odoState?.acceptedOdometerEvents || events.filter(e=>e.type==='odometer' && e.odometerKm!==null && e.odometerKm!==undefined && Number.isFinite(Number(e.odometerKm))).sort((a,b)=>eventEpoch(a)-eventEpoch(b));
     const coveredTrips = new Set();
@@ -852,7 +856,7 @@
     }).join('')}</div>`;
   }
   function periodBucketKeys(period) {
-    const now = new Date();
+    const now = garageNow();
     const today = localDateString(now);
     if (period === 'hour') return Array.from({ length: 24 }, (_, i) => {
       const d = new Date(now.getTime() - (23 - i) * 3600000);
@@ -992,7 +996,7 @@
     add('وضعیت', event.status === 'fixed' ? 'رفع‌شده' : event.status === 'open' ? 'باز' : event.status);
     add('وضعیت پرداخت', event.type === 'fine' ? (event.paid ? 'پرداخت‌شده' : 'پرداخت‌نشده') : null);
     if (event.type === 'fine' && state.fineEngine?.calculateFineTimeline) {
-      const timeline = state.fineEngine.calculateFineTimeline(event, localDateString(new Date()));
+      const timeline = state.fineEngine.calculateFineTimeline(event, localDateString(garageNow()));
       add('مهلت پیگیری', timeline.deadlineDate || 'ندارد؛ دیرکرد خودکار فعال نیست');
       add('قاعده دیرکرد', timeline.eligibilityLabel);
       add('وضعیت مهلت', timeline.statusLabel);
@@ -1312,17 +1316,17 @@
   }
   function exportCsvAll() {
     if (!state.events.length) { showToast('سوابقی برای خروجی وجود ندارد.'); return; }
-    exportCsvRows(state.events, `206-garage-all-${localDateString(new Date())}.csv`); showToast('خروجی کامل CSV آماده شد.');
+    exportCsvRows(state.events, `206-garage-all-${localDateString(garageNow())}.csv`); showToast('خروجی کامل CSV آماده شد.');
   }
   function exportJsonAll() {
     if (!state.events.length) { showToast('سوابقی برای خروجی وجود ندارد.'); return; }
-    downloadBlob(`206-garage-all-${localDateString(new Date())}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), vehicle: state.config?.vehicle || {}, config: state.config, months: state.months, events: state.events }, null, 2), 'application/json;charset=utf-8');
+    downloadBlob(`206-garage-all-${localDateString(garageNow())}.json`, JSON.stringify({ exportedAt: garageNow().toISOString(), vehicle: state.config?.vehicle || {}, config: state.config, months: state.months, events: state.events }, null, 2), 'application/json;charset=utf-8');
     showToast('پشتیبان کامل JSON آماده شد.');
   }
   function exportExpensesCsv() {
     const rows = state.events.filter(isActualExpense);
     if (!rows.length) { showToast('هزینه‌ای برای خروجی وجود ندارد.'); return; }
-    exportCsvRows(rows, `206-garage-expenses-${localDateString(new Date())}.csv`); showToast('خروجی هزینه‌ها آماده شد.');
+    exportCsvRows(rows, `206-garage-expenses-${localDateString(garageNow())}.csv`); showToast('خروجی هزینه‌ها آماده شد.');
   }
   async function copyApiExample() {
     const node = $('#copyApiExample')?.parentElement?.querySelector('.api-code code');
@@ -1357,7 +1361,7 @@
   function eventPersianMonthKey(event) {
     return PersianCalendar?.monthKeyFromEvent ? PersianCalendar.monthKeyFromEvent(event) : persianMonthKey(event?.occurredAt || event?.date || event?.createdAt);
   }
-  function currentPersianMonthKey(now = new Date()) { return persianMonthKey(now); }
+  function currentPersianMonthKey(now = garageNow()) { return persianMonthKey(now); }
   function previousPersianMonthKeys(lastKey, count) {
     if (PersianCalendar?.previousMonthKeys) return PersianCalendar.previousMonthKeys(lastKey, count);
     const [yearValue, monthValue] = String(lastKey || '').split('-').map(Number);
