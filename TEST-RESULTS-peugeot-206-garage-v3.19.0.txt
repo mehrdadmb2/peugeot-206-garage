@@ -1,0 +1,37 @@
+Peugeot 206 Garage v3.19.0 — validation results
+
+Full test suite:
+  Command: cd worker && npm test
+  Result: PASS — 93 tests, 93 passed, 0 failed.
+
+Syntax check:
+  Command: cd worker && npm run check
+  Result: PASS.
+
+Dashboard snapshot:
+  Command: node scripts/build-dashboard.mjs
+  Result: PASS.
+  Events: 62
+  Months: 2
+  Current odometer: 432261 km
+  Snapshot size: 158.3 KiB
+  Calculation version: 5
+
+Worker smoke:
+  Command: node worker/test/smoke.mjs
+  Result: PASS — health, odometer formats, trip distance, fuel, service keys,
+  fine payment, summary, CSV export, interval updates and webhook secret.
+
+Road Police SMS integration:
+  Result: PASS — both supplied message formats parsed; individual fine amounts
+  separated from aggregate unpaid balance; exact original text retained;
+  re-sending a semantically identical ticket did not create a second record.
+
+Fuel model regression:
+  Result: PASS — partial-to-partial refuels do not infer consumption or trip cost;
+  near-in-time/near-distance refuels do not imply an empty tank; intermediate
+  partial fills are counted once inside a full-to-full interval.
+
+Notes:
+  The supplied SMS examples are test fixtures only and were not added to the
+  real vehicle event ledger. No Cloudflare deployment or GitHub push is claimed.

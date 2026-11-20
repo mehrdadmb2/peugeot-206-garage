@@ -253,20 +253,24 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
   }
 
   const today = localDateString(now);
+  // Never allow events dated after the snapshot's as-of timestamp to leak into
+  // current-month totals, odometer, maintenance status or cost forecasts.
+  const asOfEpoch = now.getTime();
+  const asOfEvents = events.filter(event => eventEpoch(event) <= asOfEpoch);
   // Monthly summaries follow the Iranian/Persian calendar, not the Gregorian
   // storage partition used by data/logs/YYYY-MM.json.
   const currentMonth = PersianCalendar.monthKey(now);
-  const currentMonthEvents = events.filter(event => PersianCalendar.monthKey(event.occurredAt || event.date || event.createdAt) === currentMonth);
-  const currentMonthCosts = events.filter(event => expenseAmount(event) > 0 && PersianCalendar.monthKey(expenseDate(event)) === currentMonth);
+  const currentMonthEvents = asOfEvents.filter(event => PersianCalendar.monthKey(event.occurredAt || event.date || event.createdAt) === currentMonth);
+  const currentMonthCosts = asOfEvents.filter(event => expenseAmount(event) > 0 && PersianCalendar.monthKey(expenseDate(event)) === currentMonth);
   const currentMonthFuel = currentMonthEvents.filter(event => event.type === 'fuel');
-  const currentOdometerKm = calculateCurrentOdometer(events);
-  const dueItems = calculateDueItems(events, config, currentOdometerKm, today);
+  const currentOdometerKm = calculateCurrentOdometer(asOfEvents);
+  const dueItems = calculateDueItems(asOfEvents, config, currentOdometerKm, today);
   const eventTypes = {};
   for (const event of events) eventTypes[event.type] = (eventTypes[event.type] || 0) + 1;
 
   const sourceTimestamps = [index.updatedAt, config.updatedAt, ...logUpdatedAt].filter(Boolean).sort();
-  const distanceEntries = calculateDistanceEntries(events, config.ownership || {});
-  const fullVehicleCostModel = calculateVehicleCostModel(events, {
+  const distanceEntries = calculateDistanceEntries(asOfEvents, config.ownership || {});
+  const fullVehicleCostModel = calculateVehicleCostModel(asOfEvents, {
     purchaseOdometerKm: config.ownership?.purchaseOdometerKm ?? DEFAULT_PURCHASE_KM,
     currentOdometerKm
   });
@@ -313,7 +317,7 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
-      calculationVersion: 4,
+      calculationVersion: 5,
       eventCount: events.length,
       currentOdometerKm,
       currentMonth,

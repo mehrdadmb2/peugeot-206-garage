@@ -1,13 +1,18 @@
 /**
- * Shared fuel-consumption estimator for the browser dashboard and Telegram Worker.
- * It supports partial refuels. A refuel-to-refuel interval is an estimate unless
- * both ends are confirmed full; changes in tank level therefore remain a source
- * of uncertainty. No consumption is invented when the data cannot support it.
+ * Conservative fuel-consumption engine shared by the dashboard and Worker.
+ *
+ * Consumption is measured only between two user-confirmed full-tank checkpoints.
+ * Every refuel between those checkpoints is included exactly once. A sequence of
+ * partial top-ups is deliberately NOT interpreted as fuel consumed: the amount
+ * remaining in the tank before/after each visit is unknown, even when visits are
+ * close together in time or distance.
  */
 const MIN_INTERVAL_KM = 40;
 const MAX_INTERVAL_KM = 5000;
 const MIN_RATE = 2;
 const MAX_RATE = 25;
+const RAPID_REFUEL_MAX_HOURS = 6;
+const RAPID_REFUEL_MAX_DISTANCE_KM = 30;
 
 function epochOf(event) {
   const value = event?.occurredAt || (event?.date ? `${String(event.date).slice(0, 10)}T${event?.time || '12:00'}:00+03:30` : event?.createdAt);
@@ -18,6 +23,11 @@ function epochOf(event) {
 function finitePositive(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function finiteNonNegative(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
 function refuelCostRial(event) {
@@ -36,25 +46,35 @@ function median(values) {
 }
 
 function confidenceFor(intervals, sampleDistanceKm) {
-  if (!intervals.length) return { key: 'none', label: 'دادهٔ کافی موجود نیست' };
-  const exact = intervals.filter(item => item.measured);
-  const estimated = intervals.length - exact.length;
-  const exactDistance = exact.reduce((sum, item) => sum + item.distanceKm, 0);
-  if (exact.length >= 3 && exactDistance >= 1000) return { key: 'high', label: 'اطمینان بالا · چند بازهٔ باک‌کامل' };
-  if (exact.length >= 2 && exactDistance >= 500) return { key: 'good', label: 'اطمینان خوب · اندازه‌گیری باک‌کامل' };
-  if (exact.length === 1 && exactDistance >= 250 && estimated === 0) return { key: 'medium', label: 'اطمینان متوسط · یک بازهٔ باک‌کامل' };
-  if (estimated >= 6 && sampleDistanceKm >= 1200) return { key: 'high', label: 'اطمینان بالا · چند بازهٔ سوخت‌گیری جزئی' };
-  if (estimated >= 4 && sampleDistanceKm >= 700) return { key: 'good', label: 'اطمینان متوسط رو به خوب · دادهٔ چندمرحله‌ای' };
-  if (intervals.length >= 2 && sampleDistanceKm >= 300) return { key: 'medium', label: 'اطمینان متوسط · مدل در حال یادگیری' };
-  return { key: 'low', label: 'برآورد اولیه · داده هنوز کم است' };
+  if (!intervals.length) return { key: 'none', label: 'دادهٔ دقیق کافی نیست · دو ثبت باک‌کامل لازم است' };
+  const exactDistance = intervals.reduce((sum, item) => sum + item.distanceKm, 0);
+  if (intervals.length >= 3 && exactDistance >= 1000) return { key: 'high', label: 'اطمینان بالا · حداقل سه بازهٔ باک‌کامل' };
+  if (intervals.length >= 2 && exactDistance >= 500) return { key: 'good', label: 'اطمینان خوب · چند بازهٔ باک‌کامل' };
+  if (intervals.length === 1 && exactDistance >= 250) return { key: 'medium', label: 'اطمینان متوسط · یک بازهٔ باک‌کامل' };
+  return { key: 'low', label: 'اطمینان محدود · فقط یک بازهٔ کوتاه' };
+}
+
+function findRapidRefuelPairs(refuels) {
+  let count = 0;
+  const pairs = [];
+  for (let index = 1; index < refuels.length; index += 1) {
+    const from = refuels[index - 1];
+    const to = refuels[index];
+    const elapsedHours = (epochOf(to) - epochOf(from)) / 3_600_000;
+    const distanceKm = Number(to.odometerKm) - Number(from.odometerKm);
+    if (elapsedHours >= 0 && elapsedHours <= RAPID_REFUEL_MAX_HOURS && distanceKm >= 0 && distanceKm <= RAPID_REFUEL_MAX_DISTANCE_KM) {
+      count += 1;
+      pairs.push({ from, to, elapsedHours, distanceKm });
+    }
+  }
+  return { count, pairs };
 }
 
 /**
- * Build a distance-weighted fuel model from all valid refuel records.
- * Full-to-full windows absorb every partial stop between the two full-tank
- * checkpoints and are treated as measured. Outside those windows, adjacent
- * partial-fill pairs provide a lower-confidence estimate. This prevents
- * counting the same fuel twice when a full-to-full interval contains partials.
+ * Calculate a distance-weighted model from full-to-full measurements only.
+ * Partial fills inside a measured full-to-full window are included in its total.
+ * Partial-only sequences remain useful for cost totals and unit-price trends, but
+ * do not generate a consumption figure or a trip fuel forecast.
  */
 export function calculateFuelModel(events, options = {}) {
   const cutoffValue = Number(options.at);
@@ -63,20 +83,17 @@ export function calculateFuelModel(events, options = {}) {
   const refuels = sourceEvents
     .filter(event => {
       if (!event || event.type !== 'fuel' || epochOf(event) > cutoff) return false;
-      const liters = Number(event.liters);
-      return finitePositive(event.odometerKm) !== null && Number.isFinite(liters) && liters >= 0;
+      const liters = finiteNonNegative(event.liters);
+      return finitePositive(event.odometerKm) !== null && liters !== null && (liters > 0 || event.fullTank === true);
     })
     .sort((a, b) => epochOf(a) - epochOf(b) || Number(a.odometerKm) - Number(b.odometerKm));
 
-  const intervals = [];
-  const covered = new Set();
+  const candidates = [];
   const fullIndices = refuels.reduce((indices, event, index) => {
     if (event.fullTank === true) indices.push(index);
     return indices;
   }, []);
 
-  // Exact measurement: from one confirmed full tank to the next, add every
-  // intermediate partial fill and the litres needed to refill the second one.
   for (let cursor = 1; cursor < fullIndices.length; cursor += 1) {
     const fromIndex = fullIndices[cursor - 1];
     const toIndex = fullIndices[cursor];
@@ -84,54 +101,44 @@ export function calculateFuelModel(events, options = {}) {
     const to = refuels[toIndex];
     const distanceKm = Number(to.odometerKm) - Number(from.odometerKm);
     const elapsedMs = epochOf(to) - epochOf(from);
-    const liters = refuels.slice(fromIndex + 1, toIndex + 1)
-      .reduce((sum, event) => sum + (finitePositive(event.liters) || 0), 0);
+    const windowEvents = refuels.slice(fromIndex + 1, toIndex + 1);
+    const liters = windowEvents.reduce((sum, event) => sum + (finiteNonNegative(event.liters) || 0), 0);
     const rate = distanceKm > 0 ? liters / distanceKm * 100 : null;
-    if (distanceKm < MIN_INTERVAL_KM || distanceKm > MAX_INTERVAL_KM || elapsedMs <= 0 || liters <= 0 || rate < MIN_RATE || rate > MAX_RATE) continue;
-    intervals.push({
-      from, to, fromOdometerKm: Number(from.odometerKm), toOdometerKm: Number(to.odometerKm),
-      distanceKm, liters, rate, measured: true, method: 'full-to-full',
-      fromDate: from.jalaliDate || from.date || String(from.occurredAt || '').slice(0, 10),
-      toDate: to.jalaliDate || to.date || String(to.occurredAt || '').slice(0, 10)
-    });
-    for (let index = fromIndex; index <= toIndex; index += 1) covered.add(index);
-  }
-
-  // Estimated measurement: use consecutive stops only when they are not part
-  // of an exact full-to-full interval. The tank-level difference is unknown.
-  for (let index = 1; index < refuels.length; index += 1) {
-    if (covered.has(index - 1) || covered.has(index)) continue;
-    const from = refuels[index - 1];
-    const to = refuels[index];
-    const distanceKm = Number(to.odometerKm) - Number(from.odometerKm);
-    const elapsedMs = epochOf(to) - epochOf(from);
-    const liters = finitePositive(to.liters) || 0;
-    const rate = distanceKm > 0 ? liters / distanceKm * 100 : null;
-    if (distanceKm < MIN_INTERVAL_KM || distanceKm > MAX_INTERVAL_KM || elapsedMs <= 0 || liters <= 0 || rate < MIN_RATE || rate > MAX_RATE) continue;
-    intervals.push({
-      from, to, fromOdometerKm: Number(from.odometerKm), toOdometerKm: Number(to.odometerKm),
-      distanceKm, liters, rate, measured: false, method: 'partial-refuel-estimate',
+    const valid = distanceKm >= MIN_INTERVAL_KM && distanceKm <= MAX_INTERVAL_KM && elapsedMs > 0 && liters > 0 && rate >= MIN_RATE && rate <= MAX_RATE;
+    candidates.push({
+      from, to,
+      fromOdometerKm: Number(from.odometerKm),
+      toOdometerKm: Number(to.odometerKm),
+      distanceKm, liters, rate,
+      measured: true,
+      valid,
+      rejectedReason: valid ? null : distanceKm < MIN_INTERVAL_KM || distanceKm > MAX_INTERVAL_KM ? 'invalid-distance' : elapsedMs <= 0 ? 'invalid-time' : liters <= 0 ? 'missing-liters' : 'implausible-rate',
+      method: 'full-to-full',
+      refuelCount: windowEvents.length,
       fromDate: from.jalaliDate || from.date || String(from.occurredAt || '').slice(0, 10),
       toDate: to.jalaliDate || to.date || String(to.occurredAt || '').slice(0, 10)
     });
   }
 
-  intervals.sort((a, b) => epochOf(a.to) - epochOf(b.to));
-  // Keep exact checkpoints intact; trim only obvious partial-fill outliers.
-  const exactIntervals = intervals.filter(item => item.measured);
-  const partialIntervals = intervals.filter(item => !item.measured);
-  let acceptedPartial = partialIntervals;
-  const middle = median(partialIntervals.map(item => item.rate));
-  if (partialIntervals.length >= 4 && middle !== null) {
-    const tolerance = Math.max(3, middle * 0.55);
-    const trimmed = partialIntervals.filter(item => Math.abs(item.rate - middle) <= tolerance);
-    if (trimmed.length >= Math.min(2, partialIntervals.length)) acceptedPartial = trimmed;
+  // Remove only strong statistical outliers when there are enough independent
+  // measurements. Never trim a model built from one, two or three intervals.
+  const plausible = candidates.filter(item => item.valid);
+  let accepted = plausible;
+  const middle = median(plausible.map(item => item.rate));
+  if (plausible.length >= 4 && middle !== null) {
+    const deviations = plausible.map(item => Math.abs(item.rate - middle));
+    const mad = median(deviations) || 0;
+    const tolerance = Math.max(4.5, middle * 0.45, mad * 3.5);
+    const trimmed = plausible.filter(item => Math.abs(item.rate - middle) <= tolerance);
+    if (trimmed.length >= 3 && trimmed.length < plausible.length) accepted = trimmed;
   }
-  const accepted = [...exactIntervals, ...acceptedPartial].sort((a, b) => epochOf(a.to) - epochOf(b.to));
-  const sampleDistanceKm = accepted.reduce((sum, item) => sum + item.distanceKm, 0);
-  const sampleLiters = accepted.reduce((sum, item) => sum + item.liters, 0);
+  const acceptedSet = new Set(accepted);
+  const intervals = accepted.map(item => ({ ...item, outlier: false }));
+  const rejectedIntervals = candidates.filter(item => !acceptedSet.has(item)).map(item => ({ ...item, outlier: item.valid }));
+  const sampleDistanceKm = intervals.reduce((sum, item) => sum + item.distanceKm, 0);
+  const sampleLiters = intervals.reduce((sum, item) => sum + item.liters, 0);
   const consumptionLPer100 = sampleDistanceKm > 0 ? sampleLiters / sampleDistanceKm * 100 : null;
-  const confidence = confidenceFor(accepted, sampleDistanceKm);
+  const confidence = confidenceFor(intervals, sampleDistanceKm);
   const recentPriced = sourceEvents
     .filter(event => event?.type === 'fuel' && epochOf(event) <= cutoff && finitePositive(event.liters) && refuelCostRial(event))
     .sort((a, b) => epochOf(b) - epochOf(a))
@@ -139,28 +146,41 @@ export function calculateFuelModel(events, options = {}) {
   const pricedLiters = recentPriced.reduce((sum, item) => sum + Number(item.liters), 0);
   const pricedCostRial = recentPriced.reduce((sum, item) => sum + refuelCostRial(item), 0);
   const priceTomanPerLiter = pricedLiters > 0 ? pricedCostRial / pricedLiters / 10 : null;
-  const allExact = accepted.length > 0 && accepted.every(item => item.measured);
+  const rapid = findRapidRefuelPairs(refuels);
+  const coveredIndices = new Set();
+  for (const item of intervals) {
+    const start = refuels.indexOf(item.from);
+    const end = refuels.indexOf(item.to);
+    if (start >= 0 && end >= start) for (let index = start; index <= end; index += 1) coveredIndices.add(index);
+  }
+  const unmeasuredRefuelCount = refuels.reduce((sum, event, index) => sum + (coveredIndices.has(index) ? 0 : 1), 0);
 
   return {
     consumptionLPer100,
-    intervals: accepted,
-    acceptedIntervals: accepted,
-    rawIntervals: intervals,
+    intervals,
+    acceptedIntervals: intervals,
+    rawIntervals: candidates,
+    rejectedIntervals,
     refuelCount: refuels.length,
-    sampleIntervals: accepted.length,
-    exactIntervals: exactIntervals.length,
-    estimatedIntervals: acceptedPartial.length,
+    sampleIntervals: intervals.length,
+    exactIntervals: intervals.length,
+    estimatedIntervals: 0,
     sampleDistanceKm,
     sampleLiters,
     priceTomanPerLiter,
     confidenceKey: confidence.key,
     confidenceLabel: confidence.label,
-    method: allExact ? 'full-to-full' : 'partial-refuel-estimate',
-    hasEstimate: consumptionLPer100 !== null
+    method: intervals.length ? 'full-to-full' : 'insufficient-full-tank-checkpoints',
+    hasEstimate: consumptionLPer100 !== null,
+    rapidRefuelPairCount: rapid.count,
+    rapidRefuelPairs: rapid.pairs,
+    unmeasuredRefuelCount,
+    partialOnlyRefuelCount: refuels.filter(event => event.fullTank !== true).length,
+    ignoredPartialPairCount: Math.max(0, refuels.length - fullIndices.length - intervals.reduce((sum, item) => sum + item.refuelCount - 1, 0))
   };
 }
 
-/** Estimate fuel and price for a known driven distance using only prior refuels. */
+/** Estimate fuel and price for a known driven distance using only prior measured intervals. */
 export function estimateFuelTrip(events, distanceKm, options = {}) {
   const distance = finitePositive(distanceKm);
   if (distance === null) return null;

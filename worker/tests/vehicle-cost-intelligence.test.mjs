@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateCurrentOdometerDelta, calculateVehicleCostModel } from '../../assets/js/vehicle-cost-intelligence.mjs';
 
-const refuel = (id, date, km, liters, costRial) => ({
+const refuel = (id, date, km, liters, costRial, fullTank = false) => ({
   id, type: 'fuel', occurredAt: `${date}T10:00:00+03:30`, date,
-  odometerKm: km, liters, costRial, fullTank: false
+  odometerKm: km, liters, costRial, fullTank
 });
 
 test('ownership cost model separates fuel, wear, other operating costs and paid fines', () => {
   const events = [
-    refuel('f1', '2026-01-01', 1000, 20, 300000),
-    refuel('f2', '2026-01-10', 1200, 20, 320000),
+    refuel('f1', '2026-01-01', 1000, 20, 300000, true),
+    refuel('f2', '2026-01-10', 1200, 20, 320000, true),
     { id: 'p1', type: 'part', costRial: 500000, occurredAt: '2026-01-11T10:00:00+03:30' },
     { id: 's1', type: 'service', costRial: 100000, occurredAt: '2026-01-12T10:00:00+03:30' },
     { id: 'e1', type: 'expense', costRial: 50000, occurredAt: '2026-01-13T10:00:00+03:30' },
@@ -61,8 +61,8 @@ test('unpaid fines and unpriced service records do not become paid cost', () => 
 
 test('trip estimate and unit fuel rate update when new refuel data arrives', () => {
   const base = [
-    refuel('a', '2026-03-01', 1000, 20, 300000),
-    refuel('b', '2026-03-10', 1200, 20, 320000),
+    refuel('a', '2026-03-01', 1000, 20, 300000, true),
+    refuel('b', '2026-03-10', 1200, 20, 320000, true),
     { id: 'part', type: 'part', costRial: 100000, occurredAt: '2026-03-11T10:00:00+03:30' }
   ];
   const next = [...base, refuel('c', '2026-03-20', 1400, 22, 440000)];
@@ -70,6 +70,21 @@ test('trip estimate and unit fuel rate update when new refuel data arrives', () 
   const refreshed = calculateVehicleCostModel(next, { purchaseOdometerKm: 1000, currentOdometerKm: 1400, tripDistanceKm: 100 });
   assert.notEqual(early.trip.fuelPriceTomanPerLiter, refreshed.trip.fuelPriceTomanPerLiter);
   assert.notEqual(early.totalFuelRial, refreshed.totalFuelRial);
+});
+
+test('partial fuel spend remains historical and is not projected to fuel cost per km', () => {
+  const events = [
+    refuel('partial-a', '2026-06-01', 1000, 20, 300000),
+    refuel('partial-b', '2026-06-05', 1080, 15, 225000)
+  ];
+  const model = calculateVehicleCostModel(events, { purchaseOdometerKm: 1000, currentOdometerKm: 1500, tripDistanceKm: 100 });
+  assert.equal(model.totalFuelRial, 525000);
+  assert.equal(model.fuelModel.hasEstimate, false);
+  assert.equal(model.fuelCostPerKmToman, null);
+  assert.equal(model.fuelRecordedCostPerKmToman, 105);
+  assert.equal(model.trip.fuelLiters, null);
+  assert.equal(model.trip.fuelCostToman, null);
+  assert.match(model.fuelCostPerKmBasis, /پوشش ناقص|مصرف قابل اندازه‌گیری نیست/);
 });
 
 test('odometer distance is derived from the current event timeline, not stale saved deltas', () => {
@@ -87,8 +102,8 @@ test('odometer distance is derived from the current event timeline, not stale sa
 
 test('editing or removing a recorded expense rebuilds historical per-kilometre and trip reserves', () => {
   const base = [
-    refuel('f1', '2026-05-01', 1000, 20, 300000),
-    refuel('f2', '2026-05-10', 1200, 20, 300000),
+    refuel('f1', '2026-05-01', 1000, 20, 300000, true),
+    refuel('f2', '2026-05-10', 1200, 20, 300000, true),
     { id: 'repair', type: 'service', costRial: 1000000, occurredAt: '2026-05-11T10:00:00+03:30' }
   ];
   const original = calculateVehicleCostModel(base, { purchaseOdometerKm: 1000, currentOdometerKm: 2000, tripDistanceKm: 100 });

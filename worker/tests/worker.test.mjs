@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.18.0");
+ assert.equal(body.version, "3.19.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.18.0");
+ assert.equal(body.version, "3.19.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -157,7 +157,7 @@ test("odometer submitted by another driver attributes the distance since the pri
  }
 });
 
-test("odometer confirmation includes a partial-refuel fuel and trip-cost estimate", async () => {
+test("odometer confirmation never invents fuel consumption from partial-only refuels", async () => {
  const token = "f".repeat(64);
  const fuelLog = { schemaVersion: 1, month: "2026-10", events: [
   { id: "fuel-partial-1", type: "fuel", title: "سوخت‌گیری", actor: "بابام", occurredAt: "2026-10-22T09:00:00+03:30", date: "2026-10-22", odometerKm: 431200, liters: 36.5, costRial: 547500, fullTank: false },
@@ -194,8 +194,8 @@ test("odometer confirmation includes a partial-refuel fuel and trip-cost estimat
   const body = await response.json();
   assert.equal(body.persisted, true);
   assert.match(body.reply, /مسافت از آخرین کیلومتر ثبت‌شده: ۴۰ km/);
-  assert.match(body.reply, /مصرف تقریبی این مسیر: ۳٫۶۷ لیتر/);
-  assert.match(body.reply, /هزینه تقریبی سوخت این مسیر: ۵٬۵۱۲ تومان/);
+  assert.doesNotMatch(body.reply, /مصرف تقریبی این مسیر:/);
+  assert.doesNotMatch(body.reply, /هزینه تقریبی سوخت این مسیر:/);
   const index = JSON.parse(files.get("data/index.json"));
   const saved = index.months.flatMap(month => {
    const path = `data/logs/${month}.json`;
@@ -203,9 +203,9 @@ test("odometer confirmation includes a partial-refuel fuel and trip-cost estimat
   }).find(event => event.type === "odometer" && event.odometerKm === 431621);
   assert.ok(saved);
   assert.equal(saved.deltaSincePreviousKm, 40);
-  assert.equal(saved.fuelEstimateLiters, 3.67);
-  assert.equal(saved.fuelEstimateCostRial, 55118);
-  assert.equal(saved.fuelEstimateConfidence, "low");
+  assert.equal(saved.fuelEstimateLiters, undefined);
+  assert.equal(saved.fuelEstimateCostRial, undefined);
+  assert.equal(saved.fuelEstimateConfidence, undefined);
  } finally { globalThis.fetch = originalFetch; }
 });
 
@@ -1175,3 +1175,106 @@ test("/costs calculates comprehensive ownership cost and a trip while keeping th
   globalThis.fetch = originalFetch;
  }
 });
+
+
+test("Telegram imports both official Road Police fine SMS formats and blocks semantic duplicates", async () => {
+ const files = new Map([
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })],
+  ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 428000 }, people: [], serviceIntervals: {} })]
+ ]);
+ const sent = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.github.com") {
+   const suffix = url.pathname.split("/contents/")[1];
+   const path = suffix.split("/").map(decodeURIComponent).join("/");
+   if ((init.method || "GET").toUpperCase() === "GET") {
+    const content = files.get(path);
+    if (content === undefined) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+   }
+   if (init.method === "PUT") {
+    const body = JSON.parse(init.body);
+    files.set(path, Buffer.from(body.content, "base64").toString("utf8"));
+    return new Response(JSON.stringify({ content: { path } }), { status: 201, headers: { "content-type": "application/json" } });
+   }
+   return new Response("unexpected GitHub method", { status: 500 });
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sent.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sent.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response(`unexpected upstream ${url.hostname}${url.pathname}`, { status: 500 });
+ };
+ const env = { TELEGRAM_WEBHOOK_SECRET: "road-police-test", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-telegram-token", GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ const smsSeatbelt = "مالک محترم وسيله نقليه به شماره پلاک: شخصي ايران 63 ــ 127ي68 قبض صادره شده براي شما به شرح زير است.شماره سريال: 056281770653 تاريخ و ساعت: 1405/8/28 14:34 محل تخلف: ميدان ابوالکلام??ثبت با تاخير نوع قبض: دوبرگي وسيله نقليه: سواري پژو سفيد تخلف ها: 1: عدم استفاده از كمربند ايمني توسط راننده يا سرنشينان وسيله نقليه درحال حركت( غير استثنائات قانوني) در معابر شهري وروستايي مبلغ: 500000 شناسه قبض: 8177065300296 شناسه پرداخت: 50024436 پليس راهور فرماندهي انتظامي ج.ا.ايران";
+ const smsSpeed = "مالک محترم، تخلف سرعت غيرمجاز(سرعت مجاز 110کيلومتربرساعت، سرعت وسيله نقليه 116کيلومتربرساعت )براي خودرو به شماره شخصي ايران 63 ــ 127ي68 درمحورروبروي شرکت حمل و نقل اتحاد توسط دوربين با کد 616028در تاريخ 1405/07/30 15:49به مبلغ 1000000ريال ثبت گرديده است. شناسه قبض 4946296100299 شناسه پرداخت 100021689مجموع تخلفات پرداخت نشده شما تا تاريخ 1405/08/01 مبلغ 2000000 ريال مي باشد. پليس راهور فراجا";
+ const post = async (updateId, messageId, text) => worker.fetch(new Request("https://unit.test/telegram", {
+  method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "road-police-test" },
+  body: JSON.stringify({ update_id: updateId, message: { message_id: messageId, date: Math.floor(Date.now() / 1000), text, from: { id: 42 }, chat: { id: 101, type: "private" } } })
+ }), env);
+ try {
+  const first = await post(7001, 1, smsSeatbelt);
+  assert.equal(first.status, 200);
+  const second = await post(7002, 2, smsSpeed);
+  assert.equal(second.status, 200);
+
+  const index = JSON.parse(files.get("data/index.json"));
+  assert.deepEqual(index.months, ["2026-10", "2026-11"]);
+  const allEvents = index.months.flatMap(month => JSON.parse(files.get(`data/logs/${month}.json`)).events);
+  assert.equal(allEvents.length, 2);
+  const seatbelt = allEvents.find(event => event.ticketNumber === "8177065300296");
+  const speeding = allEvents.find(event => event.ticketNumber === "4946296100299");
+  assert.ok(seatbelt);
+  assert.ok(speeding);
+
+  assert.equal(seatbelt.type, "fine");
+  assert.equal(seatbelt.ticketSerialNumber, "056281770653");
+  assert.equal(seatbelt.ticketPaymentId, "50024436");
+  assert.equal(seatbelt.ticketType, "دوبرگی");
+  assert.equal(seatbelt.ticketDate, "2026-11-19");
+  assert.equal(seatbelt.time, "14:34");
+  assert.equal(seatbelt.costRial, 500000, "an amount without a currency suffix in a Road Police SMS defaults to Rial");
+  assert.equal(seatbelt.amountCurrency, "ریال (واحد پیش‌فرض پیامک راهور)");
+  assert.equal(seatbelt.vehicleDescription, "سواری پژو سفید");
+  assert.equal(seatbelt.vehiclePlate, "63-127ی68");
+  assert.match(seatbelt.violationDescription, /عدم استفاده از کمربند ایمنی/);
+  assert.equal(seatbelt.fineSource, "road-police-sms");
+  assert.equal(seatbelt.originalSms, smsSeatbelt);
+  assert.equal(seatbelt.note, smsSeatbelt);
+  assert.equal(seatbelt.odometerKm, null, "official fine SMS must not borrow the current odometer as the offence mileage");
+
+  assert.equal(speeding.ticketDate, "2026-10-22");
+  assert.equal(speeding.time, "15:49");
+  assert.equal(speeding.costRial, 1000000, "the individual ticket amount must not be replaced by the aggregate unpaid balance");
+  assert.equal(speeding.ticketPaymentId, "100021689");
+  assert.equal(speeding.speedLimitKph, 110);
+  assert.equal(speeding.recordedSpeedKph, 116);
+  assert.equal(speeding.cameraCode, "616028");
+  assert.match(speeding.fineLocation, /شرکت حمل و نقل اتحاد/);
+  assert.equal(speeding.reportedUnpaidFineBalanceRial, 2000000);
+  assert.equal(speeding.reportedBalanceDate, "2026-10-23");
+  assert.equal(speeding.originalSms, smsSpeed);
+
+  const countBeforeDuplicate = allEvents.length;
+  const duplicate = await post(7003, 3, smsSpeed.replace(/\s+/g, " ").replace("مبلغ 2000000", "مبلغ 2000000"));
+  assert.equal(duplicate.status, 200);
+  const afterDuplicateIndex = JSON.parse(files.get("data/index.json"));
+  const afterDuplicate = afterDuplicateIndex.months.flatMap(month => JSON.parse(files.get(`data/logs/${month}.json`)).events);
+  assert.equal(afterDuplicate.length, countBeforeDuplicate, "same ticket IDs/date/time must not create another event");
+  assert.ok(sent.at(-1)?.text.includes("قبلاً ثبت شده"));
+
+  const details = await post(7004, 4, `/fineinfo ${speeding.id.slice(0, 8)}`);
+  assert.equal(details.status, 200);
+  const detailsText = sent.at(-1).text;
+  assert.match(detailsText, /شناسه قبض/);
+  assert.match(detailsText, /شناسه پرداخت/);
+  assert.match(detailsText, /کد دوربین/);
+  assert.match(detailsText, /سرعت مجاز\/ثبت‌شده/);
+  assert.match(detailsText, /مانده تجمیعی جریمه‌های پرداخت‌نشده/);
+ } finally {
+  globalThis.fetch = originalFetch;
+ }
+});
+

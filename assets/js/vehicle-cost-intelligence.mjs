@@ -114,7 +114,11 @@ export function calculateVehicleCostModel(events, options = {}) {
   const modeledFuelPerKmToman = fuelModel.consumptionLPer100 != null && fuelModel.priceTomanPerLiter != null
     ? fuelModel.consumptionLPer100 * fuelModel.priceTomanPerLiter / 100
     : null;
-  const fuelCostPerKmToman = modeledFuelPerKmToman ?? (counts.fuel > 0 ? fuelRecordedPerKmToman : null);
+  // Do not divide the partial fuel ledger by the full ownership distance:
+  // incomplete logging makes that apparent cost/km systematically misleading.
+  // Keep recorded spend as a separate historical metric and use measured
+  // full-to-full consumption for forecasts only.
+  const fuelCostPerKmToman = modeledFuelPerKmToman;
   const operatingComponentsPerKm = [fuelCostPerKmToman, wearPerKmToman, otherPerKmToman].filter(value => value != null);
   const operatingPerKmToman = operatingComponentsPerKm.length
     ? operatingComponentsPerKm.reduce((sum, value) => sum + value, 0)
@@ -123,7 +127,7 @@ export function calculateVehicleCostModel(events, options = {}) {
   const allRecordedPerKmToman = totalRecordedRial > 0 ? perKm(totalRecordedRial) : null;
   const fuelCostPerKmBasis = modeledFuelPerKmToman != null
     ? 'مصرف سوخت مدل × نرخ موزون پنج سوخت‌گیری قیمت‌دار اخیر ÷ ۱۰۰'
-    : counts.fuel > 0 ? 'هزینه سوخت ثبت‌شده ÷ مسافت از کیلومتر خرید (پوشش ناقص ممکن است)' : 'داده کافی برای هزینه سوخت هر کیلومتر موجود نیست';
+    : counts.fuel > 0 ? 'مصرف قابل اندازه‌گیری نیست؛ سوخت ثبت‌شده فقط در جمع تاریخی می‌آید و به هزینه هر km تعمیم داده نمی‌شود' : 'داده کافی برای هزینه سوخت هر کیلومتر موجود نیست';
 
   const tripDistanceKm = positive(options.tripDistanceKm);
   const fuelTrip = tripDistanceKm > 0 ? estimateFuelTrip(rows, tripDistanceKm) : null;

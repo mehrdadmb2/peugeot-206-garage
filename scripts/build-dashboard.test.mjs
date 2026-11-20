@@ -18,7 +18,7 @@ function writeJson(path, value) {
 test('real repository data builds a complete dashboard snapshot without dropping events or catalog data', () => {
   const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-10-30T06:00:00.000Z') });
   assert.equal(snapshot.schemaVersion, 1);
-  assert.equal(snapshot.computed.calculationVersion, 4);
+  assert.equal(snapshot.computed.calculationVersion, 5);
   assert.ok(snapshot.events.length >= 1);
   assert.equal(snapshot.computed.eventCount, snapshot.events.length);
   assert.equal(snapshot.computed.componentCount, 62);
@@ -114,4 +114,38 @@ test('Persian month keys are not confused with Gregorian storage month names', (
   assert.equal(PersianCalendar.monthKey('2026-10-29T21:35:00+03:30'), '1405-08');
   assert.equal(PersianCalendar.monthKey('2026-11-02T07:00:00.000Z'), '1405-08');
   assert.deepEqual(PersianCalendar.previousMonthKeys('1405-08', 3), ['1405-06', '1405-07', '1405-08']);
+});
+
+
+test('as-of snapshot excludes future events from current month, odometer, due state and cost totals', () => {
+  const temp = mkdtempSync(join(tmpdir(), '206-garage-asof-'));
+  try {
+    const config = {
+      schemaVersion: 5,
+      vehicle: { make: 'Peugeot', model: '206 SD' },
+      ownership: { purchaseOdometerKm: 1000, purchaseDate: null, defaultActor: 'من' },
+      serviceIntervals: { engine_oil: { label: 'روغن موتور', intervalKm: 5000, intervalDays: 180 } },
+      partCatalog: { categories: { engine: { label: 'موتور' } }, items: { oil: { label: 'روغن' } }, services: { oil_change: { label: 'تعویض روغن' } } },
+      people: []
+    };
+    const events = [
+      { id: 'odo-before', type: 'odometer', occurredAt: '2026-11-01T08:00:00+03:30', date: '2026-11-01', odometerKm: 1200 },
+      { id: 'fuel-before', type: 'fuel', occurredAt: '2026-11-01T09:00:00+03:30', date: '2026-11-01', liters: 10, costRial: 100000 },
+      { id: 'odo-after', type: 'odometer', occurredAt: '2026-11-10T08:00:00+03:30', date: '2026-11-10', odometerKm: 9999 },
+      { id: 'expense-after', type: 'expense', occurredAt: '2026-11-10T09:00:00+03:30', date: '2026-11-10', costRial: 900000 },
+      { id: 'fuel-after', type: 'fuel', occurredAt: '2026-11-10T10:00:00+03:30', date: '2026-11-10', liters: 95, costRial: 950000 }
+    ];
+    writeJson(join(temp, 'data/config.json'), config);
+    writeJson(join(temp, 'data/index.json'), { updatedAt: '2026-11-10T10:00:00+03:30', months: ['2026-11'] });
+    writeJson(join(temp, 'data/logs/2026-11.json'), { month: '2026-11', events });
+    const snapshot = buildDashboardData({ rootDir: temp, now: new Date('2026-11-02T12:00:00+03:30') });
+    assert.equal(snapshot.events.length, 5, 'raw events remain available for historical browsing');
+    assert.equal(snapshot.computed.currentOdometerKm, 1200);
+    assert.equal(snapshot.computed.currentMonthEventCount, 2);
+    assert.equal(snapshot.computed.currentMonthFuelLiters, 10);
+    assert.equal(snapshot.computed.currentMonthCostRial, 100000);
+    assert.equal(snapshot.computed.vehicleCostModel.totalFuelToman, 10000);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 });

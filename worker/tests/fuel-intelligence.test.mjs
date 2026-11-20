@@ -6,24 +6,23 @@ const refuel = ({ id, date, km, liters, costRial = 0, fullTank = false }) => ({
   id, type: 'fuel', occurredAt: `${date}T10:00:00+03:30`, date, odometerKm: km, liters, costRial, fullTank
 });
 
-test('two partial refuels produce a first approximate consumption and trip cost without full tanks', () => {
+test('two partial refuels never infer consumption or trip cost from unknown tank levels', () => {
   const events = [
     refuel({ id: 'a', date: '2026-10-22', km: 431200, liters: 36.5, costRial: 547500 }),
     refuel({ id: 'b', date: '2026-10-29', km: 431581, liters: 35, costRial: 525000 })
   ];
   const model = calculateFuelModel(events);
-  assert.equal(model.hasEstimate, true);
+  assert.equal(model.hasEstimate, false);
   assert.equal(model.refuelCount, 2);
-  assert.equal(model.sampleIntervals, 1);
-  assert.equal(model.consumptionLPer100, 35 / 381 * 100);
+  assert.equal(model.sampleIntervals, 0);
+  assert.equal(model.consumptionLPer100, null);
   assert.equal(model.priceTomanPerLiter, 1500);
-  assert.equal(model.confidenceKey, 'low');
-  const trip = estimateFuelTrip(events, 40);
-  assert.equal(trip.fuelLiters, 40 * (35 / 381 * 100) / 100);
-  assert.equal(trip.costRial, 55118);
+  assert.equal(model.confidenceKey, 'none');
+  assert.equal(model.partialOnlyRefuelCount, 2);
+  assert.equal(estimateFuelTrip(events, 40), null);
 });
 
-test('partial-refuel estimate gains confidence as additional non-overlapping samples accumulate', () => {
+test('many partial top-ups do not gain false confidence merely by accumulating', () => {
   const sparse = [
     refuel({ id: 'a', date: '2026-09-01', km: 1000, liters: 20 }),
     refuel({ id: 'b', date: '2026-09-11', km: 1200, liters: 20 }),
@@ -36,11 +35,25 @@ test('partial-refuel estimate gains confidence as additional non-overlapping sam
   ];
   const early = calculateFuelModel(sparse);
   const learned = calculateFuelModel(rich);
-  assert.equal(early.consumptionLPer100, 10);
-  assert.equal(learned.consumptionLPer100, 10);
-  assert.equal(early.confidenceKey, 'medium');
-  assert.equal(learned.confidenceKey, 'good');
-  assert.equal(learned.sampleIntervals, 4);
+  assert.equal(early.hasEstimate, false);
+  assert.equal(learned.hasEstimate, false);
+  assert.equal(early.consumptionLPer100, null);
+  assert.equal(learned.consumptionLPer100, null);
+  assert.equal(early.confidenceKey, 'none');
+  assert.equal(learned.confidenceKey, 'none');
+  assert.equal(learned.sampleIntervals, 0);
+});
+
+test('rapid visits to nearby fuel stations are retained but do not imply an empty tank', () => {
+  const events = [
+    { ...refuel({ id: 'a', date: '2026-10-01', km: 1000, liters: 12 }), occurredAt: '2026-10-01T08:00:00+03:30' },
+    { ...refuel({ id: 'b', date: '2026-10-01', km: 1008, liters: 8 }), occurredAt: '2026-10-01T10:00:00+03:30' }
+  ];
+  const model = calculateFuelModel(events);
+  assert.equal(model.rapidRefuelPairCount, 1);
+  assert.equal(model.refuelCount, 2);
+  assert.equal(model.hasEstimate, false);
+  assert.equal(estimateFuelTrip(events, 25), null);
 });
 
 test('full-to-full windows include every partial top-up exactly once', () => {
@@ -82,7 +95,6 @@ test('weighted fuel price also supports imported Toman-denominated refuel record
   ];
   const model = calculateFuelModel(events);
   assert.equal(model.priceTomanPerLiter, 1550);
-  const trip = estimateFuelTrip(events, 100);
-  assert.equal(trip.priceTomanPerLiter, 1550);
-  assert.equal(trip.costToman, trip.fuelLiters * 1550);
+  assert.equal(model.hasEstimate, false);
+  assert.equal(estimateFuelTrip(events, 100), null);
 });

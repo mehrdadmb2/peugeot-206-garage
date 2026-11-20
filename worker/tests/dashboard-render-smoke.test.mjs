@@ -105,12 +105,13 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.equal(renderErrors.length, 0, JSON.stringify(renderErrors));
   assert.match(elements.get('#connectionBadge')?.innerHTML || '', /داده‌ها آماده/);
   assert.ok((elements.get('#serviceGrid')?.innerHTML || '').length > 1000, 'service cards should be populated');
-  assert.equal(elements.get('#statFuel')?.textContent, '۳۵', 'Aban fuel metric must count the 35 L entry stored in the Gregorian October log');
+  const expectedCurrentMonthFuel = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 1 }).format(snapshot.computed.currentMonthFuelLiters);
+  assert.equal(elements.get('#statFuel')?.textContent, expectedCurrentMonthFuel, 'Aban fuel metric must sum all current Persian-month refuels across Gregorian log files');
   assert.ok((elements.get('#statCost')?.textContent || '').includes('۴'), 'Aban expense card must not show zero');
   assert.match(elements.get('#statCostFoot')?.textContent || '', /آبان/);
   assert.match(elements.get('#statFuelFoot')?.textContent || '', /آبان/);
   assert.match(elements.get('#monthFilter')?.innerHTML || '', /آبان/);
-  assert.match(elements.get('#fuelOnlyChart')?.innerHTML || '', /۳۵/);
+  assert.ok((elements.get('#fuelOnlyChart')?.innerHTML || '').includes(expectedCurrentMonthFuel), 'fuel chart must include the same current Persian-month total as the metric');
   assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
   assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
   const purchaseOdometerKm = Number(
@@ -173,12 +174,10 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#eventList')?.innerHTML || '').length > 500, 'journal should show real events');
   assert.ok((elements.get('#costChart')?.innerHTML || '').length > 100, 'analytics chart should be rendered');
   assert.ok((elements.get('#fuelEventList')?.innerHTML || '').length > 100, 'fuel page should render');
-  assert.match(elements.get('#fuelEstimateRate')?.textContent || '', /۹٫۱۹ L\/100km/);
-  assert.match(elements.get('#fuelEstimateLiters')?.textContent || '', /۳٫۶۷ لیتر/);
-  assert.match(elements.get('#fuelEstimateCost')?.textContent || '', /۵٬۵۱۲ تومان/);
-  assert.match(elements.get('#eventList')?.innerHTML || '', /هزینهٔ بنزین این پیمایش/);
-  assert.match(elements.get('#eventList')?.innerHTML || '', /۳٫۶۷ لیتر/);
-  assert.match(elements.get('#eventList')?.innerHTML || '', /۵٬۵۱۲ تومان/);
+  assert.equal(elements.get('#fuelEstimateRate')?.textContent, 'در انتظار داده', 'partial-only historical refuels must not create a consumption model');
+  assert.equal(elements.get('#fuelEstimateLiters')?.textContent, '—', 'trip liters stay unknown until two full-tank checkpoints exist');
+  assert.equal(elements.get('#fuelEstimateCost')?.textContent, '—', 'trip fuel cost stays unknown until consumption is measured');
+  assert.doesNotMatch(elements.get('#eventList')?.innerHTML || '', /event-fuel-estimate/, 'old persisted estimates must not be rendered after the model policy changes');
   assert.match(elements.get('#eventList')?.innerHTML || '', /event-ownership-cost/);
   assert.ok((elements.get('#ownershipCostTotal')?.textContent || '').includes('تومان'), 'ownership costs must be recalculated from actual costs');
   assert.ok((elements.get('#ownershipAllRecordedCostPerKm')?.textContent || '').includes('تومان'), 'all paid costs including fines must have a separate historical per-km metric');
@@ -186,7 +185,7 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#ownershipRecordedCostPerKm')?.textContent || '').includes('تومان/km'), 'historical paid cost per kilometre must be shown separately from the modeled rate');
   assert.match(elements.get('#specVehicleNameHero')?.textContent || '', /Peugeot 206 SD/);
   assert.match(elements.get('#specEngineIdentity')?.textContent || '', /TU3/);
-  assert.match(elements.get('#eventList')?.innerHTML || '', /km داده/);
+  assert.match(elements.get('#fuelModelDiagnostics')?.textContent || '', /دو نوبت پرکردن واقعی باک/, 'fuel diagnostics must explain what is missing rather than invent consumption');
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
   assert.equal(dataset.events.length, snapshot.events.length);
   assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);

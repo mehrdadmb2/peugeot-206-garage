@@ -48,7 +48,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.18.0",
+        version: "3.19.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -73,7 +73,7 @@ export default {
       });
     }
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "206 Garage API", version: "3.18.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
+      return json({ ok: true, service: "206 Garage API", version: "3.19.0", time: nowTehran().iso, timezone: TZ, mode: "request-driven", configured: {
         telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.ALLOWED_TELEGRAM_USER_ID),
         github: Boolean(env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO),
         externalApi: Boolean(env.API_ACCESS_TOKEN),
@@ -337,14 +337,14 @@ async function claimTelegramUpdate(updateId, env) {
 function looksLikeStateChange(text) {
   const value = normalizeIntentText(text);
   if (/^\/(?:km|odo|trip|fuel|service|part|interval|wash|fine|paid|payfine|repair|fixed|expense|note|repairjob|workshop|purchasekm|people|edit|annotate|actor|delete|restore|revise)\b/i.test(value)) return true;
-  return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|خراب|روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|جریمه|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+  return /(?:تعویض|عوض شد|تعمیر شد|دیاگ|هواگیری|خراب|روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|جریمه|شناسه\s*قبض|شناسه\s*پرداخت|شماره\s*سریال|تخلف\s*سرعت|پلیس\s*راهور|فراجا|سوخت.?گیری|بنزین زدم|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
 function looksLikeEventCreation(text) {
   const value = normalizeIntentText(text);
   if (/^\/(?:km|odo|trip|fuel|service|part|wash|fine|repairjob|workshop|expense|note)\b/i.test(value)) return true;
   if (/^\//.test(value)) return false;
-  return /(?:روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|خراب|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|کارواش|شستم|شست.?وشو|نشتی|روغن|واکس|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
+  return /(?:روشن.{0,10}(?:نمی.{0,5}(?:شود|شه|زند)|نشد)|استارت.{0,10}(?:نمی.{0,5}(?:خورد|زنه|زند)|نخورد)|باتری.{0,12}(?:خوابیده|خالی|ضعیف)|خراب|برد.*تعمیرگاه|تعمیرگاه|تعویض|عوض شد|دیاگ|هواگیری|سوخت.?گیری|بنزین|جریمه|شناسه\s*قبض|شناسه\s*پرداخت|شماره\s*سریال|تخلف\s*سرعت|پلیس\s*راهور|فراجا|کارواش|شستم|شست.?وشو|نشتی|روغن|واکس|یادداشت:|هزینه.*تومان|کیلومتر\s*\d{4,6}|کارکرد\s*\d{4,6})/i.test(value);
 }
 
 async function fingerprintText(value) {
@@ -441,16 +441,17 @@ async function handleTelegramUpdate(update, env, options = {}) {
   const text = normalizeDigits(message.text.trim());
   try {
     if (looksLikeEventCreation(text)) {
-      if (!options.acknowledgementSent) {
+      const officialFineSms = Boolean(parseRoadPoliceFineSms(message.text));
+      if (!officialFineSms && !options.acknowledgementSent) {
         await sendText(env, chatId, "📩 پیام دریافت شد. ابتدا تکراری‌بودن را بررسی می‌کنم و سپس نتیجهٔ ثبت را جداگانه می‌فرستم؛ لطفاً پیام را دوباره ارسال نکن.", false);
       }
-      const duplicate = await findMessageDuplicate(text, env);
+      const duplicate = officialFineSms ? null : await findMessageDuplicate(text, env);
       if (duplicate) {
         const token = await savePendingDuplicate({ kind: "message", text: message.text, message: { date: message.date, message_id: message.message_id, text: message.text, from: { id: message.from?.id }, chat: { id: chatId } }, existingEventIds: [duplicate.event.id] }, env);
         await sendText(env, chatId, `🟡 <b>احتمال ثبت تکراری</b>\n\nاین پیام با سابقهٔ قبلی شباهت دقیق دارد. هیچ رویداد تازه‌ای ذخیره نشده است.\n\nعنوان قبلی: ${duplicate.event.title || eventTypeLabel(duplicate.event.type)}\nشناسهٔ قبلی: <code>${duplicate.event.id.slice(0,8)}</code>\nتاریخ: ${duplicate.event.jalaliDate || duplicate.event.date || "—"}\n\nاگر واقعاً عملیات جدیدی است، ثبت را تأیید کن؛ در غیر این صورت انصراف بده.`, duplicateConfirmationKeyboard(token));
         return;
       }
-      const anomalies = await detectMessageAnomalies(text, env);
+      const anomalies = officialFineSms ? [] : await detectMessageAnomalies(text, env);
       if (anomalies.length) {
         const reviewToken = await savePendingAnomaly({ text: message.text, message: { date: message.date, message_id: message.message_id, text: message.text, from: { id: message.from?.id }, chat: { id: chatId } }, anomalies }, env);
         await sendText(env, chatId, formatAnomalyReview(anomalies, reviewToken), anomalyReviewKeyboard(reviewToken));
@@ -861,6 +862,25 @@ function telegramHtml(value) {
 }
 
 async function processMessage(text, message, env, options = {}) {
+  const rawIncomingText = String(message?.text || text || "").trim();
+  const officialFineSms = parseRoadPoliceFineSms(rawIncomingText);
+  if (officialFineSms) {
+    const result = await saveEvent({
+      type: "fine", title: "جریمه راهور · پیامک خودکار", description: officialFineSms.violationDescription,
+      note: rawIncomingText, originalSms: rawIncomingText, costRial: officialFineSms.costRial,
+      paid: false, ticketDate: officialFineSms.ticketDate, ticketDateJalali: officialFineSms.ticketDateJalali,
+      ticketNumber: officialFineSms.ticketNumber, ticketSerialNumber: officialFineSms.ticketSerialNumber,
+      ticketPaymentId: officialFineSms.ticketPaymentId, ticketType: officialFineSms.ticketType,
+      fineLocation: officialFineSms.fineLocation, vehicleDescription: officialFineSms.vehicleDescription,
+      vehiclePlate: officialFineSms.vehiclePlate, violationDescription: officialFineSms.violationDescription,
+      speedLimitKph: officialFineSms.speedLimitKph, recordedSpeedKph: officialFineSms.recordedSpeedKph,
+      cameraCode: officialFineSms.cameraCode, reportedUnpaidFineBalanceRial: officialFineSms.reportedUnpaidFineBalanceRial,
+      reportedBalanceDate: officialFineSms.reportedBalanceDate, amountCurrency: officialFineSms.amountCurrency,
+      fineSource: "road-police-sms", occurredAt: officialFineSms.occurredAt,
+      sourceText: rawIncomingText, source: "road-police-sms"
+    }, env);
+    return { text: result, keyboard: false };
+  }
   const parsedCommand = canonicalizeCommand(text);
   text = parsedCommand.text;
   if (parsedCommand.unknown) return { text: `دستور «/${parsedCommand.command}» شناخته نشد. راهنمای کامل و نمونه‌های ثبت را پایین ببین:\n\n${helpText()}`, keyboard: true };
@@ -961,7 +981,7 @@ async function processMessage(text, message, env, options = {}) {
     const raw = text.replace(/^\/\S+/, "");
     const liters = parseLiters(raw);
     if (!(liters > 0)) return { text: "نمونه: /fuel 20l cost=700000 toman km=156200 full\nواحد مبلغ را تومان وارد کن، یا «ریال» بنویس.", keyboard: false };
-    return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: raw.trim() || text, liters, costRial: extractMoneyRial(raw), odometerKm: extractOdometer(raw), fullTank: /\bfull\b|باک\s*را\s*پر|باک\s*کامل|پر\s*کردم/i.test(raw), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
+    return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: raw.trim() || text, liters, costRial: extractMoneyRial(raw), odometerKm: extractOdometer(raw), fullTank: /\bfull\b|باک\s*(?:را\s*|رو\s*)?(?:کامل|پر)|پر\s*(?:کردم|شد|شده)|تا\s*لبه\s*پر/i.test(raw), occurredAt: getOccurredAt(text, fromDate), sourceText: text }, env), keyboard: true };
   }
   if (/^\/service\b|^\/part\b|^\/سرویس\b|^\/قطعه\b/i.test(text)) {
     const raw = text.replace(/^\/\S+/, "").trim();
@@ -1005,7 +1025,7 @@ async function processMessage(text, message, env, options = {}) {
   }
   const isFuel = /بنزین|سوخت.?گیری|پمپ\s*بنزین|باک\s*(?:زدم|پر)|\bpetrol\b|\brefuel(?:led|ing)?\b|\bfuel\b|\bfilled\s*(?:up|the\s*tank)\b|\bgas(?:oline)?\b|\d+(?:\.\d+)?\s*l\b/i.test(lower) && liters > 0;
   if (isFuel) {
-    return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: text, liters, costRial: money, odometerKm: km, fullTank: /\bfull\b|باک\s*را\s*پر|باک\s*کامل|پر\s*کردم/i.test(text), occurredAt, sourceText: text }, env), keyboard: true };
+    return { text: await saveEvent({ type: "fuel", title: "سوخت‌گیری", description: text, liters, costRial: money, odometerKm: km, fullTank: /\bfull\b|باک\s*(?:را\s*|رو\s*)?(?:کامل|پر)|پر\s*(?:کردم|شد|شده)|تا\s*لبه\s*پر/i.test(text), occurredAt, sourceText: text }, env), keyboard: true };
   }
   if (/جریمه|خلافی|قبض\s*جریمه/i.test(lower) && !/پرداخت|واریز|تسویه|پرداخت کردم/i.test(lower)) {
     if (!money) return { text: "مبلغ جریمه مشخص نیست. نمونه: جریمه سرعت ۵۰۰ هزار تومان در کیلومتر ۱۵۶۲۰۰", keyboard: false };
@@ -1050,6 +1070,14 @@ function helpText() {
 • بابام ۲۰ لیتر بنزین؛ هزینه ۷۰۰ هزار تومان؛ توضیح: سفر
 • روغن موتور عوض شد؛ هزینه ۹۰۰ هزار تومان؛ کیلومتر ۴۳۰۰۰۰
 
+📩 ثبت خودکار جریمهٔ راهور
+• متن کامل پیامک جریمه را مستقیم در همین گفت‌وگو بفرست؛ دستور /fine لازم نیست.
+• شماره قبض، سریال، شناسه پرداخت، تاریخ و ساعت، نوع تخلف، محل، پلاک، نوع خودرو، دوربین و سرعت (در صورت وجود) استخراج می‌شوند.
+• مبلغ همان قبض جدا از «مجموع تخلفات پرداخت‌نشده» ذخیره می‌شود؛ ماندهٔ تجمیعی به مبلغ قبض اضافه نمی‌شود.
+• متن کامل پیامک عیناً در توضیحات رویداد حفظ می‌شود. ارسال مجدد قبض با شناسه‌های یکسان یا تاریخ/ساعت و جزئیات منطبق، رکورد دوم نمی‌سازد.
+• مبالغ پیامک راهور در صورت نداشتن واحد صریح، ریال فرض می‌شوند؛ در داشبورد به تومان نمایش داده خواهند شد.
+• برای جزئیات هر قبض: /fineinfo شناسه
+
 👥 اشخاص و توضیحات
 • اگر نام شخص را ننویسی، ثبت به نام «من» است.
 • بابام: ۲۰ لیتر بنزین · توضیح: سفر خانوادگی
@@ -1086,7 +1114,8 @@ function helpText() {
 📊 گزارش‌ها و نگهداری
 /summary today|week|month|all — خلاصه و مبالغ
 /fines — جمع کل جریمه، پرداختی و بدهی
-/fuelstats — مصرف و هزینه سوخت
+/fuelstats — مصرف و هزینه سوخت؛ مصرف فقط بین دو ثبت باک‌کامل اندازه‌گیری می‌شود
+برای ثبت واقعی باک‌کامل: /fuel 35l cost=... toman km=431500 full
 /costs 100 — هزینه هر کیلومتر، استهلاک و برآورد سفر ۱۰۰ کیلومتری
 /due — سرویس‌های نزدیک موعد یا عقب‌افتاده
 /config — تنظیمات و بازه‌های نگهداری
@@ -1817,7 +1846,7 @@ async function mergeDuplicateEvents(keepPrefix, removePrefix, env, editor = "tel
   const keep = keepMatch.event, duplicate = removeMatch.event;
   if (keep.id === duplicate.id || keep.type !== duplicate.type) return "❌ ادغام فقط برای دو رویداد متفاوت از یک نوع مجاز است.";
   const patch = {};
-  const fillKeys = ["description", "note", "actor", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceLabel", "serviceCatalogKey", "componentKey", "componentName", "componentCategory", "componentMode", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "ticketDate", "deadlineDate", "ticketNumber", "fineLocation", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "repairDescription", "repairCostRial", "resolvedAt", "status"];
+  const fillKeys = ["description", "note", "actor", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceLabel", "serviceCatalogKey", "componentKey", "componentName", "componentCategory", "componentMode", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "ticketDate", "deadlineDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "repairDescription", "repairCostRial", "resolvedAt", "status"];
   for (const key of fillKeys) {
     const current = keep[key], incoming = duplicate[key];
     if ((current === null || current === undefined || current === "" || (typeof current === "object" && !Array.isArray(current) && Object.keys(current).length === 0)) && incoming !== null && incoming !== undefined && incoming !== "") patch[key] = incoming;
@@ -1900,7 +1929,7 @@ async function saveEvent(input, env) {
     title: input.title || "رویداد خودرو",
     description: String(parsedMeta.description || input.description || "").slice(0, 2000),
     actor: parsedMeta.actor || "من",
-    note: String(parsedMeta.note || "").slice(0, 2000),
+    note: String(parsedMeta.note || "").slice(0, input.type === "fine" && input.fineSource === "road-police-sms" ? 4000 : 2000),
     updatedAt: null,
     revision: 1,
     editHistory: [],
@@ -1937,7 +1966,22 @@ async function saveEvent(input, env) {
     appealed: input.type === "fine" ? Boolean(input.appealed) : undefined,
     appealDecisionDate: input.type === "fine" ? normalizeFlexibleDate(input.appealDecisionDate) : undefined,
     ticketNumber: input.ticketNumber || extractFineTicketNumber(metaSource),
+    ticketSerialNumber: input.ticketSerialNumber || null,
+    ticketPaymentId: input.ticketPaymentId || null,
+    ticketType: input.ticketType || null,
     fineLocation: input.fineLocation || null,
+    vehicleDescription: input.vehicleDescription || null,
+    vehiclePlate: input.vehiclePlate || null,
+    violationDescription: input.violationDescription || (input.type === "fine" ? String(input.description || "") : null),
+    ticketDateJalali: input.ticketDateJalali || null,
+    speedLimitKph: Number.isFinite(input.speedLimitKph) ? input.speedLimitKph : null,
+    recordedSpeedKph: Number.isFinite(input.recordedSpeedKph) ? input.recordedSpeedKph : null,
+    cameraCode: input.cameraCode || null,
+    reportedUnpaidFineBalanceRial: Number.isFinite(input.reportedUnpaidFineBalanceRial) ? input.reportedUnpaidFineBalanceRial : null,
+    reportedBalanceDate: normalizeFlexibleDate(input.reportedBalanceDate),
+    amountCurrency: input.amountCurrency || null,
+    fineSource: input.fineSource || null,
+    originalSms: input.originalSms ? String(input.originalSms).slice(0, 4000) : null,
     officialCurrentAmountRial: Number.isFinite(input.officialCurrentAmountRial) ? input.officialCurrentAmountRial : null,
     paidAmountRial: Number.isFinite(input.paidAmountRial) ? input.paidAmountRial : null,
     paymentReference: input.paymentReference || null,
@@ -1946,7 +1990,7 @@ async function saveEvent(input, env) {
     resolvedAt: input.resolvedAt || null,
     metadata: { source: input.source || "telegram-or-api", ...(sourceFingerprint ? { messageFingerprint: sourceFingerprint } : {}) }
   };
-  if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "repair" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null) {
+  if ((event.type === "service" || event.type === "part" || event.type === "fuel" || event.type === "wash" || event.type === "issue" || event.type === "repair" || event.type === "expense" || event.type === "fine") && event.odometerKm === null && latestOdo !== null && !(event.type === "fine" && input.fineSource === "road-police-sms")) {
     event.odometerKm = latestOdo;
     event.odometerAutoAssigned = true;
   }
@@ -1978,6 +2022,12 @@ async function saveEvent(input, env) {
     }
   }
   if (event.type === "service" && event.serviceKey && !config.serviceIntervals?.[event.serviceKey]) event.metadata.intervalWarning = "service key is not configured";
+  if (event.type === "fine") {
+    const duplicate = findDuplicateFineEvent(event, eventsBefore);
+    if (duplicate) {
+      return `🟡 این جریمه قبلاً ثبت شده و مورد جدیدی ایجاد نشد.\n\nشناسه قبض: ${event.ticketNumber || duplicate.ticketNumber || "—"}\nشناسه رکورد قبلی: <code>${String(duplicate.id).slice(0, 8)}</code>\nتاریخ و ساعت تخلف: ${duplicate.jalaliDate || duplicate.ticketDate || "—"} · ${duplicate.time || "—"}\nشرح: ${duplicate.violationDescription || duplicate.description || "—"}\nمبلغ ثبت‌شده: ${formatMoneyToman(duplicate.costRial || 0)}\n\nبرای مشاهده: /fineinfo ${String(duplicate.id).slice(0, 8)}`;
+    }
+  }
   const month = event.date.slice(0, 7);
   const file = `data/logs/${month}.json`;
   await mutateJsonFile(file, env, () => ({ schemaVersion: 1, month, updatedAt: nowTehran().iso, events: [] }), current => {
@@ -2016,6 +2066,16 @@ async function saveEvent(input, env) {
   if (event.type === "fine") {
     const fine = fineTimeline(event);
     lines.push(`وضعیت جریمه: ${fine.statusLabel}`, `تاریخ جریمه: ${fine.ticketDate || "—"} · گذشت زمان: ${fine.elapsedDays == null ? "—" : `${formatNum(fine.elapsedDays)} روز`}`, `مهلت پیگیری/پرداخت: ${fine.deadlineDate || "نیازمند بررسی"}${fine.daysToDeadline != null ? ` · ${fine.daysToDeadline < 0 ? `${formatNum(Math.abs(fine.daysToDeadline))} روز از مهلت گذشته` : `${formatNum(fine.daysToDeadline)} روز باقی‌مانده`}` : ""}`);
+    if (event.ticketNumber) lines.push(`شناسه قبض: <code>${event.ticketNumber}</code>`);
+    if (event.ticketSerialNumber) lines.push(`شماره سریال: <code>${event.ticketSerialNumber}</code>`);
+    if (event.ticketPaymentId) lines.push(`شناسه پرداخت قبض: <code>${event.ticketPaymentId}</code>`);
+    if (event.ticketType) lines.push(`نوع قبض: ${event.ticketType}`);
+    if (event.fineLocation) lines.push(`محل تخلف: ${event.fineLocation}`);
+    if (event.vehicleDescription) lines.push(`وسیله نقلیه: ${event.vehicleDescription}`);
+    if (event.vehiclePlate) lines.push(`پلاک پیامک: ${event.vehiclePlate}`);
+    if (event.cameraCode) lines.push(`کد دوربین: ${event.cameraCode}`);
+    if (event.speedLimitKph != null || event.recordedSpeedKph != null) lines.push(`سرعت مجاز/ثبت‌شده: ${event.speedLimitKph ?? "—"} / ${event.recordedSpeedKph ?? "—"} km/h`);
+    if (event.reportedUnpaidFineBalanceRial != null) lines.push(`مانده تجمیعی پرداخت‌نشده در پیامک: ${formatMoneyToman(event.reportedUnpaidFineBalanceRial)} تا ${event.reportedBalanceDate || "—"} · جدا از مبلغ همین قبض`);
   }
   if (event.type === "service" && event.serviceKey) {
     const interval = config.serviceIntervals?.[event.serviceKey];
@@ -2179,7 +2239,19 @@ function formatEventDetails(event) {
   if (event.type === "fine") {
     const timeline = fineTimeline(event);
     lines.push(`وضعیت جریمه: ${timeline.statusLabel}`, `تاریخ جریمه: ${timeline.ticketDate || "—"} · ${timeline.elapsedDays == null ? "—" : `${formatNum(timeline.elapsedDays)} روز گذشته`}`, `مهلت محاسباتی: ${timeline.deadlineDate || "نامشخص"}`);
-    if (event.ticketNumber) lines.push(`شماره قبض: <code>${event.ticketNumber}</code>`);
+    if (event.ticketNumber) lines.push(`شناسه قبض: <code>${event.ticketNumber}</code>`);
+    if (event.ticketSerialNumber) lines.push(`شماره سریال قبض: <code>${event.ticketSerialNumber}</code>`);
+    if (event.ticketPaymentId) lines.push(`شناسه پرداخت قبض: <code>${event.ticketPaymentId}</code>`);
+    if (event.ticketType) lines.push(`نوع قبض: ${event.ticketType}`);
+    if (event.ticketDateJalali) lines.push(`تاریخ شمسی درج‌شده در پیامک: ${event.ticketDateJalali}`);
+    if (event.fineLocation) lines.push(`محل تخلف: ${event.fineLocation}`);
+    if (event.vehicleDescription) lines.push(`وسیله نقلیه: ${event.vehicleDescription}`);
+    if (event.vehiclePlate) lines.push(`پلاک استخراج‌شده: ${event.vehiclePlate}`);
+    if (event.speedLimitKph != null || event.recordedSpeedKph != null) lines.push(`سرعت مجاز/ثبت‌شده: ${event.speedLimitKph ?? "—"} / ${event.recordedSpeedKph ?? "—"} km/h`);
+    if (event.cameraCode) lines.push(`کد دوربین: <code>${event.cameraCode}</code>`);
+    if (event.reportedUnpaidFineBalanceRial != null) lines.push(`مانده کل جریمه‌های پرداخت‌نشده در پیامک: ${formatMoneyToman(event.reportedUnpaidFineBalanceRial)} · تا ${event.reportedBalanceDate || "تاریخ درج‌شده در پیامک"} (اطلاعات تجمیعی، نه مبلغ همین قبض)`);
+    if (event.amountCurrency) lines.push(`واحد مبلغ پیامک: ${event.amountCurrency}`);
+    if (event.fineSource === "road-police-sms") lines.push("منبع: استخراج خودکار پیامک راهور");
     if (event.paid) lines.push(`تاریخ پرداخت: ${event.paymentDate || event.paidAt || "ثبت نشده"}`, `مبلغ پرداختی: ${event.paidAmountRial ? formatMoneyToman(event.paidAmountRial) : "—"}`, `کد پیگیری پرداخت: ${event.paymentReference || "ثبت نشده"}`);
     if (timeline.potentialAmountRial != null) lines.push(`برآورد هشدار احتمالی: ${formatMoneyToman(timeline.potentialAmountRial)} (غیرقطعی؛ استعلام رسمی لازم است)`);
   }
@@ -2876,6 +2948,105 @@ function normalizeFlexibleDate(value) {
   return `${String(year).padStart(4,"0")}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
 }
 
+function parseRoadPoliceFineSms(rawText) {
+  const raw = String(rawText || "").trim();
+  if (!raw) return null;
+  const normalized = normalizeIntentText(raw);
+  const officialMarker = /(?:شناسه\s*قبض|شماره\s*سریال)/i.test(normalized) && /(?:پلیس\s*راهور|فراجا|تخلف)/i.test(normalized);
+  if (!officialMarker) return null;
+
+  const dateTime = normalized.match(/(14\d{2}\s*[\/.-]\s*\d{1,2}\s*[\/.-]\s*\d{1,2})\s+(\d{1,2}:\d{2})/);
+  const amountMatch = normalized.match(/(?:به\s*)?مبلغ\s*[:=：]?\s*([\d,٬،.]+)\s*(ریال|تومان)?/i);
+  if (!dateTime || !amountMatch) return null;
+  const ticketDate = normalizeFlexibleDate(dateTime[1].replace(/\s+/g, ""));
+  const hour = Number(dateTime[2].split(":")[0]);
+  const minute = Number(dateTime[2].split(":")[1]);
+  if (!ticketDate || hour > 23 || minute > 59) return null;
+  const amountRaw = Number(normalizeDigits(amountMatch[1]).replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(amountRaw) || amountRaw <= 0) return null;
+  // Official traffic SMS amounts are IRR unless the message explicitly says Toman.
+  const amountCurrency = amountMatch[2] || "ریال (واحد پیش‌فرض پیامک راهور)";
+  const costRial = Math.round(amountRaw * (/تومان/.test(amountMatch[2] || "") ? 10 : 1));
+  const occurredAt = parseOccurredInput({ date: ticketDate, time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` });
+
+  const ticketNumber = normalized.match(/شناسه\s*قبض\s*[:=：#]?\s*(\d{6,24})/i)?.[1] || null;
+  const ticketSerialNumber = normalized.match(/شماره\s*سریال\s*[:=：#]?\s*(\d{6,24})/i)?.[1] || null;
+  const ticketPaymentId = normalized.match(/شناسه\s*پرداخت\s*[:=：#]?\s*(\d{6,24})/i)?.[1] || null;
+  const ticketType = normalized.match(/نوع\s*قبض\s*[:=：]?\s*(.+?)(?=\s*(?:وسیله\s*نقلیه|تخلف|مبلغ|شناسه|پلیس|$))/i)?.[1]?.trim() || null;
+  const vehicleDescription = normalized.match(/وسیله\s*نقلیه\s*[:=：]\s*(.+?)(?=\s*(?:تخلف|مبلغ|شناسه|پلیس|$))/i)?.[1]?.trim() || null;
+  const plateParts = normalized.match(/ایران\s*(\d{2})\s*[ـ\-–—\s]*?(\d{3})\s*([آ-ی])\s*(\d{2})/i);
+  const vehiclePlate = plateParts ? `${plateParts[1]}-${plateParts[2]}${plateParts[3]}${plateParts[4]}` : null;
+
+  const violationMatch = normalized.match(/(?<!محل\s)تخلف(?:\s*ها)?\s*[:：]?\s*(.+?)(?=\s*(?:برای\s*خودرو|براي\s*خودرو|در\s*محور|محور|توسط\s*دوربین|توسط\s*دوربين|در\s*تاریخ|در\s*تاريخ|به\s*مبلغ|مبلغ|شناسه\s*قبض|پلیس\s*راهور|فراجا|$))/i);
+  let violationDescription = violationMatch?.[1]?.trim() || "تخلف ثبت‌شده توسط راهور";
+  violationDescription = violationDescription.replace(/^\d+\s*[:.)-]\s*/, "").replace(/[\s،,;؛]+$/g, "").trim();
+
+  let fineLocation = normalized.match(/محل\s*تخلف\s*[:=：]?\s*(.+?)(?=\s*(?:ثبت\s*با\s*تأخیر|ثبت\s*با\s*تاخیر|نوع\s*قبض|وسیله\s*نقلیه|تخلف|مبلغ|شناسه|پلیس|$))/i)?.[1]?.trim() || null;
+  if (!fineLocation) fineLocation = normalized.match(/محور\s*(.+?)(?=\s*(?:توسط|با\s*کد|در\s*تاریخ|در\s*تاريخ|به\s*مبلغ|مبلغ|شناسه\s*قبض|پلیس\s*راهور|فراجا|$))/i)?.[1]?.trim() || null;
+  const cameraCode = normalized.match(/دوربین\s*(?:با\s*)?کد\s*(\d{3,})/i)?.[1] || normalized.match(/دوربين\s*(?:با\s*)?کد\s*(\d{3,})/i)?.[1] || null;
+  const speedLimitKphRaw = normalized.match(/سرعت\s*مجاز\s*[:=：]?\s*(\d{1,3})\s*(?:کیلومتر|km)/i)?.[1];
+  const recordedSpeedKphRaw = normalized.match(/سرعت\s*(?:وسیله\s*نقلیه|وسيله\s*نقليه|خودرو)\s*[:=：]?\s*(\d{1,3})\s*(?:کیلومتر|km)/i)?.[1];
+  const balanceMatch = normalized.match(/مجموع\s*تخلفات\s*پرداخت\s*نشده(?:\s*شما)?\s*تا\s*تاریخ\s*(14\d{2}\s*[\/.-]\s*\d{1,2}\s*[\/.-]\s*\d{1,2}).{0,80}?مبلغ\s*[:=：]?\s*([\d,٬،.]+)\s*(ریال|تومان)?/i);
+  const reportedUnpaidFineBalanceRial = balanceMatch
+    ? Math.round(Number(normalizeDigits(balanceMatch[2]).replace(/[^0-9]/g, "")) * (/تومان/.test(balanceMatch[3] || "") ? 10 : 1))
+    : null;
+  const reportedBalanceDate = balanceMatch ? normalizeFlexibleDate(balanceMatch[1].replace(/\s+/g, "")) : null;
+  return {
+    ticketDate,
+    ticketDateJalali: dateTime[1].replace(/\s+/g, ""),
+    occurredAt,
+    costRial,
+    amountCurrency,
+    ticketNumber,
+    ticketSerialNumber,
+    ticketPaymentId,
+    ticketType,
+    fineLocation,
+    vehicleDescription,
+    vehiclePlate,
+    violationDescription,
+    cameraCode,
+    speedLimitKph: speedLimitKphRaw ? Number(speedLimitKphRaw) : null,
+    recordedSpeedKph: recordedSpeedKphRaw ? Number(recordedSpeedKphRaw) : null,
+    reportedUnpaidFineBalanceRial: Number.isFinite(reportedUnpaidFineBalanceRial) ? reportedUnpaidFineBalanceRial : null,
+    reportedBalanceDate,
+    fineSource: "road-police-sms",
+    originalSms: raw
+  };
+}
+
+function fineIdentityValue(value) {
+  return String(value || "").replace(/[^\p{L}\p{N}]/gu, "").toLocaleLowerCase("fa");
+}
+
+function findDuplicateFineEvent(candidate, events) {
+  const idFields = ["ticketNumber", "ticketSerialNumber", "ticketPaymentId"];
+  const candidateIds = idFields.map(key => fineIdentityValue(candidate[key])).filter(Boolean);
+  const candidateViolation = fineIdentityValue(candidate.violationDescription || candidate.description);
+  const candidateLocation = fineIdentityValue(candidate.fineLocation);
+  for (const existing of (events || []).filter(event => event?.type === "fine")) {
+    const existingIds = idFields.map(key => fineIdentityValue(existing[key])).filter(Boolean);
+    if (candidateIds.some(id => existingIds.includes(id))) return existing;
+    const sameDateTime = (existing.ticketDate || existing.date) === (candidate.ticketDate || candidate.date)
+      && String(existing.time || "") === String(candidate.time || "");
+    if (!sameDateTime) continue;
+    const existingViolation = fineIdentityValue(existing.violationDescription || existing.description);
+    if (!candidateViolation || !existingViolation || candidateViolation !== existingViolation) continue;
+    const sameAmount = Number(existing.costRial || 0) === Number(candidate.costRial || 0);
+    const existingLocation = fineIdentityValue(existing.fineLocation);
+    const sameCamera = candidate.cameraCode && existing.cameraCode && String(candidate.cameraCode) === String(existing.cameraCode);
+    const sameLocation = candidateLocation && existingLocation && candidateLocation === existingLocation;
+    const sameSpeed = candidate.speedLimitKph != null && candidate.recordedSpeedKph != null
+      && Number(existing.speedLimitKph) === Number(candidate.speedLimitKph)
+      && Number(existing.recordedSpeedKph) === Number(candidate.recordedSpeedKph);
+    const samePlate = Boolean(fineIdentityValue(candidate.vehiclePlate)) && fineIdentityValue(candidate.vehiclePlate) === fineIdentityValue(existing.vehiclePlate);
+    const sameVehicle = Boolean(fineIdentityValue(candidate.vehicleDescription)) && fineIdentityValue(candidate.vehicleDescription) === fineIdentityValue(existing.vehicleDescription);
+    const sameTicketType = Boolean(fineIdentityValue(candidate.ticketType)) && fineIdentityValue(candidate.ticketType) === fineIdentityValue(existing.ticketType);
+    if (sameAmount && (sameLocation || sameCamera || sameSpeed || samePlate || sameVehicle || sameTicketType)) return existing;
+  }
+  return null;
+}
+
 function extractFineTicketNumber(text) {
   return String(text || "").match(/(?:شماره\s*(?:قبض|جریمه|پیگیری)|شناسه\s*(?:جریمه|قبض)|ticket(?:\s*(?:no|number|id))?)\s*[:=：#]?\s*([\da-zA-Z_-]{4,40})/i)?.[1] || null;
 }
@@ -2909,7 +3080,19 @@ async function fineInfoCommand(raw, env) {
     const t = fineTimeline(target);
     const lines = [`🚦 جزئیات جریمه`, `شناسه: <code>${target.id}</code>`, `شرح: ${target.description || "—"}`, `مبلغ درج‌شده در ثبت: ${formatMoneyToman(target.costRial || 0)}`, `وضعیت: ${t.statusLabel}`, `تاریخ جریمه: ${t.ticketDate || "—"}`, `مدت گذشته از ثبت جریمه: ${t.elapsedDays == null ? "—" : `${formatNum(t.elapsedDays)} روز`}`, `مهلت محاسباتی: ${t.deadlineDate || "مشخص نشده؛ به وضعیت رسمی قبض مراجعه کن"}`];
     if (t.daysToDeadline != null) lines.push(t.daysToDeadline < 0 ? `⏳ مهلت ${formatNum(Math.abs(t.daysToDeadline))} روز پیش گذشته است.` : `⏳ ${formatNum(t.daysToDeadline)} روز تا مهلت محاسباتی باقی مانده است.`);
-    if (target.ticketNumber) lines.push(`شماره قبض: <code>${target.ticketNumber}</code>`);
+    if (target.ticketNumber) lines.push(`شناسه قبض: <code>${target.ticketNumber}</code>`);
+    if (target.ticketSerialNumber) lines.push(`شماره سریال: <code>${target.ticketSerialNumber}</code>`);
+    if (target.ticketPaymentId) lines.push(`شناسه پرداخت: <code>${target.ticketPaymentId}</code>`);
+    if (target.ticketType) lines.push(`نوع قبض: ${target.ticketType}`);
+    if (target.ticketDateJalali) lines.push(`تاریخ شمسی پیامک: ${target.ticketDateJalali}`);
+    if (target.fineLocation) lines.push(`محل تخلف: ${target.fineLocation}`);
+    if (target.vehicleDescription) lines.push(`وسیله نقلیه: ${target.vehicleDescription}`);
+    if (target.vehiclePlate) lines.push(`پلاک: ${target.vehiclePlate}`);
+    if (target.speedLimitKph != null || target.recordedSpeedKph != null) lines.push(`سرعت مجاز/ثبت‌شده: ${target.speedLimitKph ?? "—"} / ${target.recordedSpeedKph ?? "—"} km/h`);
+    if (target.cameraCode) lines.push(`کد دوربین: <code>${target.cameraCode}</code>`);
+    if (target.reportedUnpaidFineBalanceRial != null) lines.push(`مانده تجمیعی جریمه‌های پرداخت‌نشده در پیامک: ${formatMoneyToman(target.reportedUnpaidFineBalanceRial)} تا ${target.reportedBalanceDate || "—"}؛ این عدد به مبلغ همین قبض اضافه نشده است.`);
+    if (target.amountCurrency) lines.push(`واحد مبلغ پیامک: ${target.amountCurrency}`);
+    if (target.fineSource === "road-police-sms") lines.push("منبع: پیامک راهور · متن اصلی و کامل پیامک عیناً در توضیحات رکورد نگهداری شده است.");
     if (target.paid) lines.push(`تاریخ ثبت پرداخت: ${target.paidAt || "ثبت نشده"}`, `مبلغ پرداختی ثبت‌شده: ${target.paidAmountRial ? formatMoneyToman(target.paidAmountRial) : "از مبلغ جریمه استفاده شده/مشخص نشده"}`, `کد پیگیری: ${target.paymentReference || "ثبت نشده"}`);
     if (t.potentialAmountRial != null) lines.push(`برآورد هشدار (نه مبلغ رسمی): ${formatMoneyToman(t.potentialAmountRial)} در صورت شمول قاعده دوبرابری؛ استعلام رسمی لازم است.`);
     lines.push("برای ثبت پرداخت: /paid " + target.id.slice(0,8) + " date=1405/08/03 amount=... تومان ref=...", "مهلت‌ها و مبلغ نهایی را از وضعیت رسمی قبض/راهور تأیید کن؛ این محاسبه حکم قطعی قانونی نیست.");
@@ -2986,29 +3169,23 @@ async function recordRepair(raw, occurredAt, env) {
 }
 
 function calculateFuelConsumptionHistory(fuelEvents) {
-  const fuel = [...(fuelEvents || [])].filter(e => e && e.type === "fuel").sort((a,b) => eventTimestampForReport(a) - eventTimestampForReport(b));
-  const full = fuel.filter(e => e.fullTank && e.odometerKm !== null && e.odometerKm !== undefined && e.odometerKm !== "" && Number.isFinite(Number(e.odometerKm)));
-  const results = [];
-  for (let i = 1; i < full.length; i++) {
-    const from = full[i - 1], to = full[i];
-    const km = Number(to.odometerKm) - Number(from.odometerKm);
-    const fromTime = eventTimestampForReport(from), toTime = eventTimestampForReport(to);
-    if (!(km > 0) || km > 5000 || !(toTime > fromTime)) continue;
-    // Fuel bought after the first full tank through the next full tank measures the interval.
-    const intervalFuel = fuel.filter(e => {
-      const time = eventTimestampForReport(e);
-      return time > fromTime && time <= toTime;
-    });
-    const liters = intervalFuel.reduce((n,e) => n + Math.max(0, Number(e.liters) || 0), 0);
-    if (!(liters > 0)) continue;
-    const costRial = intervalFuel.reduce((n,e) => n + Math.max(0, Number(e.costRial) || 0), 0);
-    results.push({ from, to, km, liters, costRial, consumption: liters / km * 100,
-      costPerKmToman: costRial > 0 ? costRial / 10 / km : null,
-      fromOdometerKm: Number(from.odometerKm), toOdometerKm: Number(to.odometerKm),
-      fromDate: from.jalaliDate || from.date || String(from.occurredAt || "").slice(0,10),
-      toDate: to.jalaliDate || to.date || String(to.occurredAt || "").slice(0,10) });
-  }
-  return results;
+  const model = calculateFuelModel(fuelEvents || []);
+  return model.intervals.map(item => {
+    const startTime = Date.parse(item.from?.occurredAt || "");
+    const endTime = Date.parse(item.to?.occurredAt || "");
+    const intervalCostRial = (fuelEvents || []).filter(event => event?.type === "fuel")
+      .filter(event => Date.parse(event.occurredAt || "") > startTime && Date.parse(event.occurredAt || "") <= endTime)
+      .reduce((sum, event) => sum + Math.max(0, Number(event.costRial) || Number(event.amountRial) || 0), 0);
+    return {
+    from: item.from, to: item.to,
+    km: item.distanceKm, liters: item.liters,
+    costRial: intervalCostRial,
+    consumption: item.rate,
+    costPerKmToman: intervalCostRial > 0 ? intervalCostRial / 10 / item.distanceKm : null,
+    fromOdometerKm: item.fromOdometerKm, toOdometerKm: item.toOdometerKm,
+    fromDate: item.fromDate, toDate: item.toDate
+  };
+  });
 }
 
 async function ownershipCostReport(commandText, env) {
@@ -3037,9 +3214,10 @@ async function ownershipCostReport(commandText, env) {
 جریمه‌های پرداخت‌نشده / بدهی باز: ${toman(model.unpaidFinesToman)}
 
 📐 نرخ‌های تاریخی به‌ازای هر کیلومتر
-هزینه بنزین مدل‌شده: ${toman(model.fuelCostPerKmToman)} / km
+هزینه بنزین مدل‌شده (فقط باک‌کامل): ${toman(model.fuelCostPerKmToman)} / km
 هزینه استهلاک و نگهداری: ${toman(model.wearCostPerKmToman)} / km
 هزینه عملیاتی مدل‌شده (سوخت + نگهداری + سایر): ${toman(model.operatingCostPerKmToman)} / km
+خرج سوخت ثبت‌شده ÷ پیمایش مالکیت (شاخص دفتری با پوشش ناقص): ${toman(model.fuelRecordedCostPerKmToman)} / km
 میانگین واقعی پرداخت‌های ثبت‌شده: ${toman(model.recordedOperatingCostPerKmToman)} / km
 مجموع ثبت‌شده با جریمه پرداختی: ${toman(model.allRecordedCostPerKmToman)} / km
 
@@ -3079,21 +3257,23 @@ ${formatNum(item.fromOdometerKm)} → ${formatNum(item.toOdometerKm)} km · پی
 🧾 سوخت‌گیری: ${formatNum(allFuel.length)} بار · باک کامل: ${formatNum(allFuel.filter(e=>e.fullTank).length)} بار
 💰 میانگین قیمت هر لیترِ دارای مبلغ: ${averagePrice == null ? "—" : formatMoneyToman(averagePrice)}
 
-📈 مصرف دقیق بازه‌های باک‌کامل
+📈 مصرف اندازه‌گیری‌شدهٔ باک‌کامل
 ${latest ? `آخرین بازه: ${formatNum(latest.consumption)} لیتر در ۱۰۰ کیلومتر
 ${formatNum(latest.fromOdometerKm)} → ${formatNum(latest.toOdometerKm)} km · ${formatNum(latest.km)} km پیمایش · ${formatNum(latest.liters)} لیتر سوخت` : "هنوز دو نقطهٔ باک‌کامل ثبت نشده است."}
 ${weightedConsumption == null ? "میانگین دقیق: هنوز بازهٔ باک‌کامل معتبر کافی نیست." : `میانگین وزنی بازه‌های دقیق: ${formatNum(weightedConsumption)} لیتر/۱۰۰ km
 مبنای محاسبه: ${formatNum(measuredKm)} km و ${formatNum(measuredLiters)} لیتر سوخت در بازه‌های کامل.`}
 
-📉 برآورد پویا با سوخت‌گیری‌های کامل و نیمه
-${model.hasEstimate ? `مصرف برآوردی فعلی: ${formatNum(model.consumptionLPer100)} لیتر/۱۰۰ km
+📉 مدل مصرف قابل اتکا
+${model.hasEstimate ? `مصرف اندازه‌گیری‌شدهٔ فعلی: ${formatNum(model.consumptionLPer100)} لیتر/۱۰۰ km
 مبنای مدل: ${formatNum(model.sampleIntervals)} بازه از ${formatNum(model.refuelCount)} ثبت سوخت‌گیری · ${formatNum(model.sampleDistanceKm)} km · ${model.confidenceLabel}${model.priceTomanPerLiter == null ? "" : `
-میانگین قیمت ۵ سوخت‌گیری اخیر: ${formatNum(model.priceTomanPerLiter)} تومان/لیتر`}` : "برای شروع برآورد، دست‌کم دو سوخت‌گیری با کیلومتر معتبر و فاصلهٔ قابل‌استفاده ثبت کن."}
+میانگین قیمت ۵ سوخت‌گیری اخیر: ${formatNum(model.priceTomanPerLiter)} تومان/لیتر`}` : `مصرف هنوز محاسبه نمی‌شود؛ ${formatNum(model.partialOnlyRefuelCount)} ثبت سوخت‌گیری فعلی باک‌کامل تأییدشده ندارد. برای فعال‌شدن مدل، هنگام واقعاً پرشدن باک عبارت «باک کامل» یا full را ثبت کن.`}
 
-${segments ? `🗓️ جزئیات بازه‌های دقیق
-${segments}` : "بازهٔ دقیق باک‌کامل هنوز در دسترس نیست."}
+${segments ? `🗓️ جزئیات بازه‌های اندازه‌گیری‌شده
+${segments}` : "بازهٔ اندازه‌گیری‌شدهٔ باک‌کامل هنوز در دسترس نیست."}
 
-ℹ️ روش برآورد: لیترهای اضافه‌شده در فاصلهٔ بین دو ثبت سوخت با اختلاف کیلومترشمار مقایسه می‌شوند. اگر هر دو نقطه باک‌کامل نباشند، تفاوت سطح بنزین داخل باک باعث خطای طبیعی می‌شود؛ به همین دلیل خروجی با برچسب اطمینان ارائه شده و با ثبت‌های بیشتر بهتر می‌شود. برآورد جایگزین اندازه‌گیری باک‌کامل نیست.`;
+🔎 کنترل سوخت‌گیری‌های نزدیک: ${formatNum(model.rapidRefuelPairCount)} جفت ثبت در فاصلهٔ حداکثر ۶ ساعت و ۳۰ کیلومتر شناسایی شد؛ این موارد جداگانه ثبت می‌شوند اما به‌تنهایی وارد محاسبهٔ مصرف نیستند.
+
+ℹ️ روش: مصرف فقط از فاصلهٔ دو ثبت تأییدشدهٔ «باک کامل» محاسبه می‌شود. تمام سوخت‌گیری‌های جزئی بین این دو نقطه جمع می‌شوند. سوخت‌گیری‌های نزدیک یا پرتکرار به‌تنهایی نشانهٔ خالی‌شدن باک نیستند و هرگز به‌عنوان مصرف قطعی تفسیر نمی‌شوند. تا زمان وجود دو نقطهٔ باک‌کامل، فقط مبلغ/لیتر خریداری‌شده گزارش می‌شود و پیش‌بینی سوخت سفر خالی می‌ماند.`;
 }
 
 function detectServiceKeys(text, config) {
@@ -3257,7 +3437,7 @@ async function sendPhoto(env, chatId, filename, blob, caption) {
 }
 
 function eventsToCsv(events) {
-  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "previousOdometerKm", "deltaSincePreviousKm", "distanceKm", "liters", "costRial", "fuelEstimateLiters", "fuelEstimateCostRial", "fuelEstimateLPer100", "fuelEstimatePriceTomanPerLiter", "fuelEstimateConfidence", "fuelEstimateConfidenceLabel", "fuelEstimateSampleRefuels", "fuelEstimateSampleIntervals", "fuelEstimateSampleDistanceKm", "fuelEstimateMethod", "serviceKey", "serviceCatalogKey", "serviceLabel", "componentKey", "componentName", "componentCategory", "componentMode", "componentReplaced", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "paid", "ticketDate", "deadlineDate", "appealed", "appealDecisionDate", "ticketNumber", "fineLocation", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
+  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "previousOdometerKm", "deltaSincePreviousKm", "distanceKm", "liters", "costRial", "fuelEstimateLiters", "fuelEstimateCostRial", "fuelEstimateLPer100", "fuelEstimatePriceTomanPerLiter", "fuelEstimateConfidence", "fuelEstimateConfidenceLabel", "fuelEstimateSampleRefuels", "fuelEstimateSampleIntervals", "fuelEstimateSampleDistanceKm", "fuelEstimateMethod", "serviceKey", "serviceCatalogKey", "serviceLabel", "componentKey", "componentName", "componentCategory", "componentMode", "componentReplaced", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "paid", "ticketDate", "deadlineDate", "appealed", "appealDecisionDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
   const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [headers.join(","), ...events.map(event => headers.map(key => quote(event[key])).join(","))].join("\r\n");
 }
