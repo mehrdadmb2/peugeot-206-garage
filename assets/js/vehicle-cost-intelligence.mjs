@@ -103,7 +103,8 @@ export function calculateVehicleCostModel(events, options = {}) {
   const totalRecordedRial = totalOperatingRial + totals.fines;
   const toToman = rial => rial / 10;
   const perKm = (rial, km = distanceKm) => km > 0 ? toToman(rial) / km : null;
-  const fuelModel = calculateFuelModel(rows);
+  const fuelOptions = options.fuelOptions && typeof options.fuelOptions === 'object' ? options.fuelOptions : {};
+  const fuelModel = calculateFuelModel(rows, fuelOptions);
   const wearPerKmToman = perKm(totals.wear);
   const otherPerKmToman = perKm(totals.other);
   const fuelRecordedPerKmToman = perKm(totals.fuel);
@@ -116,8 +117,8 @@ export function calculateVehicleCostModel(events, options = {}) {
     : null;
   // Do not divide the partial fuel ledger by the full ownership distance:
   // incomplete logging makes that apparent cost/km systematically misleading.
-  // Keep recorded spend as a separate historical metric and use measured
-  // full-to-full consumption for forecasts only.
+  // Keep recorded spend as a separate historical metric. The fuel model may
+  // use exact full-to-full checkpoints or bounded partial-tank balance estimates.
   const fuelCostPerKmToman = modeledFuelPerKmToman;
   const operatingComponentsPerKm = [fuelCostPerKmToman, wearPerKmToman, otherPerKmToman].filter(value => value != null);
   const operatingPerKmToman = operatingComponentsPerKm.length
@@ -130,7 +131,7 @@ export function calculateVehicleCostModel(events, options = {}) {
     : counts.fuel > 0 ? 'مصرف قابل اندازه‌گیری نیست؛ سوخت ثبت‌شده فقط در جمع تاریخی می‌آید و به هزینه هر km تعمیم داده نمی‌شود' : 'داده کافی برای هزینه سوخت هر کیلومتر موجود نیست';
 
   const tripDistanceKm = positive(options.tripDistanceKm);
-  const fuelTrip = tripDistanceKm > 0 ? estimateFuelTrip(rows, tripDistanceKm) : null;
+  const fuelTrip = tripDistanceKm > 0 ? estimateFuelTrip(rows, tripDistanceKm, fuelOptions) : null;
   const estimatedFuelToman = fuelTrip?.costToman ?? null;
   const estimatedWearToman = tripDistanceKm > 0 && wearPerKmToman !== null ? wearPerKmToman * tripDistanceKm : null;
   const estimatedOtherToman = tripDistanceKm > 0 && otherPerKmToman !== null ? otherPerKmToman * tripDistanceKm : null;
@@ -166,11 +167,18 @@ export function calculateVehicleCostModel(events, options = {}) {
     trip: tripDistanceKm > 0 ? {
       distanceKm: tripDistanceKm,
       fuelLiters: fuelTrip?.fuelLiters ?? null,
+      fuelLitersMin: fuelTrip?.minFuelLiters ?? null,
+      fuelLitersMax: fuelTrip?.maxFuelLiters ?? null,
       fuelCostToman: estimatedFuelToman,
+      fuelCostMinToman: fuelTrip?.minCostToman ?? null,
+      fuelCostMaxToman: fuelTrip?.maxCostToman ?? null,
       fuelPriceTomanPerLiter: fuelTrip?.priceTomanPerLiter ?? fuelModel.priceTomanPerLiter ?? latestFuelUnitPriceToman,
       fuelConsumptionLPer100: fuelTrip?.consumptionLPer100 ?? fuelModel.consumptionLPer100 ?? null,
+      fuelConsumptionMinLPer100: fuelTrip?.consumptionMinLPer100 ?? fuelModel.consumptionMinLPer100 ?? null,
+      fuelConsumptionMaxLPer100: fuelTrip?.consumptionMaxLPer100 ?? fuelModel.consumptionMaxLPer100 ?? null,
       fuelConfidenceKey: fuelTrip?.confidenceKey ?? fuelModel.confidenceKey,
       fuelConfidenceLabel: fuelTrip?.confidenceLabel ?? fuelModel.confidenceLabel,
+      fuelMethod: fuelTrip?.method ?? fuelModel.method,
       wearReserveToman: estimatedWearToman,
       otherRunningReserveToman: estimatedOtherToman,
       estimatedOperatingCostToman: estimatedTripOperatingToman,

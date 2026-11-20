@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null, fuelEngine: null, costEngine: null };
+  const state = { events: [], config: null, months: [], precomputed: null, snapshotGeneratedAt: null, dataMode: 'idle', dataWarnings: [], range: 6, analyticsPeriod: 'month', componentCategoryFilter: 'all', shown: 12, filtered: [], refreshedAt: null, fuelEngine: null, costEngine: null, fineEngine: null };
   const PersianCalendar = window.GaragePersianCalendar || null;
   const typeLabels = {
     odometer: 'کیلومترشمار', trip: 'مسافت', fuel: 'سوخت‌گیری', service: 'سرویس', part: 'قطعه',
@@ -117,6 +117,10 @@
       if (!state.costEngine) {
         try { state.costEngine = await import('./vehicle-cost-intelligence.mjs'); }
         catch (error) { window.GarageDiagnostics?.log('error', 'cost.engine', 'موتور محاسبات هزینه بارگذاری نشد.', error); }
+      }
+      if (!state.fineEngine) {
+        try { state.fineEngine = await import('./fine-intelligence.mjs'); }
+        catch (error) { window.GarageDiagnostics?.log('error', 'fine.engine', 'موتور مشترک محاسبه مهلت جریمه بارگذاری نشد؛ مهلت خودکار اعمال نمی‌شود.', error); }
       }
       setConnection('loading');
       refreshButton?.classList.add('is-loading');
@@ -678,7 +682,26 @@
     if ($('#fineTotalPaid')) $('#fineTotalPaid').textContent = `${moneyText(paidFine)} تومان`;
     if ($('#fineTotalUnpaid')) $('#fineTotalUnpaid').textContent = `${moneyText(unpaidFine)} تومان`;
     if ($('#fineCountAll')) $('#fineCountAll').textContent = `${formatNumber(fines.length)} مورد ثبت‌شده`;
-    $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e=>{ const ticketDate=String(e.ticketDate||e.date||e.occurredAt||'').slice(0,10); const deadline=e.deadlineDate || (ticketDate ? addDays(ticketDate, e.appealed && e.appealDecisionDate ? 20 : 60) : null); const days=deadline ? daysBetween(localDateString(new Date()),deadline) : null; const age=ticketDate ? Math.max(0,daysBetween(ticketDate,localDateString(new Date()))) : null; return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description || 'جریمه ثبت‌شده')}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || ticketDate || '—')} · ${String(e.id).slice(0,8)}${age != null ? ` · ${formatNumber(age)} روز گذشته` : ''}</div><div class="mini-row-meta fine-deadline-meta">${e.paid ? `پرداخت: ${escapeHtml(e.paymentDate||String(e.paidAt||'').slice(0,10)||'تاریخ نامشخص')}${e.paymentReference ? ` · پیگیری ${escapeHtml(e.paymentReference)}` : ''}` : days == null ? 'مهلت: نیازمند بررسی' : days < 0 ? `${formatNumber(Math.abs(days))} روز از مهلت محاسباتی گذشته؛ استعلام رسمی` : `${formatNumber(days)} روز تا مهلت محاسباتی`}</div></div><div class="mini-row-value ${e.paid?'paid':''}">${escapeHtml(moneyText((Number(e.costRial)||0)/10))}<div class="mini-row-meta">${e.paid?'پرداخت شد':'پرداخت‌نشده'}</div></div></div>`; }).join('') : '<div class="empty-state">جریمه‌ای ثبت نشده است.</div>';
+    $('#fineSummary').innerHTML = fines.length ? fines.slice(0,4).map(e => {
+      const timeline = state.fineEngine?.calculateFineTimeline
+        ? state.fineEngine.calculateFineTimeline(e, localDateString(new Date()))
+        : { ticketDate: String(e.ticketDate || e.date || e.occurredAt || '').slice(0, 10) || null, elapsedDays: null, deadlineDate: e.deadlineDate || null, daysToDeadline: null, potentialAmountRial: null, eligibilityLabel: 'موتور مهلت در دسترس نیست؛ دیرکرد خودکار اعمال نشده است' };
+      const ticketDate = timeline.ticketDate;
+      const age = timeline.elapsedDays == null ? null : Math.max(0, timeline.elapsedDays);
+      let deadlineText;
+      if (e.paid) {
+        deadlineText = `پرداخت: ${escapeHtml(e.paymentDate || String(e.paidAt || '').slice(0,10) || 'تاریخ نامشخص')}${e.paymentReference ? ` · پیگیری ${escapeHtml(e.paymentReference)}` : ''}`;
+      } else if (timeline.potentialAmountRial != null) {
+        deadlineText = `مهلت پیگیری قبض دوبرگی گذشته؛ مبلغ احتمالی با قاعدهٔ دوبرابری: ${escapeHtml(moneyText(timeline.potentialAmountRial / 10))} تومان · استعلام رسمی لازم است`;
+      } else if (timeline.deadlineDate && timeline.daysToDeadline != null) {
+        deadlineText = timeline.daysToDeadline < 0
+          ? `${formatNumber(Math.abs(timeline.daysToDeadline))} روز از مهلت پیگیری/یادآوری گذشته · مبلغ نهایی را استعلام کن`
+          : `${formatNumber(timeline.daysToDeadline)} روز تا مهلت پیگیری/یادآوری`;
+      } else {
+        deadlineText = `${timeline.eligibilityLabel || 'بدون دیرکرد خودکار'} · مهلت دوبرابرشدن خودکار ندارد`;
+      }
+      return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(e.description || 'جریمه ثبت‌شده')}</div><div class="mini-row-meta">${escapeHtml(e.jalaliDate || ticketDate || '—')} · ${String(e.id).slice(0,8)}${age != null ? ` · ${formatNumber(age)} روز گذشته` : ''}</div><div class="mini-row-meta fine-deadline-meta">${deadlineText}</div></div><div class="mini-row-value ${e.paid?'paid':''}">${escapeHtml(moneyText((Number(e.costRial)||0)/10))}<div class="mini-row-meta">${e.paid?'پرداخت شد':'پرداخت‌نشده'}</div></div></div>`;
+    }).join('') : '<div class="empty-state">جریمه‌ای ثبت نشده است.</div>';
     const issues = state.events.filter(e => e.type === 'issue' || e.type === 'repair').sort((a,b)=>eventEpoch(b)-eventEpoch(a));
     const open = issues.filter(e=>e.type==='issue' && e.status!=='fixed');
     $('#issueTotals').textContent = `خرابی باز: ${formatNumber(open.length)}`;
@@ -706,7 +729,7 @@
   function exportCsv() {
     const rows = state.filtered.slice();
     if (!rows.length) { showToast('با فیلتر فعلی داده‌ای برای خروجی وجود ندارد.'); return; }
-    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','fuelEstimateLiters','fuelEstimateCostRial','fuelEstimateLPer100','fuelEstimatePriceTomanPerLiter','fuelEstimateConfidence','fuelEstimateSampleRefuels','fuelEstimateSampleIntervals','fuelEstimateSampleDistanceKm','fuelEstimateMethod','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','ticketSerialNumber','ticketPaymentId','ticketType','fineLocation','vehicleDescription','vehiclePlate','violationDescription','ticketDateJalali','speedLimitKph','recordedSpeedKph','cameraCode','reportedUnpaidFineBalanceRial','reportedBalanceDate','amountCurrency','fineSource','originalSms','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','fuelEstimateLiters','fuelEstimateCostRial','fuelEstimateMinCostRial','fuelEstimateMaxCostRial','fuelEstimateConfidenceLabel','fuelEstimateLPer100','fuelEstimateMinLPer100','fuelEstimateMaxLPer100','fuelEstimateMinLiters','fuelEstimateMaxLiters','fuelEstimatePriceTomanPerLiter','fuelEstimateConfidence','fuelEstimateSampleRefuels','fuelEstimateSampleIntervals','fuelEstimateSampleDistanceKm','fuelEstimateMethod','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','ticketSerialNumber','ticketPaymentId','ticketType','fineLocation','vehicleDescription','vehiclePlate','violationDescription','ticketDateJalali','speedLimitKph','recordedSpeedKph','cameraCode','reportedUnpaidFineBalanceRial','reportedBalanceDate','amountCurrency','fineSource','originalSms','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...rows.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n');
     downloadBlob(`206-garage-${localDateString(new Date())}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8');
     showToast('خروجی CSV آماده شد.');
@@ -898,7 +921,7 @@
     if (!(Number(dynamicDistance) > 0)) return null;
     // Always rebuild from the current refuel ledger. Older stored estimates are
     // deliberately ignored so a corrected/added fuel record updates every trip.
-    return state.fuelEngine.estimateFuelTrip(state.events, Number(dynamicDistance));
+    return state.fuelEngine.estimateFuelTrip(state.events, Number(dynamicDistance), { ...(state.config?.fuelModel || {}), at: eventEpoch(event), tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 });
   }
 
   function eventDescriptionBlocks(event) {
@@ -941,6 +964,13 @@
     add('دسته هزینه', event.expenseCategory);
     add('وضعیت', event.status === 'fixed' ? 'رفع‌شده' : event.status === 'open' ? 'باز' : event.status);
     add('وضعیت پرداخت', event.type === 'fine' ? (event.paid ? 'پرداخت‌شده' : 'پرداخت‌نشده') : null);
+    if (event.type === 'fine' && state.fineEngine?.calculateFineTimeline) {
+      const timeline = state.fineEngine.calculateFineTimeline(event, localDateString(new Date()));
+      add('مهلت پیگیری', timeline.deadlineDate || 'ندارد؛ دیرکرد خودکار فعال نیست');
+      add('قاعده دیرکرد', timeline.eligibilityLabel);
+      add('وضعیت مهلت', timeline.statusLabel);
+      add('مبلغ احتمالی پس از دوبرابرشدن (غیررسمی)', timeline.potentialAmountRial == null ? null : `${moneyText(timeline.potentialAmountRial / 10)} تومان`);
+    }
     add('شناسه قبض', event.ticketNumber);
     add('شماره سریال قبض', event.ticketSerialNumber);
     add('شناسه پرداخت قبض', event.ticketPaymentId);
@@ -983,6 +1013,7 @@
     const distanceKm = state.costEngine.calculateCurrentOdometerDelta(state.events, event.id, purchaseKm);
     if (!(Number(distanceKm) > 0)) return null;
     const model = state.costEngine.calculateVehicleCostModel(state.events, {
+      fuelOptions: { tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 },
       purchaseOdometerKm: purchaseKm,
       currentOdometerKm: calculateOdometer(state.events),
       tripDistanceKm: distanceKm
@@ -1013,7 +1044,7 @@
       if (event.paid === false && event.type === 'fine') metrics.push('پرداخت‌نشده');
       const fuelEstimate = fuelEstimateForOdometerEvent(event);
       const fuelBasis = `${formatNumber(fuelEstimate?.sampleRefuels || 0)} سوخت‌گیری · ${formatNumber(fuelEstimate?.sampleIntervals || 0)} بازه${fuelEstimate?.sampleDistanceKm ? ` · ${formatNumber(fuelEstimate.sampleDistanceKm)} km داده` : ''}`;
-      const fuelEstimateCard = fuelEstimate ? `<div class="event-fuel-estimate confidence-${escapeAttr(fuelEstimate.confidenceKey || 'low')}"><span class="event-fuel-estimate-icon">⛽</span><div class="event-fuel-estimate-copy"><b>هزینهٔ بنزین این پیمایش · باز‌محاسبه‌شده</b><small>${formatNumber(fuelEstimate.consumptionLPer100, 2)} لیتر/۱۰۰ km · ${escapeHtml(fuelEstimate.confidenceLabel || 'برآورد اولیه')}</small><small>${escapeHtml(fuelBasis)}</small></div><strong>${formatNumber(fuelEstimate.fuelLiters, 2)} لیتر</strong>${fuelEstimate.costToman == null ? '' : `<span class="event-fuel-estimate-cost">≈ ${moneyText(fuelEstimate.costToman)} تومان${fuelEstimate.priceTomanPerLiter ? `<small>${formatNumber(fuelEstimate.priceTomanPerLiter)} تومان/لیتر</small>` : ''}</span>`}</div>` : '';
+      const fuelEstimateCard = fuelEstimate ? `<div class="event-fuel-estimate confidence-${escapeAttr(fuelEstimate.confidenceKey || 'low')}"><span class="event-fuel-estimate-icon">⛽</span><div class="event-fuel-estimate-copy"><b>هزینهٔ بنزین این پیمایش · باز‌محاسبه‌شده</b><small>${formatNumber(fuelEstimate.consumptionLPer100, 2)} لیتر/۱۰۰ km · بازه ${formatNumber(fuelEstimate.consumptionMinLPer100, 1)} تا ${formatNumber(fuelEstimate.consumptionMaxLPer100, 1)}</small><small>${escapeHtml(fuelEstimate.confidenceLabel || 'برآورد اولیه')} · ${escapeHtml(fuelBasis)}</small></div><strong>${formatNumber(fuelEstimate.minFuelLiters, 2)}–${formatNumber(fuelEstimate.maxFuelLiters, 2)} لیتر</strong>${fuelEstimate.costToman == null ? '' : `<span class="event-fuel-estimate-cost">≈ ${moneyText(fuelEstimate.minCostToman)}–${moneyText(fuelEstimate.maxCostToman)} تومان<small>میانگین ${moneyText(fuelEstimate.costToman)} تومان</small></span>`}</div>` : ''; 
       const ownershipEstimate = ownershipTripForOdometerEvent(event);
       const ownershipTrip = ownershipEstimate?.trip;
       const ownershipFmt = value => value == null ? '—' : `${moneyText(value)} تومان`;
@@ -1026,52 +1057,61 @@
     const fuel = state.events.filter(event => event.type === 'fuel').sort((a, b) => eventEpoch(a) - eventEpoch(b));
     const totalLiters = sum(fuel, event => event.liters);
     const totalCost = sum(fuel, event => event.costRial);
-    const model = state.fuelEngine?.calculateFuelModel ? state.fuelEngine.calculateFuelModel(state.events) : null;
+    const fuelOptions = { ...(state.config?.fuelModel || {}), tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 };
+    const model = state.fuelEngine?.calculateFuelModel ? state.fuelEngine.calculateFuelModel(state.events, fuelOptions) : null;
     safeText('#fuelPageLiters', formatNumber(totalLiters, 1));
     safeText('#fuelPageLitersFoot', `${formatNumber(fuel.length)} سوخت‌گیری ثبت‌شده`);
     safeText('#fuelPageCost', compactMoney(totalCost / 10));
     safeText('#fuelPageCostFoot', 'مجموع هزینهٔ ثبت‌شده سوخت');
     safeText('#fuelPageStops', formatNumber(fuel.length));
-    safeText('#fuelPageStopsFoot', fuel.length ? `${formatNumber(fuel.filter(event => event.fullTank).length)} بار باک کامل` : 'هنوز سوخت‌گیری ثبت نشده است');
+    safeText('#fuelPageStopsFoot', fuel.length ? `${formatNumber(fuel.filter(event => event.fullTank).length)} بار باک کامل · ${formatNumber(fuel.filter(event => !event.fullTank).length)} جزئی` : 'هنوز سوخت‌گیری ثبت نشده است');
     const intervals = model?.acceptedIntervals || [];
     const average = model?.consumptionLPer100 ?? null;
     safeText('#fuelPageEfficiency', average == null ? '—' : formatNumber(average, 2));
-    safeText('#fuelPageEfficiencyFoot', average == null ? 'دو ثبت باک‌کامل با کیلومتر معتبر لازم است.' : `${model.confidenceLabel} · ${formatNumber(model.sampleDistanceKm)} km مبنای مدل`);
-    safeText('#fuelWeightedAverage', average == null ? '—' : `${formatNumber(average, 2)} L/100km`);
+    safeText('#fuelPageEfficiencyFoot', average == null ? 'حداقل دو سوخت‌گیری با کیلومتر معتبر و فاصلهٔ کافی لازم است.' : `${model.confidenceLabel} · بازه ${formatNumber(model.consumptionMinLPer100, 1)} تا ${formatNumber(model.consumptionMaxLPer100, 1)} · ${formatNumber(model.sampleDistanceKm)} km`);
+    safeText('#fuelWeightedAverage', average == null ? '—' : `${formatNumber(average, 2)} L/100km · ${formatNumber(model.consumptionMinLPer100, 1)}–${formatNumber(model.consumptionMaxLPer100, 1)}`);
     const months = previousPersianMonthKeys(currentPersianMonthKey(), 8);
     chartBars('#fuelOnlyChart', months.map(key => ({ label: key, shortLabel: persianMonthLabel(key), value: sum(fuel.filter(event => eventPersianMonthKey(event) === key), event => event.liters) })), value => `${formatNumber(value, 1)} L`, 'هنوز سوخت‌گیری ثبت نشده است.');
-    chartBars('#fuelConsumptionChart', intervals.slice(-10).map(item => ({ label: item.toDate, shortLabel: item.toDate, value: item.rate })), value => `${formatNumber(value, 2)}`, 'برای ساخت مدل، دو ثبت باک‌کامل با کیلومتر معتبر لازم است.');
+    chartBars('#fuelConsumptionChart', intervals.slice(-10).map(item => ({ label: item.toDate, shortLabel: item.toDate, value: item.rate })), value => `${formatNumber(value, 2)}`, 'برای تخمین اولیه، حداقل دو سوخت‌گیری با کیلومتر معتبر و حداقل ۱۰۰ km فاصله لازم است.');
     const list = $('#fuelEventList');
     if (list) list.innerHTML = fuel.length ? fuel.slice().reverse().slice(0, 12).map(event => {
       const unitPrice = Number(event.liters) > 0 && Number(event.costRial) > 0 ? Number(event.costRial) / Number(event.liters) / 10 : null;
       return `<div class="mini-row"><div class="mini-row-main"><div class="mini-row-title">${escapeHtml(event.jalaliDate || eventDateKey(event))} · ${formatNumber(Number(event.liters) || 0, 1)} لیتر</div><div class="mini-row-meta">${event.odometerKm != null ? `${formatNumber(event.odometerKm)} km · ` : ''}${event.fullTank ? 'باک کامل · ' : 'سوخت‌گیری جزئی · '}${escapeHtml(event.actor || 'من')}${unitPrice == null ? '' : ` · ${formatNumber(unitPrice)} تومان/لیتر`}</div></div><div class="mini-row-value">${moneyText((Number(event.costRial) || 0) / 10)} تومان</div></div>`;
     }).join('') : '<div class="empty-state">سوخت‌گیری ثبت نشده است.</div>';
     const history = $('#fuelConsumptionHistory');
-    if (history) history.innerHTML = intervals.length ? intervals.slice().reverse().map(item => `<div class="fuel-measurement-row is-measured"><b>${escapeHtml(item.fromDate)} ← ${escapeHtml(item.toDate)}<small>اندازه‌گیری باک‌به‌باک · ${formatNumber(item.refuelCount)} سوخت‌گیری در بازه</small></b><span>${formatNumber(item.distanceKm)} km</span><span>${formatNumber(item.liters, 1)} L</span><strong>${formatNumber(item.rate, 2)} L/100km</strong></div>`).join('') : '<div class="empty-state">هنوز دو ثبت باک‌کامل با کیلومتر معتبر برای اندازه‌گیری مصرف وجود ندارد.</div>';
+    if (history) history.innerHTML = intervals.length ? intervals.slice().reverse().map(item => {
+      const exact = item.method === 'full-to-full';
+      const range = item.minRate != null && item.maxRate != null && Math.abs(item.maxRate - item.minRate) > 0.01
+        ? `<small>بازهٔ ممکن: ${formatNumber(item.minRate, 2)} تا ${formatNumber(item.maxRate, 2)} L/100km</small>` : '';
+      const label = exact ? 'باک‌به‌باک دقیق' : 'موازنهٔ سطح بنزین باک · تخمینی';
+      return `<div class="fuel-measurement-row ${exact ? 'is-measured' : 'is-estimated'}"><b>${escapeHtml(item.fromDate)} ← ${escapeHtml(item.toDate)}<small>${label} · ${formatNumber(item.refuelCount)} ثبت سوخت</small>${range}</b><span>${formatNumber(item.distanceKm)} km</span><span>${formatNumber(item.minLiters ?? item.liters, 1)}–${formatNumber(item.maxLiters ?? item.liters, 1)} L</span><strong>${formatNumber(item.rate, 2)} L/100km</strong></div>`;
+    }).join('') : '<div class="empty-state">برای شروع محاسبه، حداقل دو سوخت‌گیری همراه با کیلومتر معتبر و ۱۰۰ کیلومتر فاصله ثبت کن؛ لازم نیست باک کامل باشد.</div>';
     const diagnostics = $('#fuelModelDiagnostics');
     if (diagnostics) {
       const partialCount = Number(model?.partialOnlyRefuelCount) || 0;
       const rapidCount = Number(model?.rapidRefuelPairCount) || 0;
+      const invalidCount = Number(model?.invalidRefuelCount) || 0;
       diagnostics.textContent = model?.hasEstimate
-        ? `${formatNumber(model.sampleIntervals)} بازهٔ باک‌به‌باک معتبر · ${formatNumber(model.sampleDistanceKm)} کیلومتر مبنا · ${formatNumber(model.unmeasuredRefuelCount)} ثبت خارج از بازه‌های اندازه‌گیری‌شده. ${rapidCount ? `${formatNumber(rapidCount)} جفت سوخت‌گیری نزدیک شناسایی شد؛ نزدیکی آن‌ها به‌معنی خالی‌شدن باک نیست.` : 'سوخت‌گیری‌های جزئی فقط در صورت قرارگرفتن بین دو باک‌کامل در اندازه‌گیری وارد می‌شوند.'}`
-        : `مدل مصرف هنوز فعال نیست. ${formatNumber(partialCount)} سوخت‌گیری جزئی ثبت شده و ${formatNumber(rapidCount)} جفت سوخت‌گیری نزدیک (حداکثر ۶ ساعت و ۳۰ کیلومتر) شناسایی شده است؛ هیچ‌کدام به‌تنهایی نشانهٔ خالی‌شدن باک نیستند. برای شروع اندازه‌گیری، دو نوبت پرکردن واقعی باک را با گزینهٔ «باک کامل» و کیلومتر دقیق ثبت کن.`;
+        ? `${model.method === 'full-to-full' ? 'مدل اصلی بر پایهٔ باک‌به‌باک دقیق است' : 'مدل با سوخت‌گیری‌های جزئی فعال شده است'} · ${formatNumber(model.sampleDistanceKm)} کیلومتر داده · مصرف ${formatNumber(model.consumptionMinLPer100, 2)} تا ${formatNumber(model.consumptionMaxLPer100, 2)} L/100km · ظرفیت مبنا ${formatNumber(model.tankCapacityLiters)} لیتر. ${rapidCount ? `${formatNumber(rapidCount)} جفت مراجعهٔ نزدیک ثبت شده؛ همهٔ سوخت‌گیری‌ها در موازنه لحاظ شده‌اند و نزدیکی به‌معنی خالی‌شدن باک نیست. ` : ''}${invalidCount ? `${formatNumber(invalidCount)} ثبت غیرقابل استفاده به‌علت مقدار نامعتبر یا ظرفیت/کیلومتر بررسی‌نشده‌اند.` : ''}`
+        : `${formatNumber(partialCount)} سوخت‌گیری جزئی ثبت شده است. برای محاسبه لازم نیست باک کامل کنی؛ دو یا چند ثبت سوخت‌گیری با کیلومتر معتبر و حداقل ۱۰۰ کیلومتر فاصله لازم است. هرچه فاصله و تعداد ثبت‌ها بیشتر باشد، بازهٔ عدم‌قطعیت کوچک‌تر می‌شود. ${invalidCount ? `${formatNumber(invalidCount)} سوخت‌گیری نامعتبر کنار گذاشته شده است.` : ''}`;
     }
     renderFuelTripEstimator();
   }
   function renderFuelTripEstimator() {
     const rateNode = $('#fuelEstimateRate');
     if (!rateNode) return;
-    const model = state.fuelEngine?.calculateFuelModel ? state.fuelEngine.calculateFuelModel(state.events) : null;
+    const fuelOptions = { ...(state.config?.fuelModel || {}), tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 };
+    const model = state.fuelEngine?.calculateFuelModel ? state.fuelEngine.calculateFuelModel(state.events, fuelOptions) : null;
     const distance = Number($('#fuelTripDistanceInput')?.value);
     const estimate = state.fuelEngine?.estimateFuelTrip && Number.isFinite(distance) && distance > 0
-      ? state.fuelEngine.estimateFuelTrip(state.events, distance)
+      ? state.fuelEngine.estimateFuelTrip(state.events, distance, fuelOptions)
       : null;
-    safeText('#fuelEstimateRate', model?.hasEstimate ? `${formatNumber(model.consumptionLPer100, 2)} L/100km` : 'در انتظار داده');
-    safeText('#fuelEstimateConfidence', model?.confidenceLabel || 'برای شروع، دو سوخت‌گیری باک‌کامل با کیلومتر معتبر ثبت کن.');
-    safeText('#fuelEstimateBasis', model?.hasEstimate ? `${formatNumber(model.sampleIntervals)} بازهٔ سوخت‌گیری · ${formatNumber(model.sampleDistanceKm)} کیلومتر مبنا · ${formatNumber(model.refuelCount)} ثبت سوخت` : 'سوخت‌گیری‌های جزئی را ثبت کن؛ مدل تا ثبت دوم باک‌کامل عدد مصرف نمی‌سازد.');
-    safeText('#fuelEstimateLiters', estimate ? `${formatNumber(estimate.fuelLiters, 2)} لیتر` : '—');
-    safeText('#fuelEstimateCost', estimate?.costToman == null ? '—' : `حدود ${moneyText(estimate.costToman)} تومان`);
-    safeText('#fuelEstimatePrice', estimate?.priceTomanPerLiter == null ? 'نرخ قیمت ثبت نشده' : `${formatNumber(estimate.priceTomanPerLiter)} تومان/لیتر · میانگین ۵ سوخت‌گیری اخیر`);
+    safeText('#fuelEstimateRate', model?.hasEstimate ? `${formatNumber(model.consumptionLPer100, 2)} L/100km · ${formatNumber(model.consumptionMinLPer100, 1)}–${formatNumber(model.consumptionMaxLPer100, 1)}` : 'در انتظار داده');
+    safeText('#fuelEstimateConfidence', model?.confidenceLabel || 'حداقل دو سوخت‌گیری با کیلومتر معتبر و فاصلهٔ ۱۰۰ کیلومتر لازم است؛ باک کامل الزامی نیست.');
+    safeText('#fuelEstimateBasis', model?.hasEstimate ? `${formatNumber(model.sampleIntervals)} بازه · ${formatNumber(model.sampleDistanceKm)} km · ${formatNumber(model.refuelCount)} سوخت‌گیری · ${model.method === 'full-to-full' ? 'اندازه‌گیری دقیق' : 'موازنهٔ جزئی با سطح باک نامعلوم'}` : 'سوخت‌گیری جزئی با کیلومتر دقیق را ثبت کن؛ برای شروع نیازی به پرکردن کامل باک نیست.');
+    safeText('#fuelEstimateLiters', estimate ? `${formatNumber(estimate.minFuelLiters, 2)} تا ${formatNumber(estimate.maxFuelLiters, 2)} لیتر · میانگین ${formatNumber(estimate.fuelLiters, 2)}` : '—');
+    safeText('#fuelEstimateCost', estimate?.costToman == null ? '—' : `${moneyText(estimate.minCostToman)} تا ${moneyText(estimate.maxCostToman)} تومان · میانگین ${moneyText(estimate.costToman)} تومان`);
+    safeText('#fuelEstimatePrice', estimate?.priceTomanPerLiter == null ? 'نرخ قیمت ثبت نشده' : `${formatNumber(estimate.priceTomanPerLiter)} تومان/لیتر · میانگین وزنی ۵ خرید اخیر`);
   }
   function renderVehicleSpecs() {
     const vehicle = state.config?.vehicle || {};
@@ -1120,6 +1160,7 @@
     const tripDistance = Number.isFinite(distanceInput) && distanceInput > 0 ? Math.min(distanceInput, 5000) : 100;
     const model = state.costEngine?.calculateVehicleCostModel
       ? state.costEngine.calculateVehicleCostModel(state.events, {
+          fuelOptions: { tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 },
           purchaseOdometerKm: Number(state.config?.ownership?.purchaseOdometerKm ?? 428000),
           currentOdometerKm: calculateOdometer(state.events),
           tripDistanceKm: tripDistance
@@ -1226,16 +1267,19 @@
     inPeriodEvents.filter(isActualExpense).forEach(event => { const category = String(event.expenseCategory || typeLabels[event.type] || event.type); categories[category] = (categories[category] || 0) + expenseAmount(event) / 10; });
     const categoryNode = $('#analyticsCategoryBreakdown');
     if (categoryNode) categoryNode.innerHTML = Object.entries(categories).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([name,value])=>`<div class="actor-breakdown-row"><div><b>${escapeHtml(name)}</b><strong>${moneyText(value)} تومان</strong></div></div>`).join('') || '<div class="empty-state">داده‌ای برای دسته‌بندی هزینه‌ها وجود ندارد.</div>';
-    const fuelEvents = inPeriodEvents.filter(event => event.type === 'fuel');
-    const fuelFull = fuelEvents.filter(event => event.fullTank && Number.isFinite(Number(event.odometerKm)));
-    safeText('#fuelInsight', fuelFull.length >= 2 ? `${formatNumber(fuelFull.length)} ثبت باک کامل در بازه موجود است؛ مصرف دقیق پس از تطبیق فاصلهٔ دو باک محاسبه می‌شود.` : 'برای مصرف قابل اتکا، حداقل دو سوخت‌گیری باک کامل همراه کیلومتر ثبت کن.');
+    const fuelModel = state.fuelEngine?.calculateFuelModel
+      ? state.fuelEngine.calculateFuelModel(state.events, { ...(state.config?.fuelModel || {}), tankCapacityLiters: Number(state.config?.fuelModel?.tankCapacityLiters) || 50 })
+      : null;
+    safeText('#fuelInsight', fuelModel?.hasEstimate
+      ? `مدل از ${formatNumber(fuelModel.refuelCount)} سوخت‌گیری، ${formatNumber(fuelModel.sampleDistanceKm)} کیلومتر داده ساخته است. مصرف میانی ${formatNumber(fuelModel.consumptionLPer100, 2)} و بازهٔ ممکن ${formatNumber(fuelModel.consumptionMinLPer100, 2)} تا ${formatNumber(fuelModel.consumptionMaxLPer100, 2)} لیتر در ۱۰۰ کیلومتر است؛ باک کامل شرط محاسبه نیست.`
+      : 'با ثبت حداقل دو سوخت‌گیری جزئی دارای کیلومتر معتبر و حداقل ۱۰۰ کیلومتر فاصله، موازنهٔ سطح بنزین فعال می‌شود؛ باک کامل فقط یک نقطهٔ مرجع دقیق‌تر است.');
     const topCategory = Object.entries(categories).sort((a,b)=>b[1]-a[1])[0];
     safeText('#topCostInsight', topCategory ? `بیشترین هزینه مربوط به ${topCategory[0]} با ${moneyText(topCategory[1])} تومان است.` : 'در بازهٔ انتخابی هزینه‌ای ثبت نشده است.');
     const topDriver = Object.entries(byActorDistance).sort((a,b)=>b[1]-a[1])[0];
     safeText('#driveInsight', topDriver ? `${topDriver[0]} با ${formatNumber(topDriver[1], 1)} کیلومتر بیشترین مسافت قابل انتساب را در این بازه دارد.` : 'با ثبت چند کیلومترشمار یا مسافت، الگوی رانندگی نمایش داده می‌شود.');
   }
   function exportCsvRows(rows, filename) {
-    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','fuelEstimateLiters','fuelEstimateCostRial','fuelEstimateLPer100','fuelEstimatePriceTomanPerLiter','fuelEstimateConfidence','fuelEstimateSampleRefuels','fuelEstimateSampleIntervals','fuelEstimateSampleDistanceKm','fuelEstimateMethod','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','ticketSerialNumber','ticketPaymentId','ticketType','fineLocation','vehicleDescription','vehiclePlate','violationDescription','ticketDateJalali','speedLimitKph','recordedSpeedKph','cameraCode','reportedUnpaidFineBalanceRial','reportedBalanceDate','amountCurrency','fineSource','originalSms','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
+    const keys = ['id','type','title','description','actor','note','occurredAt','jalaliDate','date','time','odometerKm','previousOdometerKm','deltaSincePreviousKm','distanceKm','liters','costRial','fuelEstimateLiters','fuelEstimateCostRial','fuelEstimateMinCostRial','fuelEstimateMaxCostRial','fuelEstimateConfidenceLabel','fuelEstimateLPer100','fuelEstimateMinLPer100','fuelEstimateMaxLPer100','fuelEstimateMinLiters','fuelEstimateMaxLiters','fuelEstimatePriceTomanPerLiter','fuelEstimateConfidence','fuelEstimateSampleRefuels','fuelEstimateSampleIntervals','fuelEstimateSampleDistanceKm','fuelEstimateMethod','serviceKey','serviceCatalogKey','serviceLabel','componentKey','componentName','componentCategory','componentMode','componentReplaced','brand','model','partNumber','specs','quantity','expenseCategory','repairGroupId','paid','ticketDate','deadlineDate','appealed','appealDecisionDate','ticketNumber','ticketSerialNumber','ticketPaymentId','ticketType','fineLocation','vehicleDescription','vehiclePlate','violationDescription','ticketDateJalali','speedLimitKph','recordedSpeedKph','cameraCode','reportedUnpaidFineBalanceRial','reportedBalanceDate','amountCurrency','fineSource','originalSms','officialCurrentAmountRial','paidAmountRial','paidAt','paymentDate','paymentReference','repairCostRial','resolvedAt','repairDescription','status','fullTank','updatedAt','revision'];
     const csv = [keys.join(','), ...rows.map(event => keys.map(key => csvCell(event[key])).join(','))].join('\\r\\n');
     downloadBlob(filename, '\\uFEFF' + csv, 'text/csv;charset=utf-8');
   }

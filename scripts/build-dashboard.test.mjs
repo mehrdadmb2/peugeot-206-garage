@@ -18,7 +18,7 @@ function writeJson(path, value) {
 test('real repository data builds a complete dashboard snapshot without dropping events or catalog data', () => {
   const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-10-30T06:00:00.000Z') });
   assert.equal(snapshot.schemaVersion, 1);
-  assert.equal(snapshot.computed.calculationVersion, 5);
+  assert.equal(snapshot.computed.calculationVersion, 6);
   assert.ok(snapshot.events.length >= 1);
   assert.equal(snapshot.computed.eventCount, snapshot.events.length);
   assert.equal(snapshot.computed.componentCount, 62);

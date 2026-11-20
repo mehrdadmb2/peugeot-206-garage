@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import * as fuelEngine from '../../assets/js/fuel-intelligence.mjs';
 import * as costEngine from '../../assets/js/vehicle-cost-intelligence.mjs';
+import * as fineEngine from '../../assets/js/fine-intelligence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const appSource = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
@@ -79,7 +80,7 @@ test('real project snapshot boots the app and all dashboard sections render with
     document, location: { href: 'https://garage.test/' },
     navigator: { onLine: true, language: 'fa-IR' },
     GarageDataLoader: { load: async () => dataset },
-    __fuelEngine: fuelEngine, __costEngine: costEngine,
+    __fuelEngine: fuelEngine, __costEngine: costEngine, __fineEngine: fineEngine,
     GarageDiagnostics: {
       log: (...entry) => diagnosticEntries.push(entry),
       setContext: context => diagnosticEntries.push(['context', context])
@@ -96,7 +97,7 @@ test('real project snapshot boots the app and all dashboard sections render with
     matchMedia: () => ({ matches: false }), requestAnimationFrame: callback => callback()
   };
 
-  const appWithFuelEngine = appSource.replace("await import('./fuel-intelligence.mjs')", 'window.__fuelEngine').replace("await import('./vehicle-cost-intelligence.mjs')", 'window.__costEngine');
+  const appWithFuelEngine = appSource.replace("await import('./fuel-intelligence.mjs')", 'window.__fuelEngine').replace("await import('./vehicle-cost-intelligence.mjs')", 'window.__costEngine').replace("await import('./fine-intelligence.mjs')", 'window.__fineEngine');
   vm.runInNewContext(appWithFuelEngine, sandbox, { filename: 'assets/js/app.js' });
   listeners.get('DOMContentLoaded')?.();
   await new Promise(resolveWait => setTimeout(resolveWait, 20));
@@ -174,10 +175,11 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#eventList')?.innerHTML || '').length > 500, 'journal should show real events');
   assert.ok((elements.get('#costChart')?.innerHTML || '').length > 100, 'analytics chart should be rendered');
   assert.ok((elements.get('#fuelEventList')?.innerHTML || '').length > 100, 'fuel page should render');
-  assert.equal(elements.get('#fuelEstimateRate')?.textContent, 'در انتظار داده', 'partial-only historical refuels must not create a consumption model');
-  assert.equal(elements.get('#fuelEstimateLiters')?.textContent, '—', 'trip liters stay unknown until two full-tank checkpoints exist');
-  assert.equal(elements.get('#fuelEstimateCost')?.textContent, '—', 'trip fuel cost stays unknown until consumption is measured');
-  assert.doesNotMatch(elements.get('#eventList')?.innerHTML || '', /event-fuel-estimate/, 'old persisted estimates must not be rendered after the model policy changes');
+  assert.match(elements.get('#fuelEstimateRate')?.textContent || '', /L\/100km/, 'partial-only historical refuels must activate the bounded consumption model');
+  assert.match(elements.get('#fuelEstimateRate')?.textContent || '', /۸٫۷|۸\.۷/, 'the model should show its lower consumption bound');
+  assert.match(elements.get('#fuelEstimateLiters')?.textContent || '', /لیتر/, 'trip liters should include a min/max estimate from partial refuels');
+  assert.match(elements.get('#fuelEstimateCost')?.textContent || '', /تومان/, 'trip fuel cost should include a min/max estimate when prices are known');
+  assert.match(elements.get('#eventList')?.innerHTML || '', /event-fuel-estimate/, 'the journal should dynamically recalculate odometer fuel estimates from the partial-fill model');
   assert.match(elements.get('#eventList')?.innerHTML || '', /event-ownership-cost/);
   assert.ok((elements.get('#ownershipCostTotal')?.textContent || '').includes('تومان'), 'ownership costs must be recalculated from actual costs');
   assert.ok((elements.get('#ownershipAllRecordedCostPerKm')?.textContent || '').includes('تومان'), 'all paid costs including fines must have a separate historical per-km metric');
@@ -185,7 +187,7 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.ok((elements.get('#ownershipRecordedCostPerKm')?.textContent || '').includes('تومان/km'), 'historical paid cost per kilometre must be shown separately from the modeled rate');
   assert.match(elements.get('#specVehicleNameHero')?.textContent || '', /Peugeot 206 SD/);
   assert.match(elements.get('#specEngineIdentity')?.textContent || '', /TU3/);
-  assert.match(elements.get('#fuelModelDiagnostics')?.textContent || '', /دو نوبت پرکردن واقعی باک/, 'fuel diagnostics must explain what is missing rather than invent consumption');
+  assert.match(elements.get('#fuelModelDiagnostics')?.textContent || '', /سوخت‌گیری‌های جزئی|سوخت‌گیری جزئی/, 'fuel diagnostics must identify that the partial-fill model is active');
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
   assert.equal(dataset.events.length, snapshot.events.length);
   assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);

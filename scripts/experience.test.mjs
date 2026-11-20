@@ -8,9 +8,9 @@ const experience = fs.readFileSync(new URL('../assets/js/experience.js', import.
 const css = fs.readFileSync(new URL('../assets/css/experience.css', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../.github/workflows/build-dashboard.yml', import.meta.url), 'utf8');
 
-test('v3.18 workspace assets are loaded after the existing core application', () => {
-  assert.match(html, /assets\/css\/experience\.css\?v=3\.17\.0/);
-  assert.match(html, /assets\/js\/experience\.js\?v=3\.15\.0/);
+test('v3.20 workspace assets are loaded after the existing core application', () => {
+  assert.match(html, /assets\/css\/experience\.css\?v=3\.20\.0/);
+  assert.match(html, /assets\/js\/experience\.js\?v=3\.20\.0/);
   assert.ok(html.indexOf('assets/js/app.js') < html.indexOf('assets/js/experience.js'));
   assert.ok(html.indexOf('assets/js/vehicle-documents.js') < html.indexOf('assets/js/experience.js'));
 });
@@ -68,7 +68,7 @@ test('technical specifications appears once in each navigation layer', () => {
 });
 
 
-test('v3.18 shows every event description field and ignores stale stored trip estimates', () => {
+test('v3.20 shows every event description field and ignores stale stored trip estimates', () => {
   assert.match(app, /\['شرح', event\.description\]/);
   assert.match(app, /\['یادداشت تکمیلی', event\.note\]/);
   assert.match(app, /\['شرح تعمیر', event\.repairDescription\]/);

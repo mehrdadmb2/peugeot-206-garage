@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.19.0");
+ assert.equal(body.version, "3.20.0");
 });
 
 test("GET / returns API guide", async () => {
@@ -39,7 +39,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.19.0");
+ assert.equal(body.version, "3.20.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -157,7 +157,7 @@ test("odometer submitted by another driver attributes the distance since the pri
  }
 });
 
-test("odometer confirmation never invents fuel consumption from partial-only refuels", async () => {
+test("odometer confirmation carries bounded fuel and cost estimates from partial-only refuels", async () => {
  const token = "f".repeat(64);
  const fuelLog = { schemaVersion: 1, month: "2026-10", events: [
   { id: "fuel-partial-1", type: "fuel", title: "سوخت‌گیری", actor: "بابام", occurredAt: "2026-10-22T09:00:00+03:30", date: "2026-10-22", odometerKm: 431200, liters: 36.5, costRial: 547500, fullTank: false },
@@ -194,8 +194,10 @@ test("odometer confirmation never invents fuel consumption from partial-only ref
   const body = await response.json();
   assert.equal(body.persisted, true);
   assert.match(body.reply, /مسافت از آخرین کیلومتر ثبت‌شده: ۴۰ km/);
-  assert.doesNotMatch(body.reply, /مصرف تقریبی این مسیر:/);
-  assert.doesNotMatch(body.reply, /هزینه تقریبی سوخت این مسیر:/);
+  assert.match(body.reply, /مصرف برآوردی این مسیر:/);
+  assert.match(body.reply, /تا .* لیتر · میانگین/);
+  assert.match(body.reply, /هزینهٔ برآوردی مسیر:/);
+  assert.match(body.reply, /سطح اطمینان:/);
   const index = JSON.parse(files.get("data/index.json"));
   const saved = index.months.flatMap(month => {
    const path = `data/logs/${month}.json`;
@@ -203,9 +205,15 @@ test("odometer confirmation never invents fuel consumption from partial-only ref
   }).find(event => event.type === "odometer" && event.odometerKm === 431621);
   assert.ok(saved);
   assert.equal(saved.deltaSincePreviousKm, 40);
-  assert.equal(saved.fuelEstimateLiters, undefined);
-  assert.equal(saved.fuelEstimateCostRial, undefined);
-  assert.equal(saved.fuelEstimateConfidence, undefined);
+  assert.ok(Number(saved.fuelEstimateMinLiters) > 0);
+  assert.ok(Number(saved.fuelEstimateMaxLiters) >= Number(saved.fuelEstimateMinLiters));
+  assert.ok(Number(saved.fuelEstimateLiters) >= Number(saved.fuelEstimateMinLiters));
+  assert.ok(Number(saved.fuelEstimateLiters) <= Number(saved.fuelEstimateMaxLiters));
+  assert.ok(Number(saved.fuelEstimateMinCostRial) > 0);
+  assert.ok(Number(saved.fuelEstimateMaxCostRial) >= Number(saved.fuelEstimateMinCostRial));
+  assert.ok(Number(saved.fuelEstimateCostRial) >= Number(saved.fuelEstimateMinCostRial));
+  assert.ok(Number(saved.fuelEstimateCostRial) <= Number(saved.fuelEstimateMaxCostRial));
+  assert.equal(saved.fuelEstimateConfidence, 'low');
  } finally { globalThis.fetch = originalFetch; }
 });
 
@@ -672,7 +680,7 @@ test("fuel report calculates full-to-full consumption from partial fills between
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: ["2026-10"] })],
   ["data/config.json", JSON.stringify({ schemaVersion: 2, vehicle: { label: "206 SD" }, people: [], serviceIntervals: {}, ownership: { purchaseOdometerKm: 428000 } })],
   ["data/logs/2026-10.json", JSON.stringify({ schemaVersion: 1, month: "2026-10", events: [
-   { id: "full-a-00001", type: "fuel", title: "باک کامل اول", occurredAt: "2026-10-01T10:00:00+03:30", date: "2026-10-01", time: "10:00", odometerKm: 100000, liters: 0, fullTank: true, costRial: null },
+   { id: "full-a-00001", type: "fuel", title: "باک کامل اول", occurredAt: "2026-10-01T10:00:00+03:30", date: "2026-10-01", time: "10:00", odometerKm: 100000, liters: 30, fullTank: true, costRial: 6000000 },
    { id: "partial-00001", type: "fuel", title: "سوخت‌گیری نیمه", occurredAt: "2026-10-05T10:00:00+03:30", date: "2026-10-05", time: "10:00", odometerKm: 100180, liters: 10, fullTank: false, costRial: 2000000 },
    { id: "full-b-00001", type: "fuel", title: "باک کامل دوم", occurredAt: "2026-10-10T10:00:00+03:30", date: "2026-10-10", time: "10:00", odometerKm: 100400, liters: 30, fullTank: true, costRial: 6000000 }
   ] })]
@@ -685,7 +693,7 @@ test("fuel report calculates full-to-full consumption from partial fills between
   }), { API_ACCESS_TOKEN: token, GITHUB_TOKEN: "fake-github-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" });
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.match(body.reply, /۱۰ لیتر در ۱۰۰ کیلومتر/);
+  assert.match(body.reply, /۱۰ لیتر\/۱۰۰ km/);
   assert.match(body.reply, /۴۰۰ km/);
   assert.match(body.reply, /۴۰ لیتر/);
  } finally { restoreFetch(); }
@@ -1273,6 +1281,16 @@ test("Telegram imports both official Road Police fine SMS formats and blocks sem
   assert.match(detailsText, /کد دوربین/);
   assert.match(detailsText, /سرعت مجاز\/ثبت‌شده/);
   assert.match(detailsText, /مانده تجمیعی جریمه‌های پرداخت‌نشده/);
+  assert.match(detailsText, /بدون دوبرابرشدن خودکار/);
+  assert.match(detailsText, /مهلت محاسباتی:<\/b> خودکار ندارد/);
+  assert.doesNotMatch(detailsText, /مهلت محاسباتی: 202[0-9]-/);
+
+  const seatbeltDetails = await post(7005, 5, `/fineinfo ${seatbelt.id.slice(0, 8)}`);
+  assert.equal(seatbeltDetails.status, 200);
+  const seatbeltDetailsText = sent.at(-1).text;
+  assert.match(seatbeltDetailsText, /نوع قبض:<\/b> دوبرگی/);
+  assert.match(seatbeltDetailsText, /مهلت محاسباتی:<\/b> 2027-01-18/);
+  assert.match(seatbeltDetailsText, /مشمول پیگیری دیرکرد/);
  } finally {
   globalThis.fetch = originalFetch;
  }

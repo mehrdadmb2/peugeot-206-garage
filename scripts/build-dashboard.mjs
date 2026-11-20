@@ -272,7 +272,8 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
   const distanceEntries = calculateDistanceEntries(asOfEvents, config.ownership || {});
   const fullVehicleCostModel = calculateVehicleCostModel(asOfEvents, {
     purchaseOdometerKm: config.ownership?.purchaseOdometerKm ?? DEFAULT_PURCHASE_KM,
-    currentOdometerKm
+    currentOdometerKm,
+    fuelOptions: config.fuelModel || {}
   });
   // Publish a compact derived summary; raw event metadata, fingerprints and
   // nested interval source records remain only in the canonical event ledger.
@@ -317,7 +318,7 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
-      calculationVersion: 5,
+      calculationVersion: 6,
       eventCount: events.length,
       currentOdometerKm,
       currentMonth,

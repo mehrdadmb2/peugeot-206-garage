@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-20T09:39:08.025Z",
+  "generatedAt": "2026-11-20T11:49:55.563Z",
   "generatedForLocalDate": "2026-11-20",
   "sourceUpdatedAt": "2026-11-20T13:05:00+03:30",
   "months": [
@@ -1466,7 +1466,15 @@
         "repairParsing": "خرابی/نشتی یک وضعیت است، نه قطعه. فقط فعل‌های تعویض/نصب باید سابقه قطعه نصب‌شده بسازند. مبلغ اجرت از قیمت قطعه جدا ثبت می‌شود. برای قطعات بدون بازه، عمر از نصب نمایش داده شود و تعویض دوره‌ای فرض نشود."
       }
     },
-    "updatedAt": "2026-10-27T00:00:00+03:30"
+    "updatedAt": "2026-10-27T00:00:00+03:30",
+    "fuelModel": {
+      "tankCapacityLiters": 50,
+      "minimumDistanceKm": 100,
+      "maximumDistanceKm": 5000,
+      "maximumPlausibleConsumptionLPer100": 30,
+      "priceSampleCount": 5,
+      "note": "ظرفیت پیش‌فرض ۵۰ لیتر برای موازنهٔ سوخت است؛ عدد مصرف با سوخت‌گیری‌های جزئی یک بازهٔ تخمینی دارد. ظرفیت را فقط با مشخصات دقیق باک خودرو تغییر بده."
+    }
   },
   "events": [
     {
@@ -4901,7 +4909,7 @@
     }
   ],
   "computed": {
-    "calculationVersion": 5,
+    "calculationVersion": 6,
     "eventCount": 64,
     "currentOdometerKm": 432261,
     "currentMonth": "1405-08",
@@ -4947,20 +4955,20 @@
       "unpaidFinesToman": 250000,
       "totalOperatingToman": 4781025,
       "totalRecordedToman": 4781025,
-      "fuelCostPerKmToman": null,
+      "fuelCostPerKmToman": 207.38382240129434,
       "wearCostPerKmToman": 1056.0901196902137,
-      "operatingCostPerKmToman": 1056.0901196902137,
+      "operatingCostPerKmToman": 1263.473942091508,
       "recordedOperatingCostPerKmToman": 1122.0429476648674,
       "allRecordedCostPerKmToman": 1122.0429476648674,
       "latestFuelUnitPriceToman": 3000,
       "fuelModel": {
-        "consumptionLPer100": null,
+        "consumptionLPer100": 10.469368520263902,
         "priceTomanPerLiter": 1980.862761683231,
-        "confidenceKey": "none",
-        "confidenceLabel": "دادهٔ دقیق کافی نیست · دو ثبت باک‌کامل لازم است",
+        "confidenceKey": "medium",
+        "confidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
         "refuelCount": 5,
-        "sampleIntervals": 0,
-        "sampleDistanceKm": 0
+        "sampleIntervals": 1,
+        "sampleDistanceKm": 1061
       },
       "counts": {
         "fuel": 5,

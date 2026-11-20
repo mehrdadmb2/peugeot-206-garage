@@ -75,16 +75,19 @@ test('trip estimate and unit fuel rate update when new refuel data arrives', () 
 test('partial fuel spend remains historical and is not projected to fuel cost per km', () => {
   const events = [
     refuel('partial-a', '2026-06-01', 1000, 20, 300000),
-    refuel('partial-b', '2026-06-05', 1080, 15, 225000)
+    refuel('partial-b', '2026-06-05', 1150, 15, 225000)
   ];
   const model = calculateVehicleCostModel(events, { purchaseOdometerKm: 1000, currentOdometerKm: 1500, tripDistanceKm: 100 });
   assert.equal(model.totalFuelRial, 525000);
-  assert.equal(model.fuelModel.hasEstimate, false);
-  assert.equal(model.fuelCostPerKmToman, null);
+  assert.equal(model.fuelModel.hasEstimate, true, 'partial fills should activate the bounded fuel model');
+  assert.ok(model.fuelCostPerKmToman > 0);
   assert.equal(model.fuelRecordedCostPerKmToman, 105);
-  assert.equal(model.trip.fuelLiters, null);
-  assert.equal(model.trip.fuelCostToman, null);
-  assert.match(model.fuelCostPerKmBasis, /پوشش ناقص|مصرف قابل اندازه‌گیری نیست/);
+  assert.ok(model.trip.fuelLiters > 0);
+  assert.ok(model.trip.fuelLitersMin <= model.trip.fuelLiters);
+  assert.ok(model.trip.fuelLitersMax >= model.trip.fuelLiters);
+  assert.ok(model.trip.fuelCostMinToman <= model.trip.fuelCostToman);
+  assert.ok(model.trip.fuelCostMaxToman >= model.trip.fuelCostToman);
+  assert.match(model.fuelCostPerKmBasis, /مصرف سوخت مدل/);
 });
 
 test('odometer distance is derived from the current event timeline, not stale saved deltas', () => {
