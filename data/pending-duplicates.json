@@ -1,5 +1,27 @@
 {
   "schemaVersion": 1,
-  "items": {},
-  "updatedAt": "2026-10-27T21:34:00+03:30"
+  "items": {
+    "898a3f46": {
+      "kind": "message",
+      "text": "/km 432270",
+      "message": {
+        "date": 1795176072,
+        "message_id": 383,
+        "text": "/km 432270",
+        "from": {
+          "id": 381200758
+        },
+        "chat": {
+          "id": 381200758
+        }
+      },
+      "existingEventIds": [
+        "8dbce69d-82a5-4069-99e6-8fe72fd8d7cf"
+      ],
+      "token": "898a3f46",
+      "createdAt": "2026-11-20T15:31:00+03:30",
+      "expiresAt": 1795262475401
+    }
+  },
+  "updatedAt": "2026-11-20T15:31:00+03:30"
 }
