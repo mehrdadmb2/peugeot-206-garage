@@ -49,6 +49,7 @@ jobs:
           node --check assets/js/app.js
           node --check assets/js/fuel-intelligence.mjs
           node --check assets/js/vehicle-cost-intelligence.mjs
+          node --check assets/js/fine-intelligence.mjs
           node --check assets/js/experience.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
