@@ -16,6 +16,7 @@ on:
       - 'worker/src/index.js'
       - 'assets/js/persian-calendar.cjs'
       - 'assets/js/persian-calendar.js'
+      - 'assets/js/server-clock.js'
       - 'assets/js/odometer-intelligence.js'
       - 'scripts/build-dashboard.test.mjs'
       - 'worker/tests/**'
@@ -67,6 +68,7 @@ jobs:
           node --check assets/js/vehicle-cost-intelligence.mjs
           node --check assets/js/fine-intelligence.mjs
           node --check assets/js/experience.js
+          node --check assets/js/server-clock.js
           node --check assets/js/data-loader.js
           node --check assets/js/diagnostics.js
           node --check assets/js/vehicle-documents.js
