@@ -51,7 +51,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.23.0",
+        version: "3.27.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -93,7 +93,7 @@ export default {
       return corsResponse(json({
         ok: true,
         service: "206 Garage API",
-        version: "3.23.0",
+        version: "3.27.0",
         time: nowTehran().iso,
         serverTime: new Date().toISOString(),
         epochMs: Date.now(),
@@ -791,6 +791,8 @@ function eventIdFromReply(text) { return String(text || "").match(/شناسه\s*
 
 const COMMAND_ALIASES = {
   catalog: "catalog", parts: "catalog", قطعات: "catalog", کاتالوگ: "catalog",
+  vehicle: "vehicle", specs: "vehicle", specification: "vehicle", مشخصات: "vehicle", مشخصات_فنی: "vehicle", خودرو: "vehicle",
+  partinfo: "partinfo", part_info: "partinfo", قطعه_شناسی: "partinfo", اطلاعات_قطعه: "partinfo",
   documents: "documents", vehicle_documents: "documents", vehicledocuments: "documents", مدارک: "documents", مدارک_خودرو: "documents",
   insurance: "insurance", bime: "insurance", بیمه: "insurance",
   components: "components", installed: "components", قطعات_نصب: "components",
@@ -866,12 +868,12 @@ function telegramHtml(value) {
   return lines.map(original=>{
     const line=original.trimEnd(); if(!line.trim())return "";
     let safe=namedLinks(trusted(line));
-    if(!firstContentSeen){firstContentSeen=true;return `<b>${safe}</b>`;}
+    if(!firstContentSeen){firstContentSeen=true;return /<\/?(?:b|i|u|s|code|blockquote|a)\b/i.test(safe) ? safe : `<b>${safe}</b>`;}
     if(headingPattern.test(line))return `<b>${safe}</b>`;
     const command=line.match(/^\s*(\/[a-zA-Z0-9_]+)(?:\s+(.*))?$/);
     if(command && !/<(?:code|b|a)\b/i.test(safe))return `<code>${escape(command[0].trim())}</code>`;
     const field=line.match(/^([^:：]{1,38})\s*[:：]\s*(.*)$/);
-    if(field){
+    if(field && !/[<>]/.test(line)){
       const label=field[1].trim(), rawValue=field[2];
       if (rawValue.includes(SITE_URL)) return `<b>${escape(label)}:</b> <a href="${SITE_URL}">باز کردن داشبورد</a>`;
       if (rawValue.includes(BOT_URL)) return `<b>${escape(label)}:</b> <a href="${BOT_URL}">گفت‌وگو با ربات</a>`;
@@ -920,6 +922,8 @@ async function processMessage(text, message, env, options = {}) {
     return event ? { text: formatEventDetails(event), markup: eventActionKeyboard(event.id.slice(0, 8)) } : { text: "رویداد موردنظر پیدا نشد یا حذف شده است. /latest را بررسی کن.", keyboard: false };
   }
   if (/^\/(documents|vehicle-documents|مدارک|مدارک_خودرو)(?:@\w+)?\b/i.test(text)) return await privateDocumentsTelegramReply(env);
+  if (/^\/(vehicle|specs|مشخصات|مشخصات_فنی|خودرو)(?:@\w+)?\b/i.test(text)) return { text: await vehicleProfileCommand(env), keyboard: false };
+  if (/^\/(partinfo|قطعه_شناسی|اطلاعات_قطعه)(?:@\w+)?\b/i.test(text)) return { text: await partInfoCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/(insurance|bime|بیمه)(?:@\w+)?\b/i.test(text)) return { text: await insuranceCommand(text.replace(/^\S+/, "").trim(), env), keyboard: false };
   if (/^\/(start|help)(?:@\w+)?\b/i.test(text)) return { text: helpText(), keyboard: true };
   if (/^\/guide\b|^\/راهنمای_کامل\b|^\/دفترچه\b/i.test(text)) return { messages: await guideMessages(env), keyboard: false };
@@ -1111,11 +1115,13 @@ function helpText() {
 
 📚 راهنمای کامل در چند پیام: /guide
 🔩 فرهنگ قطعات: /catalog · قطعات نصب‌شده و عمرشان: /components
-🧰 فهرست خدمات: /services
+🚘 مشخصات فنی و تیپ خودرو: /vehicle · شناسنامه قطعه: /partinfo سنسور دور موتور
+🧰 فهرست خدمات: /services · کاتالوگ قطعات: /catalog (۱۲۶ قطعه، ۱۵ گروه)
+برای قطعات جدید: /partinfo پلوس چپ · /partinfo بوستر ترمز · /partinfo رگلاتور دینام
 ▣ مدارک خصوصی خودرو: /documents · وضعیت/ثبت بیمه: /insurance
 🛠 ثبت یک مراجعه با چند قطعه/سرویس: /repairjob
 🚦 جزئیات جریمه: /fineinfo شناسه
-📈 گزارش تصویری با چهار نمودار: /analysis month (هزینه، سوخت، مسافت و سهم راننده)
+📈 گزارش تصویری با شش نمودار: /analysis month (هزینه، سوخت، مسافت، سهم راننده، قیمت واحد سوخت و سرویس‌ها)
 گزینه‌های تحلیل: hour · day · week · month
 ⚠️ خرابی‌های باز و بستن با دکمه: /issues
 
@@ -1219,7 +1225,11 @@ async function guideMessages(env) {
 /analysis hour — نمودار ۲۴ ساعت اخیر
 /analysis day — نمودار ۳۰ روز اخیر
 /analysis week — نمودار ۱۲ هفته اخیر
-/analysis month — نمودار ۱۲ ماه اخیر (پیش‌فرض)
+/analysis month — نمودار ۱۲ ماه اخیر (پیش‌فرض) · ۶ نمودار تحلیلی
+/vehicle — شناسنامه فنی، موتور، Euro، ظرفیت‌ها، ابعاد و وضعیت تأیید مشخصات
+/partinfo سنسور دور موتور — شناسنامه قطعه، گروه، سطح اهمیت، نشانه‌ها و روش بازدید
+/catalog — فرهنگ ۱۲۶ قطعه در ۱۵ گروه · /services — ۳۵ سرویس و آزمون
+/components — فهرست قطعات نصب‌شده، عمر کارکرد و وضعیت ضمانت
 /fuelstats — آمار سوخت و مصرف
 /due — موعد نگهداری
 /latest — آخرین عملیات
@@ -1337,10 +1347,16 @@ async function createAnalysisReply(rawPeriod, env) {
   const fineUnpaid = fines.filter(e=>!e.paid).reduce((n,e)=>n+(Number(e.costRial)||0),0);
   const actualCost = expenseEvents.reduce((n,e)=>n+(Number(e.costRial)||0),0);
   const liters = fuelEvents.reduce((n,e)=>n+(Number(e.liters)||0),0);
+  const fuelCostRial = fuelEvents.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const weightedFuelPriceToman = liters > 0 ? fuelCostRial / 10 / liters : null;
+  const maintenanceEvents = rangedEvents.filter(e => ["service", "part", "repair"].includes(e.type));
+  const maintenanceCostRial = maintenanceEvents.reduce((n,e)=>n+(Number(e.costRial)||0),0);
+  const maintenanceCostToman = maintenanceCostRial / 10;
   const currentOdo = calculateCurrentOdometer(events);
   const ownership = getOwnershipSettings(config);
   const ownershipKm = currentOdo !== null && currentOdo >= ownership.purchaseOdometerKm ? currentOdo - ownership.purchaseOdometerKm : null;
   const sumDistance = distanceValues.reduce((a,b)=>a+b,0);
+  const costPerKm = sumDistance > 0 ? (actualCost / 10) / sumDistance : null;
   const report = `📊 گزارش تحلیلی پژو ۲۰۶ · ${analysisPeriodLabel(period)}
 
 🧾 رویدادها: ${formatNum(rangedEvents.length)}
@@ -1348,6 +1364,9 @@ async function createAnalysisReply(rawPeriod, env) {
 🚗 مسافت قابل انتساب در این بازه: ${formatNum(sumDistance)} km
 ⛽ سوخت ثبت‌شده: ${formatNum(liters,1)} لیتر
 💳 هزینهٔ پرداخت‌شده در بازه: ${formatMoneyToman(actualCost)}
+⛽ میانگین وزنی قیمت سوخت: ${weightedFuelPriceToman == null ? "دادهٔ کافی نیست" : `${formatNum(weightedFuelPriceToman, 0)} تومان/لیتر`}
+🧰 عملیات سرویس/قطعه/تعمیر: ${formatNum(maintenanceEvents.length)} مورد · هزینه ${formatMoneyToman(maintenanceCostRial)}
+📉 هزینهٔ کل به ازای هر km قابل انتساب: ${costPerKm == null ? "قابل محاسبه نیست" : `${formatNum(costPerKm, 0)} تومان/km`}
 
 🚦 جریمه‌های این بازه
 مجموع جریمه ثبت‌شده: ${formatMoneyToman(fineTotal)}
@@ -1359,14 +1378,16 @@ async function createAnalysisReply(rawPeriod, env) {
 تفریق کیلومتر فعلی منهای کیلومتر خرید: ${ownershipKm === null ? "قابل محاسبه نیست" : `${formatNum(ownershipKm)} km`}
 تاریخ خرید: ${ownership.purchaseDate ? jalaliDateLabel(ownership.purchaseDate) : "ثبت نشده؛ پیمایش به زمان ساختگی نسبت داده نمی‌شود"}
 
-📈 چهار نمودار تصویری در پیام‌های بعدی ارسال می‌شوند: هزینه، سوخت، مسافت و سهم راننده.`;
+📈 شش نمودار تصویری در پیام‌های بعدی ارسال می‌شوند: هزینه، سوخت، مسافت، سهم راننده، قیمت واحد سوخت و تعداد عملیات نگهداری.`;
   try {
     const labels = buckets.map(b=>b.label);
     const chartSpecs = [
       { filename: "206-garage-costs.png", title: `روند هزینه · ${analysisPeriodLabel(period)}`, seriesLabel: "میلیون تومان", values: costValues, type: "bar", color: "rgba(73,222,236,0.78)", caption: "💳 نمودار هزینه‌های پرداخت‌شده · مقیاس: میلیون تومان" },
       { filename: "206-garage-fuel.png", title: `سوخت‌گیری · ${analysisPeriodLabel(period)}`, seriesLabel: "لیتر", values: fuelValues, type: "line", color: "rgba(255,181,107,0.95)", caption: "⛽ نمودار حجم سوخت‌گیری · واحد: لیتر" },
       { filename: "206-garage-distance.png", title: `مسافت · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: distanceValues, type: "line", color: "rgba(173,148,255,0.95)", caption: "🚗 نمودار مسافت ثبت‌شده · کیلومترهای تاریخی با تاریخ خرید نامشخص در بازه‌های زمانی توزیع نمی‌شوند." },
-      { filename: "206-garage-drivers.png", title: `پیمایش به تفکیک راننده · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: driverValues, labels: driverLabels, type: "bar", color: "rgba(66,232,188,0.85)", caption: "👤 نمودار پیمایش به تفکیک راننده · انتساب هر فاصله به شخص ثبت‌کننده قرائت دوم" }
+      { filename: "206-garage-drivers.png", title: `پیمایش به تفکیک راننده · ${analysisPeriodLabel(period)}`, seriesLabel: "کیلومتر", values: driverValues, labels: driverLabels, type: "bar", color: "rgba(66,232,188,0.85)", caption: "👤 نمودار پیمایش به تفکیک راننده · انتساب هر فاصله به شخص ثبت‌کننده قرائت دوم" },
+      { filename: "206-garage-fuel-price.png", title: `میانگین وزنی قیمت سوخت · ${analysisPeriodLabel(period)}`, seriesLabel: "تومان/لیتر", values: buckets.map(bucket => { const rows=fuelEvents.filter(e=>{const t=eventTimestamp(e);return t>=bucket.start&&t<bucket.end;}); const l=rows.reduce((a,e)=>a+(Number(e.liters)||0),0); const c=rows.reduce((a,e)=>a+(Number(e.costRial)||0),0)/10; return l>0?Math.round(c/l):0; }), type: "line", color: "rgba(255,189,112,0.95)", caption: "⛽ قیمت میانگین وزنی هر لیتر بر اساس مبلغ و حجم ثبت‌شده" },
+      { filename: "206-garage-maintenance.png", title: `عملیات نگهداری · ${analysisPeriodLabel(period)}`, seriesLabel: "تعداد عملیات", values: buckets.map(bucket=>rangedEvents.filter(e=>{const t=eventTimestamp(e);return t>=bucket.start&&t<bucket.end&&["service","part","repair"].includes(e.type);}).length), type: "bar", color: "rgba(139,231,177,0.88)", caption: "🧰 تعداد رویدادهای سرویس، قطعه و تعمیر؛ بدون شمارش یادآورهای زمان‌بندی‌شده" }
     ];
     const photos = await Promise.all(chartSpecs.map(async spec => ({
       filename: spec.filename,
@@ -1397,6 +1418,157 @@ async function createChartPng({ labels, values, title, seriesLabel, color, type 
   return new Blob([bytes], { type: "image/png" });
 }
 
+function extractPartMetadata(rawText) {
+  const raw = String(rawText || "");
+  const read = patterns => {
+    for (const pattern of patterns) {
+      const match = raw.match(pattern);
+      if (match?.[1]) return match[1].trim().replace(/[،,;؛|]+$/, "").slice(0, 180);
+    }
+    return null;
+  };
+  const brand = read([/(?:برند|brand)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:مدل|model|شماره|کد|سریال|serial|ضمانت|warranty|تعداد|quantity|قیمت|هزینه|فروشنده|supplier|فاکتور|invoice|سمت|position|km|کیلومتر|$)|[,;؛|]|$)/i]);
+  const model = read([/(?:مدل|model)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:برند|brand|شماره|کد|سریال|serial|ضمانت|warranty|تعداد|quantity|قیمت|هزینه|فروشنده|supplier|فاکتور|invoice|سمت|position|km|کیلومتر|$)|[,;؛|]|$)/i]);
+  const partNumber = read([/(?:شماره\s*قطعه|شماره‌قطعه|کد\s*فنی|part\s*number|partnumber|oem)\s*[:=：]?\s*([^,;؛|\s]+)/i]);
+  const serialNumber = read([/(?:شماره\s*سریال|سریال|serial)\s*[:=：]?\s*([^,;؛|\s]+)/i]);
+  const warrantyMatch = raw.match(/(?:پایان\s*ضمانت|ضمانت|warranty)\s*[:=：]?\s*([0-9۰-۹٠-٩]{4}[-/.][0-9۰-۹٠-٩]{1,2}[-/.][0-9۰-۹٠-٩]{1,2})/i);
+  const warrantyRaw = warrantyMatch?.[1] ? normalizeDigits(warrantyMatch[1]) : null;
+  let warrantyUntil = null;
+  let warrantyUntilJalali = null;
+  let warrantyCalendar = null;
+  if (warrantyRaw) {
+    const warrantyYear = Number(warrantyRaw.slice(0, 4));
+    if (warrantyYear >= 1300 && warrantyYear <= 1500) {
+      const jalaliInput = normalizeJalaliInput(warrantyRaw);
+      if (isValidJalaliDate(jalaliInput)) {
+        warrantyUntil = normalizeFlexibleDate(warrantyRaw);
+        warrantyUntilJalali = jalaliInput;
+        warrantyCalendar = "jalali";
+      }
+    } else if (warrantyYear >= 1700) {
+      warrantyUntil = normalizeFlexibleDate(warrantyRaw);
+      warrantyUntilJalali = warrantyUntil ? jalaliDateLabel(warrantyUntil) : null;
+      warrantyCalendar = warrantyUntil ? "gregorian" : null;
+    }
+  }
+  const supplier = read([/(?:فروشنده|تأمین.?کننده|supplier)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:فاکتور|invoice|سمت|position|تعداد|quantity|قیمت|هزینه)|[,;؛|]|$)/i]);
+  const invoiceRef = read([/(?:شماره\s*فاکتور|فاکتور|invoice)\s*[:=：]?\s*([^,;؛|\s]+)/i]);
+  const position = read([/(?:سمت|محل\s*نصب|position)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:فروشنده|supplier|فاکتور|invoice|تعداد|quantity|قیمت|هزینه)|[,;؛|]|$)/i]);
+  const condition = read([/(?:وضعیت\s*قطعه|condition)\s*[:=：]?\s*([^,;؛|]+?)(?=\s+(?:برند|brand|مدل|model|قیمت|هزینه)|[,;؛|]|$)/i]);
+  const normalizedRaw = normalizeDigits(raw);
+  const qtyRaw = normalizedRaw.match(/(?:تعداد|quantity|qty)\s*[:=：]?\s*(\d{1,3})/i)?.[1] || null;
+  const voltage = normalizedRaw.match(/(\d{1,2}(?:[.,]\d+)?)\s*(?:ولت|v)(?=\s|[,;؛|]|$)/i);
+  const capacity = normalizedRaw.match(/(\d{1,3}(?:[.,]\d+)?)\s*(?:آمپر\s*ساعت|آمپر.?ساعت|ah)(?=\s|[,;؛|]|$)/i);
+  const specs = {};
+  if (voltage) specs.voltageV = Number(voltage[1].replace(",", "."));
+  if (capacity) specs.capacityAh = Number(capacity[1].replace(",", "."));
+  return { brand, model, partNumber, serialNumber, warrantyUntil, warrantyUntilJalali, warrantyCalendar, supplier, invoiceRef, position, condition,
+    quantity: qtyRaw && Number(qtyRaw) > 0 ? Number(qtyRaw) : 1, specs: Object.keys(specs).length ? specs : null };
+}
+
+async function vehicleProfileCommand(env) {
+  const config = await readConfig(env);
+  const vehicle = config.vehicle || {};
+  const profile = vehicle.profile || {};
+  const e = profile.engine || {}, t = profile.transmission || {}, c = profile.capacities || {};
+  const d = profile.dimensions || {}, w = profile.wheels || {}, p = profile.performance || {}, v = profile.variant || {};
+  const q = profile.dataQuality || {}, ch = profile.chassis || {}, safety = profile.safety || {};
+  const weight = d.curbWeightKg && typeof d.curbWeightKg === "object"
+    ? `${formatNum(d.curbWeightKg.min)} تا ${formatNum(d.curbWeightKg.max)} kg · مرجع تیپ`
+    : "ثبت نشده";
+  const verifyLabel = v.confidence === "verified" ? "تأییدشده با مدرک" : "تطبیق محتمل؛ نیازمند بررسی سند";
+  const fuelSystem = e.fuelSystem || "ثبت نشده";
+  return `🚘 <b>شناسنامه فنی ${vehicle.make || "Peugeot"} ${vehicle.model || "206 SD"}</b>
+
+🏷 سال مدل: ${vehicle.modelYear ? formatNum(vehicle.modelYear) : "—"} · تیپ: ${v.value || vehicle.variant || "نامشخص"}
+وضعیت تطبیق: ${verifyLabel}
+
+🔧 <b>پیشرانه</b>
+کد مرجع: ${e.code || "—"} · خانواده: ${e.family || vehicle.engine || "—"}
+حجم: ${formatNum(e.displacementCc || 0)} cc · آرایش: ${e.layout || "Inline-4"} · ${formatNum(e.cylinders || 0)} سیلندر · ${formatNum(e.valves || 0)} سوپاپ
+توان: ${formatNum(e.maxPowerHp || 0)} hp @ ${formatNum(e.maxPowerRpm || 0)} rpm
+گشتاور: ${formatNum(e.maxTorqueNm || 0)} Nm @ ${formatNum(e.maxTorqueRpm || 0)} rpm
+هندسه: قطر ${formatNum(e.boreMm || 0)} × کورس ${formatNum(e.strokeMm || 0)} mm · نسبت تراکم مرجع ${formatNum(e.compressionRatio || 0)}:1
+آلایندگی: ${e.emissionStandard || vehicle.emissionStandard || "نامشخص"} · مرجع تیپ، نه تأیید سند خودرو
+سوخت‌رسانی: ${fuelSystem} · نوع سوخت: ${e.fuelType || vehicle.fuel || "—"}
+
+⚙️ <b>انتقال قدرت و شاسی</b>
+گیربکس: ${t.type || "—"} · ${formatNum(t.forwardGears || 0)} دنده · ${t.drivetrain || "—"} · کد گیربکس: ${t.gearboxCode || "ثبت نشده"}
+تعلیق: جلو ${ch.frontSuspension || "—"} · عقب ${ch.rearSuspension || "—"}
+ترمز: جلو ${ch.frontBrakes || "—"} · عقب ${ch.rearBrakes || "—"} · فرمان ${ch.steering || "—"}
+
+🧪 <b>ظرفیت‌های سرویس</b>
+باک ${formatNum(c.fuelTankLiters || 0)} L · روغن موتور با فیلتر ${formatNum(c.engineOilWithFilterLiters || 0)} L
+گیربکس ${formatNum(c.manualGearboxOilLiters || 0)} L · خنک‌کاری خشک ${formatNum(c.coolingSystemDryLiters || 0)} L · روغن ترمز ${formatNum(c.brakeFluidLiters || 0)} L
+
+📐 <b>ابعاد و عملکرد مرجع</b>
+${formatNum(d.lengthMm || 0)} × ${formatNum(d.widthMm || 0)} × ${formatNum(d.heightMm || 0)} mm · فاصله محوری ${formatNum(d.wheelbaseMm || 0)} mm
+صندوق ${formatNum(d.bootLiters || 0)} L · وزن مرجع ${weight}
+تایر ${w.tyreSize || "—"} · رینگ ${w.rimSize || "—"} · فشار باد سرد جلو/عقب ${formatNum(w.coldPressureFrontBar || 0)}/${formatNum(w.coldPressureRearBar || 0)} bar
+مصرف مرجع شهری/جاده/ترکیبی: ${formatNum(p.referenceCityLPer100Km || 0)}/${formatNum(p.referenceHighwayLPer100Km || 0)}/${formatNum(p.referenceCombinedLPer100Km || 0)} L/100km
+سرعت نهایی مرجع ${formatNum(p.referenceTopSpeedKph || 0)} km/h · شتاب ۰-۱۰۰ ${formatNum(p.referenceZeroTo100Seconds || 0)} s
+
+🛡 <b>ایمنی و تجهیزات</b>
+ایربگ: ${safety.airbags || "نامشخص"}
+ABS: ${safety.abs || "نیازمند بررسی"}
+EBD: ${safety.ebd || "نیازمند بررسی"} · EBA: ${safety.eba || "نیازمند بررسی"}
+
+📌 <b>کیفیت داده</b>
+${formatNum((q.verifiedFields || []).length)} فیلد تأییدشده · ${formatNum((q.unverifiedFields || []).length)} فیلد نیازمند تطبیق
+${(q.documentsToConfirm || ["کد تیپ در کارت خودرو", "کد حک‌شده موتور", "استاندارد آلایندگی در اسناد رسمی"]).map(item=>`• ${item}`).join("\n")}
+
+مقادیر موتور/تیپ و تجهیزات وابسته، مرجع فنی‌اند و تا زمان تطبیق با کارت، VIN و پلاک موتور قطعی تلقی نمی‌شوند.
+قطعات نصب‌شده: /components · فرهنگ قطعات: /catalog · شناسنامه قطعه: /partinfo سنسور دور موتور`;
+}
+
+async function partInfoCommand(query, env) {
+  const config = await readConfig(env);
+  const items = Object.entries(config.partCatalog?.items || {});
+  const q = normalizeIntentText(query);
+  if (!q) return `🔎 <b>شناسنامه قطعات</b>
+
+${formatNum(items.length)} قطعه در ${formatNum(Object.keys(config.partCatalog?.categories || {}).length)} گروه دسته‌بندی شده‌اند.
+نمونه: <code>/partinfo سنسور دور موتور</code> یا <code>/partinfo باتری</code>
+
+برای ثبت شناسنامه هنگام تعویض: برند، مدل، شماره OEM، سریال، تعداد، کیلومتر، تاریخ و محل نصب، ضمانت، فروشنده و فاکتور را در پیام وارد کن.`;
+  const matches = items.map(([key,item]) => {
+    const aliases = [key, item.label, ...(item.aliases || [])].map(normalizeIntentText);
+    const score = aliases.reduce((best, alias) => Math.max(best, alias === q ? 100 : alias.includes(q) ? 70 : q.includes(alias) ? 55 : 0), 0);
+    return { key, item, score };
+  }).filter(row=>row.score>0).sort((a,b)=>b.score-a.score).slice(0,5);
+  if (!matches.length) return `قطعه «${query}» در کاتالوگ پیدا نشد. /catalog را ببین یا نام رایج‌تر/کلید انگلیسی را امتحان کن. برای ثبت آزاد می‌توانی <code>/part متن کامل</code> را بفرستی.`;
+  if (matches.length > 1 && matches[0].score < 100 && matches[0].score === matches[1].score) return `چند مورد مشابه پیدا شد؛ یکی را دقیق انتخاب کن:\n${matches.map(row=>`• ${row.item.label} — <code>/partinfo ${row.key}</code>`).join("\n")}`;
+  const {key,item} = matches[0];
+  const cat = config.partCatalog?.categories?.[item.category] || {};
+  const interval = item.mode === "periodic" ? `دورهٔ یادآور: ${item.intervalKm ? `${formatNum(item.intervalKm)} km` : "بدون آستانه کیلومتری"}${item.intervalDays ? ` / ${formatNum(item.intervalDays)} روز` : ""}` : "پایش: شرطی/عمرمحور؛ بازهٔ ثابت اجباری ندارد";
+  const criticalityLabels = { safety_critical:"ایمنی بحرانی؛ خرابی نیازمند توقف/بازرسی فوری", safety_related:"مرتبط با ایمنی؛ بازدید در اولویت", powertrain:"عملکردی/مکانیکی", standard:"معمولی" };
+  const fitmentLabels = { variant_dependent:"وابسته به تیپ و آرایش نصب", verify_by_fusebox_and_vin:"تطبیق با جعبه‌فیوز و VIN", verify_by_gearbox_and_vin:"تطبیق با کد گیربکس و VIN", verify_by_measurement:"تطبیق ابعادی با قطعه موجود", verify_by_abs_and_vin:"تطبیق با وجود ABS و VIN", verify_by_vehicle_configuration:"تطبیق با آرایش واقعی خودرو", verify_by_vin_and_master_cylinder:"تطبیق با VIN و پمپ ترمز", verify_by_brake_disc_and_vin:"تطبیق با دیسک و VIN", verify_by_part_number_and_vin:"تطبیق با شماره قطعه و VIN", verify_by_vehicle_vin_or_existing_part:"تطبیق با VIN یا شماره قطعه قبلی" };
+  const criticality = criticalityLabels[item.criticality] || "سطح اهمیت مشخص نشده";
+  const fitment = fitmentLabels[item.fitmentStatus] || "پیش از خرید با VIN و شماره قطعه قبلی تطبیق شود";
+  const symptoms = Array.isArray(item.symptoms) && item.symptoms.length ? item.symptoms.join("، ") : "در کاتالوگ علائم اختصاصی ثبت نشده؛ شرح نشانه‌ها را در رویداد بنویس.";
+  return `${item.icon || "🔩"} <b>شناسنامه قطعه · ${item.label}</b>
+
+کلید: <code>${key}</code>
+گروه: ${cat.label || item.category || "سایر"}
+اهمیت: ${criticality}
+سازگاری: ${fitment}
+نوع پایش: ${interval}
+روش بازدید پیشنهادی: ${item.inspectionMethod || item.note || "طبق دستورالعمل سازنده و تعمیرکار"}
+علائم مرتبط: ${symptoms}
+توضیح: ${item.note || "توضیح اختصاصی ثبت نشده است."}
+
+<b>فیلدهای شناسنامه برای ثبت قطعه</b>
+• برند، مدل، شماره OEM و سریال
+• مشخصات فنی، تعداد و سمت/محل نصب
+• کیلومتر و تاریخ نصب، وضعیت قطعه
+• پایان ضمانت، فروشنده و شماره فاکتور
+
+<b>نمونه ثبت:</b>
+<code>/part ${item.label} تعویض شد km=432500 برند=... مدل=... شماره‌قطعه=... سریال=... تعداد=1 ضمانت=1406/12/29 سمت=جلو فروشنده=... فاکتور=... قیمت=... تومان</code>
+
+شماره فنی، تناسب قطعه و عمر تعویض از روی حدس ساخته نمی‌شود؛ برای قطعات ایمنی و تیپ‌محور، کد شاسی و کاتالوگ سازنده ملاک است.`;
+}
+
 async function recordServiceOrPart(rawText, type, occurredAt, env) {
   const config = await readConfig(env);
   const keys = detectServiceKeys(rawText, config);
@@ -1409,14 +1581,14 @@ async function recordServiceOrPart(rawText, type, occurredAt, env) {
     const saved = [];
     for (let i=0;i<keys.length;i++) {
       const info = describeCatalogKey(keys[i], config);
-      const reply = await saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: i === 0 ? money : null }, env);
+      const reply = await saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: i === 0 ? money : null, ...extractPartMetadata(rawText) }, env);
       saved.push(`${info.icon || "🔧"} ${info.label}: ${reply.split("\n").slice(0,2).join(" · ")}`);
     }
     return `✅ چند عملیات/قطعه به‌صورت جداگانه ثبت شد\n${saved.join("\n")}\nمبلغ پیام فقط یک بار به اولین مورد نسبت داده شد؛ اگر مبلغ‌ها متفاوت‌اند هر عملیات را جداگانه ثبت کن.`;
   }
   const info = keys.length ? describeCatalogKey(keys[0], config) : null;
-  if (info) return saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: money }, env);
-  return await saveEvent({ type: type === "part" ? "part" : "service", title: `${type === "part" ? "ثبت قطعه" : "ثبت سرویس"}: ${rawText.slice(0,100)}`, description: rawText, odometerKm: odo, costRial: money, occurredAt, sourceText: rawText }, env);
+  if (info) return saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm: odo, costRial: money, ...extractPartMetadata(rawText) }, env);
+  return await saveEvent({ type: type === "part" ? "part" : "service", title: `${type === "part" ? "ثبت قطعه" : "ثبت سرویس"}: ${rawText.slice(0,100)}`, description: rawText, odometerKm: odo, costRial: money, occurredAt, sourceText: rawText, ...extractPartMetadata(rawText) }, env);
 }
 
 function describeCatalogKey(key, config) {
@@ -1437,7 +1609,7 @@ function describeCatalogKey(key, config) {
   return { key, label: key, categoryKey: "other", categoryLabel: "سایر", icon: "🔧", mode: "condition", note: "", service: false, item: {} };
 }
 
-async function saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm, costRial, actor = null, repairGroupId = null, brand = null, model = null, partNumber = null, specs = null, quantity = 1, status = null }, env) {
+async function saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm, costRial, actor = null, repairGroupId = null, brand = null, model = null, partNumber = null, serialNumber = null, specs = null, quantity = 1, warrantyUntil = null, warrantyUntilJalali = null, warrantyCalendar = null, supplier = null, invoiceRef = null, position = null, condition = null, status = null }, env) {
   const eventType = info.service ? "service" : "part";
   const input = {
     type: eventType,
@@ -1456,7 +1628,7 @@ async function saveCatalogEvent({ info, type, rawText, occurredAt, odometerKm, c
     componentCategory: info.categoryLabel || null,
     componentMode: info.mode || null,
     componentReplaced: !info.service && /تعویض|عوض|جایگزین|نصب/i.test(normalizeIntentText(rawText)),
-    brand, model, partNumber, specs, quantity, repairGroupId,
+    brand, model, partNumber, serialNumber, specs, quantity, warrantyUntil, warrantyUntilJalali, warrantyCalendar, supplier, invoiceRef, position, condition, repairGroupId,
     status
   };
   return saveEvent(input, env);
@@ -1478,7 +1650,7 @@ async function catalogGuideMessages(env) {
     });
     for (let i=0;i<body.length;i+=7) messages.push({ text: `${category.icon || "🧩"} ${category.label || categoryKey} · ${i+1}-${Math.min(i+7,body.length)} از ${body.length}\n\n${body.slice(i,i+7).join("\n\n")}` });
   }
-  messages.push({ text: "ثبت قطعه: /part شمع موتور تعویض شد کیلومتر=431462\nثبت مشخصات: /part باتری 12 ولت 60 آمپر برند=... مدل=... شماره‌قطعه=... قیمت=... تومان\nفهرست نصب‌ها: /components\nراهنمای سرویس‌ها: /services" });
+  messages.push({ text: `ثبت قطعه: /part شمع موتور تعویض شد کیلومتر=431462\nثبت مشخصات: /part باتری تعویض شد ۱۲ ولت ۶۰ آمپرساعت برند=... مدل=... شماره‌قطعه=... سریال=... ضمانت=۱۴۰۶/۱۲/۲۹ تعداد=۱ سمت=جلو فروشنده=... فاکتور=... قیمت=... تومان\n/partinfo باتری — توضیح، گروه، نگهداری و فیلدهای قابل ثبت\nفهرست نصب‌ها: /components\nراهنمای سرویس‌ها: /services` });
   return messages;
 }
 
@@ -1510,7 +1682,9 @@ async function componentInventoryReport(env) {
     const item=config.partCatalog?.items?.[event.componentKey] || {};
     const elapsedDays=daysBetween(String(event.date||event.occurredAt||"").slice(0,10),nowTehran().date);
     const elapsedKm=odo!=null && event.odometerKm!=null && odo>=Number(event.odometerKm) ? odo-Number(event.odometerKm) : null;
-    return `${item.icon || "🔩"} <b>${event.componentName || item.label || event.componentKey}</b>\nگروه: ${event.componentCategory || item.category || "—"} · آخرین نصب: ${eventDateLabel(event)}\nکارکرد هنگام نصب: ${event.odometerKm==null?"ثبت نشده":`${formatNum(event.odometerKm)} km`} · عمر فعلی: ${elapsedKm==null?"—":`${formatNum(elapsedKm)} km`} / ${elapsedDays==null?"—":`${formatNum(elapsedDays)} روز`}\nبرند: ${event.brand || "ثبت نشده"} · مدل: ${event.model || "ثبت نشده"}\nشناسه: <code>${event.id.slice(0,8)}</code>`;
+    const warrantyDays = event.warrantyUntil ? daysBetween(nowTehran().date, event.warrantyUntil) : null;
+    const warrantyLabel = warrantyDays !== null ? `${event.warrantyUntilJalali || jalaliDateLabel(event.warrantyUntil)} · ${warrantyDays >= 0 ? `${formatNum(warrantyDays)} روز باقی‌مانده` : `${formatNum(Math.abs(warrantyDays))} روز منقضی`}` : "ثبت نشده/تاریخ نامعتبر";
+    return `${item.icon || "🔩"} <b>${event.componentName || item.label || event.componentKey}</b>\nگروه: ${event.componentCategory || item.category || "—"} · آخرین نصب: ${eventDateLabel(event)}\nکارکرد هنگام نصب: ${event.odometerKm==null?"ثبت نشده":`${formatNum(event.odometerKm)} km`} · عمر فعلی: ${elapsedKm==null?"—":`${formatNum(elapsedKm)} km`} / ${elapsedDays==null?"—":`${formatNum(elapsedDays)} روز`}\nبرند: ${event.brand || "ثبت نشده"} · مدل: ${event.model || "ثبت نشده"} · تعداد: ${formatNum(event.quantity || 1)}\nکد فنی: ${event.partNumber || "ثبت نشده"} · سریال: ${event.serialNumber || "ثبت نشده"}\nضمانت: ${warrantyLabel} · محل نصب: ${event.position || "ثبت نشده"}\nفروشنده: ${event.supplier || "ثبت نشده"} · فاکتور: ${event.invoiceRef || "ثبت نشده"}\nشناسه: <code>${event.id.slice(0,8)}</code>`;
   });
   for (let start=0;start<lines.length;start+=8) results.push({ text: `🔩 قطعات نصب‌شده و عمر کارکرد\n${start+1}-${Math.min(start+8,lines.length)} از ${lines.length}\n\n${lines.slice(start,start+8).join("\n\n")}` });
   return results;
@@ -1875,7 +2049,7 @@ async function mergeDuplicateEvents(keepPrefix, removePrefix, env, editor = "tel
   const keep = keepMatch.event, duplicate = removeMatch.event;
   if (keep.id === duplicate.id || keep.type !== duplicate.type) return "❌ ادغام فقط برای دو رویداد متفاوت از یک نوع مجاز است.";
   const patch = {};
-  const fillKeys = ["description", "note", "actor", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceLabel", "serviceCatalogKey", "componentKey", "componentName", "componentCategory", "componentMode", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "ticketDate", "deadlineDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "repairDescription", "repairCostRial", "resolvedAt", "status"];
+  const fillKeys = ["description", "note", "actor", "odometerKm", "distanceKm", "liters", "costRial", "serviceKey", "serviceLabel", "serviceCatalogKey", "componentKey", "componentName", "componentCategory", "componentMode", "brand", "model", "partNumber", "serialNumber", "specs", "quantity", "warrantyUntil", "warrantyUntilJalali", "warrantyCalendar", "supplier", "invoiceRef", "position", "condition", "expenseCategory", "repairGroupId", "ticketDate", "deadlineDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "repairDescription", "repairCostRial", "resolvedAt", "status"];
   for (const key of fillKeys) {
     const current = keep[key], incoming = duplicate[key];
     if ((current === null || current === undefined || current === "" || (typeof current === "object" && !Array.isArray(current) && Object.keys(current).length === 0)) && incoming !== null && incoming !== undefined && incoming !== "") patch[key] = incoming;
@@ -1983,7 +2157,15 @@ async function saveEvent(input, env) {
     brand: input.brand || null,
     model: input.model || null,
     partNumber: input.partNumber || null,
+    serialNumber: input.serialNumber || null,
     specs: input.specs || null,
+    warrantyUntil: input.warrantyUntil || null,
+    warrantyUntilJalali: input.warrantyUntilJalali || (input.warrantyUntil ? jalaliDateLabel(input.warrantyUntil) : null),
+    warrantyCalendar: input.warrantyCalendar || null,
+    supplier: input.supplier || null,
+    invoiceRef: input.invoiceRef || null,
+    position: input.position || null,
+    condition: input.condition || null,
     quantity: Number(input.quantity) > 0 ? Number(input.quantity) : 1,
     expenseCategory: input.expenseCategory || null,
     repairGroupId: input.repairGroupId || null,
@@ -2312,6 +2494,12 @@ function formatEventDetails(event) {
   if (event.brand) lines.push(`برند: ${event.brand}`);
   if (event.model) lines.push(`مدل: ${event.model}`);
   if (event.partNumber) lines.push(`کد فنی: ${event.partNumber}`);
+  if (event.serialNumber) lines.push(`شماره سریال قطعه: ${event.serialNumber}`);
+  if (event.warrantyUntil) lines.push(`پایان ضمانت: ${event.warrantyUntilJalali || jalaliDateLabel(event.warrantyUntil)} · ذخیرهٔ استاندارد: ${event.warrantyUntil}`);
+  if (event.supplier) lines.push(`فروشنده/تأمین‌کننده: ${event.supplier}`);
+  if (event.invoiceRef) lines.push(`شماره فاکتور: ${event.invoiceRef}`);
+  if (event.position) lines.push(`محل نصب: ${event.position}`);
+  if (event.condition) lines.push(`وضعیت قطعه: ${event.condition}`);
   if (event.specs && typeof event.specs === "object") lines.push(`مشخصات فنی: ${Object.entries(event.specs).map(([k,v])=>`${k}=${v}`).join(" · ")}`);
   if (event.quantity) lines.push(`تعداد: ${formatNum(event.quantity)}`);
   if (event.repairGroupId) lines.push(`شناسه گروه تعمیرگاه: <code>${event.repairGroupId}</code>`);
@@ -3457,7 +3645,7 @@ async function sendPhoto(env, chatId, filename, blob, caption) {
 }
 
 function eventsToCsv(events) {
-  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "previousOdometerKm", "deltaSincePreviousKm", "distanceKm", "liters", "costRial", "fuelEstimateLiters", "fuelEstimateCostRial", "fuelEstimateMinCostRial", "fuelEstimateMaxCostRial", "fuelEstimateLPer100", "fuelEstimateMinLPer100", "fuelEstimateMaxLPer100", "fuelEstimateMinLiters", "fuelEstimateMaxLiters", "fuelEstimatePriceTomanPerLiter", "fuelEstimateConfidence", "fuelEstimateConfidenceLabel", "fuelEstimateSampleRefuels", "fuelEstimateSampleIntervals", "fuelEstimateSampleDistanceKm", "fuelEstimateMethod", "serviceKey", "serviceCatalogKey", "serviceLabel", "componentKey", "componentName", "componentCategory", "componentMode", "componentReplaced", "brand", "model", "partNumber", "specs", "quantity", "expenseCategory", "repairGroupId", "paid", "ticketDate", "deadlineDate", "appealed", "appealDecisionDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
+  const headers = ["id", "type", "title", "description", "actor", "note", "occurredAt", "jalaliDate", "date", "time", "odometerKm", "previousOdometerKm", "deltaSincePreviousKm", "distanceKm", "liters", "costRial", "fuelEstimateLiters", "fuelEstimateCostRial", "fuelEstimateMinCostRial", "fuelEstimateMaxCostRial", "fuelEstimateLPer100", "fuelEstimateMinLPer100", "fuelEstimateMaxLPer100", "fuelEstimateMinLiters", "fuelEstimateMaxLiters", "fuelEstimatePriceTomanPerLiter", "fuelEstimateConfidence", "fuelEstimateConfidenceLabel", "fuelEstimateSampleRefuels", "fuelEstimateSampleIntervals", "fuelEstimateSampleDistanceKm", "fuelEstimateMethod", "serviceKey", "serviceCatalogKey", "serviceLabel", "componentKey", "componentName", "componentCategory", "componentMode", "componentReplaced", "brand", "model", "partNumber", "serialNumber", "specs", "quantity", "warrantyUntil", "warrantyUntilJalali", "warrantyCalendar", "supplier", "invoiceRef", "position", "condition", "expenseCategory", "repairGroupId", "paid", "ticketDate", "deadlineDate", "appealed", "appealDecisionDate", "ticketNumber", "ticketSerialNumber", "ticketPaymentId", "ticketType", "fineLocation", "vehicleDescription", "vehiclePlate", "violationDescription", "ticketDateJalali", "speedLimitKph", "recordedSpeedKph", "cameraCode", "reportedUnpaidFineBalanceRial", "reportedBalanceDate", "amountCurrency", "fineSource", "originalSms", "officialCurrentAmountRial", "paidAmountRial", "paidAt", "paymentDate", "paymentReference", "status", "repairDescription", "repairCostRial", "resolvedAt", "fullTank", "updatedAt", "revision"];
   const quote = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [headers.join(","), ...events.map(event => headers.map(key => quote(event[key])).join(","))].join("\r\n");
 }
@@ -3647,3 +3835,5 @@ function formatMoneyToman(rial) {
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 }
+
+export { extractPartMetadata };

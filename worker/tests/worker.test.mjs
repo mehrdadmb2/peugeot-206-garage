@@ -10,7 +10,7 @@ test("GET /health is request-driven and does not require scheduled triggers", as
  assert.equal(body.ok, true);
  assert.equal(body.mode, "request-driven");
  assert.match(body.scheduler, /GitHub Actions calls \/scheduled\/reminders/);
- assert.equal(body.version, "3.23.0");
+ assert.equal(body.version, "3.27.0");
  assert.ok(Number.isFinite(body.epochMs));
  assert.equal(body.timezone, "Asia/Tehran");
  assert.equal(response.headers.get("access-control-allow-origin"), "*");
@@ -53,7 +53,7 @@ test("protected API rejects missing bearer token", async () => {
 test("API guide advertises reciprocal links and event management routes", async () => {
  const response = await worker.fetch(new Request("https://unit.test/"), {});
  const body = await response.json();
- assert.equal(body.version, "3.23.0");
+ assert.equal(body.version, "3.27.0");
  assert.match(body.dashboard, /^https:\/\//);
  assert.match(body.telegram, /t\.me\/Peugeot206GarageBot/);
  assert.ok(body.endpoints.updateEvent);
@@ -277,7 +277,7 @@ test("Telegram operations list formats IDs and quotes and uses named clickable n
  }
 });
 
-test("/analysis week sends one textual summary and four PNG charts", async () => {
+test("/analysis week sends one textual summary and six PNG charts", async () => {
  const files = new Map([
   ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: "2026-10-23T09:00:00+03:30", months: ["2026-10"] })],
   ["data/config.json", JSON.stringify({ schemaVersion: 1, vehicle: { label: "Peugeot 206 SD" }, ownership: { purchaseOdometerKm: 428000, defaultActor: "من" }, people: [], serviceIntervals: {} })],
@@ -319,7 +319,9 @@ test("/analysis week sends one textual summary and four PNG charts", async () =>
   assert.match(sentMessages[0].text, /گزارش تحلیلی پژو/);
   assert.match(sentMessages[0].text, /تفریق کیلومتر فعلی منهای کیلومتر خرید/);
   assert.doesNotMatch(sentMessages[0].text, /۲٬۴۰۰|2400|۹۸۱/);
-  assert.equal(sentPhotos.length, 4);
+  assert.equal(sentPhotos.length, 6);
+  assert.match(sentMessages[0].text, /میانگین وزنی قیمت سوخت/);
+  assert.match(sentMessages[0].text, /عملیات سرویس/);
  } finally {
   globalThis.fetch = originalFetch;
  }
@@ -1310,3 +1312,47 @@ test("Telegram imports both official Road Police fine SMS formats and blocks sem
  }
 });
 
+
+test("Telegram /vehicle and /partinfo return the expanded technical profile and fitment-aware part sheets", async () => {
+ const config = readFileSync(new URL("../../data/config.json", import.meta.url), "utf8");
+ const files = new Map([
+  ["data/config.json", config],
+  ["data/index.json", JSON.stringify({ schemaVersion: 1, updatedAt: null, months: [] })]
+ ]);
+ const sent = [];
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(input);
+  if (url.hostname === "api.github.com") {
+   const path = url.pathname.split("/contents/")[1].split("/").map(decodeURIComponent).join("/");
+   const content = files.get(path);
+   if (content === undefined) return new Response("not found", { status: 404 });
+   return new Response(JSON.stringify({ sha: `sha-${path}`, content: Buffer.from(content, "utf8").toString("base64") }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (url.hostname === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+   sent.push(JSON.parse(init.body));
+   return new Response(JSON.stringify({ ok: true, result: { message_id: sent.length } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return new Response("unexpected upstream", { status: 500 });
+ };
+ const env = { TELEGRAM_WEBHOOK_SECRET: "technical-profile-test", ALLOWED_TELEGRAM_USER_ID: "42", TELEGRAM_BOT_TOKEN: "fake-token", GITHUB_TOKEN: "fake-token", GITHUB_OWNER: "mehrdadmb2", GITHUB_REPO: "peugeot-206-garage", GITHUB_BRANCH: "main" };
+ const post = (updateId, text) => worker.fetch(new Request("https://unit.test/telegram", {
+  method: "POST",
+  headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": env.TELEGRAM_WEBHOOK_SECRET },
+  body: JSON.stringify({ update_id: updateId, message: { message_id: updateId, date: Math.floor(Date.now()/1000), text, from: { id: 42 }, chat: { id: 101, type: "private" } } })
+ }), env);
+ try {
+  assert.equal((await post(30001, "/vehicle")).status, 200);
+  assert.equal((await post(30002, "/partinfo بوستر ترمز")).status, 200);
+  assert.equal(sent.length, 2);
+  assert.match(sent[0].text, /شناسنامه فنی/);
+  assert.match(sent[0].text, /Euro III|EURO III/);
+  assert.match(sent[0].text, /تطبیق محتمل|نیازمند بررسی سند/);
+  assert.match(sent[1].text, /بوستر ترمز/);
+  assert.match(sent[1].text, /safety_critical|ایمنی بحرانی/);
+  assert.match(sent[1].text, /VIN/);
+  assert.match(sent[1].text, /ضمانت=1406\/12\/29/);
+  assert.doesNotMatch(sent[1].text, /&lt;b&gt;نمونه ثبت/);
+  assert.doesNotMatch(sent[1].text, /<b>🛑 <b>/, "Telegram headings must not contain nested bold tags");
+ } finally { globalThis.fetch = originalFetch; }
+});

@@ -310,7 +310,7 @@ export function buildDashboardData({ rootDir = process.cwd(), now = new Date() }
     config,
     events,
     computed: {
-      calculationVersion: 9,
+      calculationVersion: 10,
       eventCount: events.length,
       currentOdometerKm,
       odometerDiagnostics: {

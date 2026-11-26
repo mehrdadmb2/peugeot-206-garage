@@ -140,6 +140,7 @@
 
       window.GarageDiagnostics?.log('info', 'app.dataset', 'داده از موتور بارگذاری دریافت شد.', { mode: dataset.mode, eventCount: dataset.events.length, monthCount: dataset.months.length, serviceIntervals: Object.keys(dataset.config.serviceIntervals || {}).length, partCategories: Object.keys(dataset.config.partCatalog?.categories || {}).length, partItems: Object.keys(dataset.config.partCatalog?.items || {}).length, serviceCatalog: Object.keys(dataset.config.partCatalog?.services || {}).length, failedMonths: dataset.failedMonths || [], source: dataset.source || 'unknown' });
       state.config = dataset.config;
+      window.GarageVehicleProfile?.render?.(state.config);
       state.events = dataset.events.filter(event => event && event.id && !event.deletedAt);
       state.months = dataset.months.filter(month => /^\d{4}-\d{2}$/.test(month)).sort().reverse();
       state.precomputed = dataset.precomputed && typeof dataset.precomputed === 'object' ? dataset.precomputed : null;
@@ -849,11 +850,25 @@
     const values = rows.map(row => Math.max(0, Number(row.value) || 0));
     const max = Math.max(1, ...values);
     if (!rows.length || values.every(value => value === 0)) { node.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`; return; }
-    node.innerHTML = `<div class="garage-bars">${rows.map((row, index) => {
+    const title = node.dataset.chartTitle || 'جزئیات نمودار';
+    node.innerHTML = `<div class="garage-bars" role="group" aria-label="${escapeHtml(title)}">${rows.map((row, index) => {
       const value = Math.max(0, Number(row.value) || 0);
       const height = value > 0 ? Math.max(5, value / max * 100) : 2;
-      return `<div class="garage-bar-column" title="${escapeHtml(row.label)}: ${escapeHtml(formatter(value))}"><strong>${escapeHtml(formatter(value))}</strong><div class="garage-bar-track"><span class="garage-bar-fill" style="height:${height.toFixed(1)}%"></span></div><small>${escapeHtml(row.shortLabel || row.label)}</small></div>`;
-    }).join('')}</div>`;
+      const label = String(row.label || row.shortLabel || `داده ${index + 1}`);
+      const valueText = String(formatter(value));
+      return `<button type="button" class="garage-bar-column" data-chart-label="${escapeHtml(label)}" data-chart-value="${escapeHtml(valueText)}" title="${escapeHtml(label)}: ${escapeHtml(valueText)}" aria-label="${escapeHtml(label)}، ${escapeHtml(valueText)}"><strong>${escapeHtml(valueText)}</strong><span class="garage-bar-track" aria-hidden="true"><span class="garage-bar-fill" style="height:${height.toFixed(1)}%"></span></span><small>${escapeHtml(row.shortLabel || row.label)}</small></button>`;
+    }).join('')}</div><div class="garage-chart-readout" aria-live="polite"><span>${escapeHtml(title)}</span><b>برای دیدن مقدار دقیق، یک ستون را انتخاب کن.</b></div>`;
+    const readout = node.querySelector('.garage-chart-readout');
+    node.querySelectorAll('.garage-bar-column').forEach(button => {
+      const update = () => {
+        node.querySelectorAll('.garage-bar-column.is-selected').forEach(item => item.classList.remove('is-selected'));
+        button.classList.add('is-selected');
+        if (readout) readout.innerHTML = `<span>${escapeHtml(button.dataset.chartLabel || title)}</span><b>${escapeHtml(button.dataset.chartValue || '')}</b>`;
+      };
+      button.addEventListener('click', update);
+      button.addEventListener('focus', update);
+      button.addEventListener('mouseenter', update);
+    });
   }
   function periodBucketKeys(period) {
     const now = garageNow();
@@ -1279,6 +1294,17 @@
     chartBars('#fuelChart', keys.map(key => ({ label: key, shortLabel: periodShortLabel(key, period), value: counts[key].fuel })), value => `${formatNumber(value, 1)} L`, 'در بازه انتخابی سوختی ثبت نشده است.');
     safeText('#fuelChartTitle', `سوخت ثبت‌شده · ${title}`);
     safeText('#fuelChartTotal', `${formatNumber(sumValue('fuel'), 1)} لیتر`);
+    const fuelPriceRows = keys.map(key => {
+      const bucketFuel = inPeriodEvents.filter(event => event.type === 'fuel' && bucketForDate(event.occurredAt || event.date || event.createdAt, period) === key);
+      const liters = bucketFuel.reduce((total, event) => total + (Number(event.liters) || 0), 0);
+      const costToman = bucketFuel.reduce((total, event) => total + (Number(event.costRial) || 0), 0) / 10;
+      return { label: key, shortLabel: periodShortLabel(key, period), value: liters > 0 ? costToman / liters : 0 };
+    });
+    chartBars('#fuelPriceAnalyticsChart', fuelPriceRows, value => value > 0 ? `${formatNumber(value, 0)} تومان/L` : '—', 'برای این بازه مبلغ و لیتر کافی ثبت نشده است.');
+    const maintenanceRows = keys.map(key => ({ label: key, shortLabel: periodShortLabel(key, period), value: inPeriodEvents.filter(event => bucketForDate(event.occurredAt || event.date || event.createdAt, period) === key && ['service','part','repair','issue'].includes(event.type)).length }));
+    chartBars('#maintenanceAnalyticsChart', maintenanceRows, value => `${formatNumber(value)} عملیات`, 'در این بازه عملیات نگهداری ثبت نشده است.');
+    const fineRows = keys.map(key => ({ label: key, shortLabel: periodShortLabel(key, period), value: inPeriodEvents.filter(event => event.type === 'fine' && bucketForDate(event.occurredAt || event.date || event.createdAt, period) === key).reduce((sum, event) => sum + (Number(event.costRial) || 0), 0) / 10 }));
+    chartBars('#fineAnalyticsChart', fineRows, value => `${compactMoney(value)} تومان`, 'در این بازه جریمه‌ای ثبت نشده است.');
     const byActorCost = {};
     inPeriodEvents.filter(isActualExpense).forEach(event => { const actor = String(event.actor || 'من'); byActorCost[actor] = (byActorCost[actor] || 0) + expenseAmount(event) / 10; });
     const actorCostNode = $('#actorCostBreakdown');

@@ -19,10 +19,10 @@ test('the live five-refuel history learns from every valid odometer sample witho
   const model = calculateFuelModel(events, { tankCapacityLiters: 50 });
   assert.equal(model.refuelCount, 5);
   assert.ok(model.hasEstimate);
-  assert.equal(model.odometerReadingCount, 42);
+  assert.equal(model.odometerReadingCount, 48);
   assert.ok(model.odometerReadingsInFuelWindow >= 30);
   assert.ok(model.odometerDistanceKm >= 1000);
-  assert.equal(model.lastOdometerKm, 432270);
+  assert.equal(model.lastOdometerKm, 432428);
   assert.ok(model.inferredRefuelOdometerCount >= 1);
   assert.ok(model.refuelOdometerAdjustments.some(row => row.eventId === original.id && row.inferredKm === 431992));
   assert.equal(original.odometerKm, originalKm, 'derived inference must not mutate the immutable source ledger');
@@ -33,14 +33,14 @@ test('a new odometer entry updates the fuel model telemetry and current mileage 
   const events = realEvents();
   const before = calculateFuelModel(events);
   const newReading = {
-    id: 'new-odo-telemetry', type: 'odometer', odometerKm: 432300,
-    occurredAt: '2026-11-21T08:00:00+03:30', createdAt: '2026-11-21T04:30:00.000Z',
-    date: '2026-11-21', time: '08:00'
+    id: 'new-odo-telemetry', type: 'odometer', odometerKm: 432500,
+    occurredAt: '2026-11-26T08:00:00+03:30', createdAt: '2026-11-26T04:30:00.000Z',
+    date: '2026-11-26', time: '08:00'
   };
   const after = calculateFuelModel([...events, newReading]);
   assert.equal(after.odometerReadingCount, before.odometerReadingCount + 1);
-  assert.equal(after.lastOdometerKm, 432300);
-  assert.equal(after.odometerDistanceKm, before.odometerDistanceKm + 30);
+  assert.equal(after.lastOdometerKm, 432500);
+  assert.equal(after.odometerDistanceKm, before.odometerDistanceKm + 72);
   assert.equal(after.refuelCount, before.refuelCount);
   assert.equal(after.consumptionLPer100, before.consumptionLPer100, 'odometer-only telemetry must not invent fuel burned or purchased');
 });
@@ -49,14 +49,14 @@ test('a subsequent partial refuel becomes a new sample and updates the model dis
   const events = realEvents();
   const before = calculateFuelModel(events);
   const newRefuel = {
-    id: 'new-partial-refuel', type: 'fuel', odometerKm: 432400, liters: 15,
+    id: 'new-partial-refuel', type: 'fuel', odometerKm: 432550, liters: 15,
     costRial: 450000, fullTank: false,
-    occurredAt: '2026-11-22T08:00:00+03:30', createdAt: '2026-11-22T04:30:00.000Z',
-    date: '2026-11-22', time: '08:00'
+    occurredAt: '2026-11-26T12:00:00+03:30', createdAt: '2026-11-26T08:30:00.000Z',
+    date: '2026-11-26', time: '12:00'
   };
   const after = calculateFuelModel([...events, newRefuel]);
   assert.equal(after.refuelCount, before.refuelCount + 1);
-  assert.equal(after.sampleDistanceKm, 1200);
+  assert.equal(after.sampleDistanceKm, before.sampleDistanceKm + 289);
   assert.notEqual(after.priceTomanPerLiter, before.priceTomanPerLiter);
   assert.ok(after.odometerReadingsInFuelWindow >= before.odometerReadingsInFuelWindow);
 });

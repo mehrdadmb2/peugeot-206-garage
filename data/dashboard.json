@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-20T14:23:41.462Z",
-  "generatedForLocalDate": "2026-11-20",
-  "sourceUpdatedAt": "2026-11-20T17:03:00+03:30",
+  "generatedAt": "2026-11-26T07:47:13.841Z",
+  "generatedForLocalDate": "2026-11-26",
+  "sourceUpdatedAt": "2026-11-26T10:45:00+03:30",
   "months": [
     "2026-10",
     "2026-11"
@@ -17,7 +17,164 @@
       "fuel": "Petrol",
       "engine": "TU3 (verify exact engine/trim from vehicle documents)",
       "label": "206 SD · 1387",
-      "bodyStyle": "sedan"
+      "bodyStyle": "sedan",
+      "variant": "V20",
+      "variantConfidence": "probable",
+      "variantVerification": "pending_vehicle_document",
+      "emissionStandard": "Euro III",
+      "emissionStandardStatus": "reference_variant_not_document_verified",
+      "profile": {
+        "profileVersion": 1,
+        "variant": {
+          "value": "V20",
+          "confidence": "probable",
+          "status": "verify",
+          "reason": "مدل سال ۱۳۸۷ و موتور TU3 ثبت‌شده با بازهٔ عرضهٔ V20 سازگار است؛ کد تیپ باید از کارت/پلاک شناسایی خودرو تأیید شود."
+        },
+        "engine": {
+          "family": "TU3",
+          "code": "K6D",
+          "displacementCc": 1360,
+          "cylinders": 4,
+          "layout": "Inline-4",
+          "valves": 8,
+          "compressionRatio": 9.6,
+          "boreMm": 75,
+          "strokeMm": 77,
+          "maxPowerHp": 75,
+          "maxPowerRpm": 5300,
+          "maxTorqueNm": 118,
+          "maxTorqueRpm": 3400,
+          "fuelSystem": "Multi-point electronic injection",
+          "fuelType": "Petrol",
+          "emissionStandard": "Euro III",
+          "verification": "reference_only"
+        },
+        "transmission": {
+          "type": "Manual",
+          "forwardGears": 5,
+          "drivetrain": "FWD",
+          "gearboxCode": null,
+          "verification": "variant_reference"
+        },
+        "chassis": {
+          "body": "4-door sedan",
+          "frontSuspension": "MacPherson strut",
+          "rearSuspension": "Torsion beam / semi-independent (variant reference)",
+          "frontBrakes": "Disc",
+          "rearBrakes": "Drum",
+          "steering": "Hydraulic power steering"
+        },
+        "dimensions": {
+          "lengthMm": 4188,
+          "widthMm": 1655,
+          "heightMm": 1456,
+          "wheelbaseMm": 2443,
+          "bootLiters": 400,
+          "curbWeightKg": {
+            "min": 1024,
+            "max": 1054,
+            "status": "variant_reference"
+          }
+        },
+        "capacities": {
+          "fuelTankLiters": 50,
+          "engineOilWithFilterLiters": 3.25,
+          "manualGearboxOilLiters": 2,
+          "coolingSystemDryLiters": 6,
+          "brakeFluidLiters": 0.9
+        },
+        "wheels": {
+          "tyreSize": "185/65 R14",
+          "rimSize": "5.5J x 14",
+          "coldPressureFrontBar": 2.3,
+          "coldPressureRearBar": 2.3,
+          "coldPressureRearLoadedBar": 3
+        },
+        "performance": {
+          "referenceCityLPer100Km": 8.9,
+          "referenceHighwayLPer100Km": 5,
+          "referenceCombinedLPer100Km": 6.55,
+          "referenceTopSpeedKph": 170,
+          "referenceZeroTo100Seconds": 14.1
+        },
+        "safety": {
+          "airbags": "Driver + front passenger (variant reference)",
+          "abs": "variant-dependent; verify installed equipment",
+          "ebd": "variant-dependent; verify installed equipment",
+          "eba": "variant-dependent; verify installed equipment",
+          "esp": "not specified in reference trim"
+        },
+        "dataQuality": {
+          "classification": "reference_with_vehicle_specific_confirmation_pending",
+          "verifiedFields": [
+            "bodyStyle",
+            "model",
+            "modelYear",
+            "color",
+            "engineFamily"
+          ],
+          "unverifiedFields": [
+            "variant",
+            "engineCode",
+            "emissionStandard",
+            "gearboxCode",
+            "abs",
+            "ebd",
+            "eba",
+            "weight"
+          ],
+          "documentsToConfirm": [
+            "vehicle_card",
+            "engine_plate",
+            "VIN_build_data",
+            "technical_inspection_certificate"
+          ]
+        },
+        "sources": [
+          {
+            "label": "Peugeot 206 SD technical brochure (V20/TU3)",
+            "url": "https://autocatalogarchive.com/wp-content/uploads/2024/07/Peugeot-206-SD-2013-IR.pdf",
+            "claims": [
+              "K6D (TU3)",
+              "1360 cc",
+              "75 hp",
+              "Euro III",
+              "50 L tank"
+            ]
+          },
+          {
+            "label": "National transport and energy reference table (2010)",
+            "url": "https://static2.tinn.ir/servev2/tYWZwW7K9T28/hhF3zQUm1m4%2C/4_150833418869934690.pdf",
+            "claims": [
+              "206 SD V20",
+              "K6D TU3",
+              "1360 cc",
+              "75 hp",
+              "Euro III"
+            ]
+          },
+          {
+            "label": "V20 technical specification",
+            "url": "https://car.ir/469-peugeot-206-sd-v20",
+            "claims": [
+              "V20 engine and drivetrain details",
+              "Euro III",
+              "performance reference"
+            ]
+          },
+          {
+            "label": "V20 model range and dimensions",
+            "url": "https://nerkhehrooz.com/cars/specs/peugeot/206sd/1085-v20",
+            "claims": [
+              "V20 model years",
+              "TU3",
+              "dimensions",
+              "50 L tank"
+            ]
+          }
+        ]
+      }
     },
     "currency": "IRR",
     "timezone": "Asia/Tehran",
@@ -268,7 +425,18 @@
             "موتور اویل"
           ],
           "note": "بازه محافظه‌کارانه فعلی؛ نوع روغن، ترافیک و دفترچه موتور ملاک نهایی است.",
-          "serviceKey": "engine_oil"
+          "serviceKey": "engine_oil",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "oil_filter": {
           "label": "فیلتر روغن",
@@ -282,7 +450,18 @@
             "oil filter"
           ],
           "note": "معمولاً همراه روغن موتور تعویض می‌شود.",
-          "serviceKey": "oil_filter"
+          "serviceKey": "oil_filter",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "air_filter": {
           "label": "فیلتر هوای موتور",
@@ -297,7 +476,18 @@
             "air filter"
           ],
           "note": "در محیط پرگردوغبار زودتر بازدید شود؛ دفترچه همان تیپ مقدم است.",
-          "serviceKey": "air_filter"
+          "serviceKey": "air_filter",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "spark_plugs": {
           "label": "شمع موتور",
@@ -317,7 +507,18 @@
             "شمع احتراق"
           ],
           "note": "فاصله به نوع شمع و موتور وابسته است؛ بعد از نصب، مارک و کد شمع ثبت شود.",
-          "serviceKey": "spark_plugs"
+          "serviceKey": "spark_plugs",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "timing_belt": {
           "label": "تسمه تایم",
@@ -338,7 +539,18 @@
             "کیت تایم"
           ],
           "note": "مورد ایمنی بحرانی؛ بازه پیش‌فرض محافظه‌کارانه است و باید با موتور/دفترچه تأیید شود.",
-          "serviceKey": "timing_belt"
+          "serviceKey": "timing_belt",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "powertrain"
         },
         "alternator_belt": {
           "label": "تسمه دینام / آلترناتور",
@@ -362,7 +574,18 @@
             "تسمه پروانه"
           ],
           "note": "بازدید ترک، صدا و کشش؛ فاصله با نسخه موتور تطبیق داده شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "spark_plug_wires": {
           "label": "وایر شمع",
@@ -381,7 +604,18 @@
             "سیم شمع"
           ],
           "note": "عمر دوره‌ای ثابت فرض نشده؛ وضعیت عایق، جرقه‌زنی و بدکارکردن بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "ignition_coil": {
           "label": "کوئل / کوئل دوبل",
@@ -396,7 +630,18 @@
             "ignition coil"
           ],
           "note": "قطعه شرط‌محور؛ در صورت خطای احتراق/دیاگ بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "engine_mount": {
           "label": "دسته موتور",
@@ -411,7 +656,18 @@
             "engine mount"
           ],
           "note": "با لرزش، ضربه یا جابه‌جایی موتور بازدید شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "throttle_body": {
           "label": "دریچه گاز",
@@ -426,7 +682,18 @@
             "throttle body"
           ],
           "note": "تمیزکاری فقط در صورت نیاز و با روش مناسب انجام شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "thermostat": {
           "label": "ترموستات",
@@ -440,7 +707,18 @@
             "thermostat"
           ],
           "note": "قطعه عمرثابت تضمین‌شده ندارد؛ دمای کارکرد و بازشدن ترموستات بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "powertrain"
         },
         "thermostat_housing": {
           "label": "محفظه ترموستات",
@@ -457,7 +735,18 @@
             "محفظه آب ترموستات"
           ],
           "note": "نشتی، ترک و سلامت آب‌بندی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "coolant": {
           "label": "مایع خنک‌کننده / ضدیخ",
@@ -483,7 +772,18 @@
             "ضد یخ و ضد جوش"
           ],
           "note": "بازه زمانی اولیه دو سال است؛ نوع سیال و توصیه سازنده را تطبیق بده.",
-          "serviceKey": "coolant"
+          "serviceKey": "coolant",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "radiator": {
           "label": "رادیاتور",
@@ -497,7 +797,18 @@
             "radiator"
           ],
           "note": "ثبت نصب و عمر قطعه؛ وضعیت خوردگی، گرفتگی و نشتی جداگانه بازدید شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "powertrain"
         },
         "radiator_fan": {
           "label": "فن رادیاتور",
@@ -513,7 +824,18 @@
             "cooling fan"
           ],
           "note": "عملکرد دورها، رله، سوکت و دمای روشن‌شدن بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "coolant_temp_sensor": {
           "label": "فشنگی / سنسور دمای آب",
@@ -529,7 +851,18 @@
             "coolant temperature sensor"
           ],
           "note": "با دیاگ و مقایسه دمای واقعی/نمایشگر بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "powertrain"
         },
         "water_pump": {
           "label": "واترپمپ",
@@ -544,7 +877,18 @@
             "water pump"
           ],
           "note": "همراه سابقه تسمه تایم و نشتی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "powertrain"
         },
         "radiator_cap": {
           "label": "درب رادیاتور / منبع انبساط",
@@ -560,7 +904,18 @@
             "radiator cap"
           ],
           "note": "فشار نامی و آب‌بندی مطابق قطعه صحیح باشد.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "coolant_hose": {
           "label": "شلنگ‌های آب",
@@ -576,7 +931,18 @@
             "coolant hose"
           ],
           "note": "ترک، نرم‌شدگی و نشتی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "battery": {
           "label": "باتری",
@@ -592,7 +958,18 @@
             "battery"
           ],
           "note": "عمر از تاریخ نصب پیگیری می‌شود؛ تست ولتاژ/CCA و تاریخ گارانتی هم در مشخصات ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "alternator": {
           "label": "دینام",
@@ -606,7 +983,18 @@
             "alternator"
           ],
           "note": "ولتاژ شارژ و سلامت تسمه/اتصالات بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "starter_motor": {
           "label": "استارت",
@@ -621,7 +1009,18 @@
             "starter motor"
           ],
           "note": "اگر خودرو استارت نمی‌خورد، باتری و اتصالات هم بررسی شوند.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "front_left_indicator": {
           "label": "چراغ راهنمای جلو چپ",
@@ -637,7 +1036,18 @@
             "front left indicator"
           ],
           "note": "بدون بازه تعویض ثابت؛ عمر از نصب و وضعیت روشنایی ثبت می‌شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "front_right_indicator": {
           "label": "چراغ راهنمای جلو راست",
@@ -653,7 +1063,18 @@
             "front right indicator"
           ],
           "note": "بدون بازه تعویض ثابت؛ عمر از نصب و وضعیت روشنایی ثبت می‌شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "headlamp_left": {
           "label": "چراغ جلو چپ",
@@ -668,7 +1089,18 @@
             "headlamp left"
           ],
           "note": "بازه ثابت ندارد؛ نوع لامپ/توان ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "headlamp_right": {
           "label": "چراغ جلو راست",
@@ -683,7 +1115,18 @@
             "headlamp right"
           ],
           "note": "بازه ثابت ندارد؛ نوع لامپ/توان ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "starter_battery_terminals": {
           "label": "سر باتری و اتصالات",
@@ -699,7 +1142,18 @@
             "battery terminals"
           ],
           "note": "تمیزی، سولفاته‌شدن و سفتی اتصال بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "fuse_relay": {
           "label": "فیوز و رله",
@@ -715,7 +1169,18 @@
             "relay"
           ],
           "note": "فقط با آمپراژ صحیح جایگزین شود؛ فیوز تکراراً سوخته علت‌یابی می‌خواهد.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "gearbox_oil": {
           "label": "روغن گیربکس",
@@ -741,7 +1206,18 @@
             "manual transmission oil"
           ],
           "note": "بازه اولیه برای پیگیری؛ نوع گیربکس/روغن و توصیه سازنده تعیین‌کننده است.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "clutch_kit": {
           "label": "دیسک و صفحه کلاچ",
@@ -756,7 +1232,18 @@
             "clutch kit"
           ],
           "note": "بسته به نحوه استفاده و علائم؛ عمر ثابت تضمین نمی‌شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "clutch_cable": {
           "label": "سیم کلاچ",
@@ -771,7 +1258,18 @@
             "clutch cable"
           ],
           "note": "لقی، سفتی و رشته‌های آسیب‌دیده بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "cv_joint": {
           "label": "سرپلوس / مفصل پلوس",
@@ -787,7 +1285,18 @@
             "cv joint"
           ],
           "note": "صدای تق‌تق در پیچ و وضعیت گردگیر بازدید شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "front_shock": {
           "label": "کمک‌فنر جلو",
@@ -803,7 +1312,18 @@
             "front shock"
           ],
           "note": "در صورت نشتی، کوبش یا کاهش کنترل بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "rear_shock": {
           "label": "کمک‌فنر عقب",
@@ -819,7 +1339,18 @@
             "rear shock"
           ],
           "note": "عمر ثابت ندارد؛ نشتی و عملکرد بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "control_arm_bushing": {
           "label": "بوش طبق",
@@ -834,7 +1365,18 @@
             "control arm bushing"
           ],
           "note": "صدا، ترک و لقی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "ball_joint": {
           "label": "سیبک",
@@ -850,7 +1392,18 @@
             "ball joint"
           ],
           "note": "قطعه ایمنی؛ در صورت لقی یا پارگی گردگیر سریع بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "stabilizer_link": {
           "label": "میل موج‌گیر و رابط",
@@ -866,7 +1419,18 @@
             "stabilizer link"
           ],
           "note": "صدای تقه و لقی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "tie_rod": {
           "label": "قرقری و سیبک فرمان",
@@ -881,7 +1445,18 @@
             "tie rod"
           ],
           "note": "لقی فرمان و لاستیک‌سایی می‌تواند علامت مشکل باشد.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "power_steering_fluid": {
           "label": "روغن هیدرولیک فرمان",
@@ -900,7 +1475,18 @@
             "power steering oil"
           ],
           "note": "سطح، نوع سیال و نشتی بررسی شود؛ نوع سیستم فرمان را با خودرو تطبیق بده.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "front_brake_pads": {
           "label": "لنت ترمز جلو",
@@ -915,7 +1501,18 @@
             "front brake pads"
           ],
           "note": "عمر به سبک رانندگی وابسته است؛ ضخامت و دیسک بازدید شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "rear_brake_pads": {
           "label": "لنت / کفشک عقب",
@@ -931,7 +1528,18 @@
             "rear brake shoes"
           ],
           "note": "نوع سامانه عقب و قطعه مناسب با خودرو تطبیق داده شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "brake_discs": {
           "label": "دیسک ترمز جلو",
@@ -946,7 +1554,18 @@
             "brake discs"
           ],
           "note": "ضخامت حداقل و تاب طبق مشخصات قطعه بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "brake_fluid": {
           "label": "روغن ترمز",
@@ -966,7 +1585,18 @@
             "brake hydraulic fluid"
           ],
           "note": "برنامه اولیه ۲ سال؛ نوع مایع و شرایط واقعی/دفترچه بررسی شود.",
-          "serviceKey": "brake_fluid"
+          "serviceKey": "brake_fluid",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "cabin_filter": {
           "label": "فیلتر کابین / اتاق",
@@ -982,7 +1612,18 @@
             "cabin filter"
           ],
           "note": "در صورت وجود این تجهیز؛ محیط پرگردوغبار می‌تواند نیاز به تعویض زودتر ایجاد کند.",
-          "serviceKey": "cabin_filter"
+          "serviceKey": "cabin_filter",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "ac_refrigerant": {
           "label": "گاز کولر",
@@ -998,7 +1639,18 @@
             "ac refrigerant"
           ],
           "note": "برای کمبود مکرر، ابتدا نشتی‌یابی شود؛ شارژ صرف، تعمیر نشتی نیست.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "ac_compressor": {
           "label": "کمپرسور کولر",
@@ -1013,7 +1665,18 @@
             "ac compressor"
           ],
           "note": "وضعیت فشار، صدا، برق و نشتی باید بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "cabin_blower": {
           "label": "فن بخاری / تهویه اتاق",
@@ -1029,7 +1692,18 @@
             "cabin blower"
           ],
           "note": "دورهای فن، مقاومت، فیوز و سوکت بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "fuel_filter": {
           "label": "فیلتر بنزین",
@@ -1044,7 +1718,18 @@
             "fuel filter"
           ],
           "note": "بازه پیشنهادی اولیه است؛ محل نصب و توصیه سازنده/مکانیک بررسی شود.",
-          "serviceKey": "fuel_filter"
+          "serviceKey": "fuel_filter",
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "fuel_pump": {
           "label": "پمپ بنزین",
@@ -1059,7 +1744,18 @@
             "fuel pump"
           ],
           "note": "فشار سوخت، صدا و برق‌رسانی تست شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "fuel_injectors": {
           "label": "انژکتورها",
@@ -1074,7 +1770,18 @@
             "fuel injector"
           ],
           "note": "شست‌وشو تنها بر اساس علائم/آزمایش و روش مناسب.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "oxygen_sensor": {
           "label": "سنسور اکسیژن",
@@ -1088,7 +1795,18 @@
             "oxygen sensor"
           ],
           "note": "بر اساس کد خطا و داده زنده دیاگ تشخیص داده شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "catalytic_converter": {
           "label": "کاتالیزور",
@@ -1102,7 +1820,18 @@
             "catalytic converter"
           ],
           "note": "طبق علائم و آزمون آلایندگی؛ حذف قطعه توصیه نمی‌شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "wiper_blades": {
           "label": "تیغه برف‌پاک‌کن",
@@ -1118,7 +1847,18 @@
             "wiper blades"
           ],
           "note": "در صورت خط انداختن یا افت دید تعویض شود؛ زمان ثابت قطعی نیست.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "side_mirror_left": {
           "label": "آینه بغل چپ",
@@ -1133,7 +1873,18 @@
             "left side mirror"
           ],
           "note": "مدل/رنگ و برقی یا دستی بودن ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "side_mirror_right": {
           "label": "آینه بغل راست",
@@ -1148,7 +1899,18 @@
             "right side mirror"
           ],
           "note": "مدل/رنگ و برقی یا دستی بودن ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "tyres": {
           "label": "لاستیک‌ها",
@@ -1166,7 +1928,18 @@
             "tire"
           ],
           "note": "عمر و وضعیت طبق تاریخ DOT، آج، ترک، فشار و شرایط استفاده بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "wheel_bearing": {
           "label": "بلبرینگ چرخ",
@@ -1181,7 +1954,18 @@
             "wheel bearing"
           ],
           "note": "صدای زوزه و لقی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "exhaust_muffler": {
           "label": "منبع و لوله اگزوز",
@@ -1196,7 +1980,18 @@
             "exhaust muffler"
           ],
           "note": "نشتی، خوردگی، اتصال و صدای غیرعادی بررسی شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "crankshaft_position_sensor": {
           "label": "سنسور دور موتور / موقعیت میل‌لنگ",
@@ -1216,7 +2011,18 @@
             "سنسور دور موتور خودرو"
           ],
           "note": "قطعهٔ عیب‌یابی و عمرمحور؛ در صورت تعویض، کیلومتر و تاریخ نصب ثبت شوند. خرابی احتمالی را فقط بر اساس دیاگ/تشخیص تعمیرکار قطعی تلقی کن.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "crankshaft_sensor_wiring": {
           "label": "سیم / کابل و سوکت سنسور دور موتور",
@@ -1237,7 +2043,18 @@
             "فیش سنسور دور موتور"
           ],
           "note": "عمرمحور؛ برند/طول/شماره قطعه و مشخصات اتصال را در صورت اطلاع ثبت کن. زمان تعویض ثابت عمومی ندارد.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
         },
         "power_steering_hose": {
           "label": "شلنگ و اتصالات هیدرولیک فرمان",
@@ -1254,7 +2071,18 @@
             "steering fluid hose"
           ],
           "note": "عمرمحور؛ در صورت نشتی، وضعیت خرابی و تعمیر را جداگانه ثبت کن.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
         },
         "crankshaft_position_sensor_connector": {
           "label": "سوکت و فیش سنسور دور موتور",
@@ -1268,7 +2096,2046 @@
             "crank sensor connector"
           ],
           "note": "قطعهٔ عمرمحور؛ با کابل سنسور یکی نیست و فقط در صورت تعویض جداگانه ثبت شود.",
-          "serviceKey": null
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "engine_oil_pressure_switch": {
+          "label": "فشنگی فشار روغن موتور",
+          "category": "engine",
+          "icon": "🛢️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "فشنگی روغن",
+            "سنسور فشار روغن",
+            "oil pressure switch"
+          ],
+          "note": "در صورت روشن‌شدن چراغ روغن یا نشتی از سوئیچ بررسی شود؛ چراغ فشار روغن را با سطح روغن اشتباه نگیر.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "camshaft_position_sensor": {
+          "label": "سنسور موقعیت میل‌سوپاپ",
+          "category": "engine",
+          "icon": "🎯",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور میل سوپاپ",
+            "سنسور میل‌سوپاپ",
+            "camshaft sensor"
+          ],
+          "note": "وجود و نوع سنسور را با ECU و دسته‌سیم همین نسخه تطبیق بده؛ برای همهٔ TU3ها فرض یکسان نساز.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "map_sensor": {
+          "label": "سنسور فشار منیفولد MAP",
+          "category": "engine",
+          "icon": "📡",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور مپ",
+            "سنسور فشار منیفولد",
+            "map sensor"
+          ],
+          "note": "مقادیر MAP در حالت سوئیچ باز، دور آرام و گاز دادن با دیاگ ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "throttle_position_sensor": {
+          "label": "سنسور موقعیت دریچه گاز TPS",
+          "category": "engine",
+          "icon": "🎚️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور دریچه گاز",
+            "سنسور تی پی اس",
+            "tps sensor"
+          ],
+          "note": "در صورت نوسان دور یا مکث گاز، ولتاژ/درصد بازشدن و خطای ECU ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "idle_air_control_valve": {
+          "label": "استپر موتور / کنترل دور آرام",
+          "category": "engine",
+          "icon": "🌀",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "استپر",
+            "استپر موتور",
+            "idle air control",
+            "iac valve"
+          ],
+          "note": "نوع دریچه و سیستم کنترل دور آرام خودرو را با نمونه نصب‌شده تطبیق بده.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "crankcase_breather_hose": {
+          "label": "شلنگ بخار روغن / تهویه کارتل",
+          "category": "engine",
+          "icon": "〰️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "شلنگ بخار روغن",
+            "شلنگ هواکش کارتل",
+            "crankcase breather"
+          ],
+          "note": "ترک، گرفتگی، نشتی روغن و اتصال صحیح بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "intake_manifold_gasket": {
+          "label": "واشر منیفولد هوا",
+          "category": "engine",
+          "icon": "🧩",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "واشر منیفولد",
+            "واشر مانیفولد هوا",
+            "intake manifold gasket"
+          ],
+          "note": "نشتی هوای کاذب، صدای سوت و اصلاح سوخت در دیاگ بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "cylinder_head_gasket": {
+          "label": "واشر سرسیلندر",
+          "category": "engine",
+          "icon": "🧰",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "واشر سرسیلندر",
+            "واشر کله",
+            "head gasket"
+          ],
+          "note": "قطعه بحرانی؛ دمای آب، فشار مدار، روغن و نشانه‌های اختلاط مایعات ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "engine_crankshaft_pulley": {
+          "label": "پولی سر میل‌لنگ",
+          "category": "engine",
+          "icon": "⚙️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "پولی سر میل لنگ",
+            "پولی میل‌لنگ",
+            "crankshaft pulley"
+          ],
+          "note": "لرزش، ترک لاستیک دمپر و هم‌راستایی تسمه بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "gearbox_mount": {
+          "label": "دسته گیربکس",
+          "category": "transmission",
+          "icon": "🔩",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "دسته گیربکس",
+            "دسته‌گیربکس",
+            "gearbox mount"
+          ],
+          "note": "ضربه هنگام تعویض دنده و حرکت موتور در بارگیری بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "clutch_release_bearing": {
+          "label": "بلبرینگ کلاچ",
+          "category": "transmission",
+          "icon": "⚙️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "بلبرینگ کلاچ",
+            "بلبرینگ هرزگرد کلاچ",
+            "release bearing"
+          ],
+          "note": "صدای وابسته به فشردن پدال و وضعیت کیت کلاچ ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "gear_selector_linkage": {
+          "label": "اهرم‌بندی و ماهک تعویض دنده",
+          "category": "transmission",
+          "icon": "🔧",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "ماهک دنده",
+            "اهرم‌بندی دنده",
+            "لینک تعویض دنده",
+            "gear linkage"
+          ],
+          "note": "لقی، سختی انتخاب دنده و تنظیم اتصالات بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "rear_axle_bearings": {
+          "label": "بلبرینگ‌های محور عقب",
+          "category": "suspension",
+          "icon": "🛞",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "بلبرینگ اکسل عقب",
+            "بلبرینگ محور عقب",
+            "rear axle bearing"
+          ],
+          "note": "صدای عقب، لقی چرخ و سایش نامتقارن تایر بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "rear_torsion_bar": {
+          "label": "میله پیچشی / اکسل عقب",
+          "category": "suspension",
+          "icon": "🛞",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "میله پیچشی",
+            "میل پیچشی",
+            "اکسل عقب",
+            "torsion bar"
+          ],
+          "note": "ارتفاع دو سمت عقب، صدای تعلیق و خوردگی محور بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "front_control_arm": {
+          "label": "طبق جلو",
+          "category": "suspension",
+          "icon": "🔩",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "طبق",
+            "طبق جلو",
+            "control arm"
+          ],
+          "note": "بوش‌ها و سیبک طبق را جداگانه ثبت کن تا تعویض کامل با تعویض بوش اشتباه نشود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "strut_mount": {
+          "label": "توپی سرکمک و بلبرینگ بالای کمک",
+          "category": "suspension",
+          "icon": "🧩",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "توپی سرکمک",
+            "بلبرینگ سرکمک",
+            "strut mount"
+          ],
+          "note": "صدای تق‌تق در فرمان‌گیری و ترک لاستیک بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "rear_brake_shoes": {
+          "label": "لنت کفشکی ترمز عقب",
+          "category": "brakes",
+          "icon": "🛑",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "کفشکی عقب",
+            "لنت کفشکی عقب",
+            "rear brake shoes"
+          ],
+          "note": "ضخامت، آلودگی روغنی، فنرها و تنظیم ترمز دستی بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "rear_wheel_cylinder": {
+          "label": "سیلندر چرخ ترمز عقب",
+          "category": "brakes",
+          "icon": "🧯",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سیلندر ترمز عقب",
+            "سیلندر چرخ",
+            "wheel cylinder"
+          ],
+          "note": "نشتی پشت گردگیر و گیرکردن پیستون بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "brake_master_cylinder": {
+          "label": "پمپ اصلی ترمز",
+          "category": "brakes",
+          "icon": "🛑",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "پمپ ترمز",
+            "بوستر پمپ",
+            "master cylinder"
+          ],
+          "note": "افت پدال، نشتی و افت تدریجی فشار؛ پس از کار، تست ایمنی لازم است.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "abs_wheel_sensor_front_left": {
+          "label": "سنسور ABS چرخ جلو چپ",
+          "category": "brakes",
+          "icon": "📟",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور abs جلو چپ",
+            "سنسور چرخ جلو چپ"
+          ],
+          "note": "فقط در صورت نصب ABS ثبت شود؛ کد خطا و مقاومت/سیگنال چرخ مشخص شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "abs_wheel_sensor_front_right": {
+          "label": "سنسور ABS چرخ جلو راست",
+          "category": "brakes",
+          "icon": "📟",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور abs جلو راست",
+            "سنسور چرخ جلو راست"
+          ],
+          "note": "فقط در صورت نصب ABS ثبت شود؛ کد خطا و سیگنال چرخ مشخص شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "handbrake_cable": {
+          "label": "سیم ترمز دستی",
+          "category": "brakes",
+          "icon": "🧵",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سیم ترمز دستی",
+            "کابل ترمز دستی",
+            "handbrake cable"
+          ],
+          "note": "کورس اهرم، گیرکردن کابل و تعادل ترمز عقب بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "safety_related"
+        },
+        "fuel_pressure_regulator": {
+          "label": "رگلاتور فشار سوخت",
+          "category": "fuel",
+          "icon": "⛽",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "رگلاتور بنزین",
+            "رگلاتور فشار سوخت",
+            "fuel pressure regulator"
+          ],
+          "note": "فشار ریل و نوع مجموعه سوخت‌رسانی این نسخه ملاک است؛ نوع سیستم را حدس نزن.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "fuel_level_sender": {
+          "label": "شناور و سنسور سطح بنزین",
+          "category": "fuel",
+          "icon": "⛽",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "شناور بنزین",
+            "درجه باک",
+            "سنسور سطح سوخت",
+            "fuel sender"
+          ],
+          "note": "خطای نشانگر، مقاومت شناور و اتصال بدنه بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "evap_canister": {
+          "label": "کنیستر بخارات بنزین",
+          "category": "fuel",
+          "icon": "🌫️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "کنیستر",
+            "canister",
+            "کنیستر بنزین"
+          ],
+          "note": "شلنگ‌ها، شیر برقی و انتشار بخار سوخت بررسی شود؛ حذف سامانه توصیه نمی‌شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "fuel_rail": {
+          "label": "ریل سوخت",
+          "category": "fuel",
+          "icon": "⛽",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "ریل بنزین",
+            "ریل سوخت",
+            "fuel rail"
+          ],
+          "note": "نشتی، اورینگ انژکتور و اتصالات پرفشار بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "exhaust_manifold": {
+          "label": "منیفولد دود",
+          "category": "exhaust",
+          "icon": "💨",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "منیفولد دود",
+            "منیفولد اگزوز",
+            "exhaust manifold"
+          ],
+          "note": "ترک، نشتی قبل از سنسور اکسیژن و صدای سرد بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "exhaust_flex_pipe": {
+          "label": "لوله فلکسی اگزوز",
+          "category": "exhaust",
+          "icon": "〰️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "فلکسی اگزوز",
+            "لوله فلکسی",
+            "flex pipe"
+          ],
+          "note": "نشتی و لرزش اگزوز در دور آرام ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "oxygen_sensor_upstream": {
+          "label": "سنسور اکسیژن قبل از کاتالیزور",
+          "category": "exhaust",
+          "icon": "🧪",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور اکسیژن بالا",
+            "سنسور اکسیژن قبل کاتالیزور",
+            "upstream oxygen sensor"
+          ],
+          "note": "تعداد و محل سنسورها به ECU و کاتالیزور نصب‌شده بستگی دارد.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "oxygen_sensor_downstream": {
+          "label": "سنسور اکسیژن بعد از کاتالیزور",
+          "category": "exhaust",
+          "icon": "🧪",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سنسور اکسیژن پایین",
+            "سنسور اکسیژن بعد کاتالیزور",
+            "downstream oxygen sensor"
+          ],
+          "note": "فقط در صورت وجود مدار و سنسور دوم ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "ac_condenser": {
+          "label": "کندانسور کولر",
+          "category": "climate",
+          "icon": "❄️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "کندانسور کولر",
+            "رادیاتور کولر",
+            "ac condenser"
+          ],
+          "note": "نشتی، گرفتگی پره‌ها و عملکرد فن کندانسور بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "ac_receiver_drier": {
+          "label": "خشک‌کن / فیلتر رطوبت کولر",
+          "category": "climate",
+          "icon": "🧊",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "درایر کولر",
+            "خشک کن کولر",
+            "receiver drier"
+          ],
+          "note": "پس از بازشدن مدار یا تعویض قطعات طبق دستورالعمل سیستم سرویس شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "heater_core": {
+          "label": "رادیاتور بخاری",
+          "category": "climate",
+          "icon": "🔥",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "رادیاتور بخاری",
+            "رادیاتور داخل اتاق",
+            "heater core"
+          ],
+          "note": "بوی ضدیخ، بخار شیشه و نم کف کابین نشانه‌های احتمالی نشتی‌اند.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "expansion_tank": {
+          "label": "منبع انبساط آب",
+          "category": "cooling",
+          "icon": "🫗",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "منبع انبساط",
+            "مخزن انبساط",
+            "expansion tank"
+          ],
+          "note": "ترک بدنه، درپوش فشار و نشتی اتصالات بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "ecu_engine": {
+          "label": "کامپیوتر موتور ECU",
+          "category": "electrical",
+          "icon": "🧠",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "ایسیو",
+            "کامپیوتر موتور",
+            "ecu"
+          ],
+          "note": "شماره سخت‌افزار/نرم‌افزار ECU و سازگاری ایموبلایزر محرمانه/حساس تلقی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "window_regulator_front_left": {
+          "label": "مکانیزم شیشه‌بالابر جلو چپ",
+          "category": "interior",
+          "icon": "🪟",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "شیشه بالابر جلو چپ",
+            "مکانیزم شیشه جلو چپ"
+          ],
+          "note": "نوع برقی/دستی و کد قطعه ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "window_regulator_front_right": {
+          "label": "مکانیزم شیشه‌بالابر جلو راست",
+          "category": "interior",
+          "icon": "🪟",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "شیشه بالابر جلو راست",
+            "مکانیزم شیشه جلو راست"
+          ],
+          "note": "نوع برقی/دستی و کد قطعه ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "trunk_latch": {
+          "label": "قفل صندوق عقب",
+          "category": "exterior",
+          "icon": "🔒",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "قفل صندوق",
+            "قفل در صندوق",
+            "trunk latch"
+          ],
+          "note": "قفل مرکزی، میکروسوئیچ و بازشدن اضطراری جداگانه بررسی شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "door_lock_actuator": {
+          "label": "موتور قفل مرکزی در",
+          "category": "interior",
+          "icon": "🔐",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "موتور قفل",
+            "قفل مرکزی در",
+            "door lock actuator"
+          ],
+          "note": "در صورت تعویض، سمت در و سازگاری سوکت ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "engine_undertray": {
+          "label": "کاور زیر موتور",
+          "category": "exterior",
+          "icon": "🛡️",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "سینی زیر موتور",
+            "کاور زیر موتور",
+            "undertray"
+          ],
+          "note": "نوع و نقاط اتصال با نسخه بدنه تطبیق داده شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "rear_lamp_left": {
+          "label": "چراغ عقب چپ",
+          "category": "exterior",
+          "icon": "🔴",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "چراغ عقب چپ",
+            "چراغ خطر چپ",
+            "rear left lamp"
+          ],
+          "note": "نسخه چراغ و شماره قطعه سمت چپ ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "rear_lamp_right": {
+          "label": "چراغ عقب راست",
+          "category": "exterior",
+          "icon": "🔴",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "چراغ عقب راست",
+            "چراغ خطر راست",
+            "rear right lamp"
+          ],
+          "note": "نسخه چراغ و شماره قطعه سمت راست ثبت شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "wheel_stud_nut": {
+          "label": "پیچ و مهره چرخ",
+          "category": "wheels",
+          "icon": "🔩",
+          "mode": "condition",
+          "intervalKm": 0,
+          "intervalDays": 0,
+          "aliases": [
+            "پیچ چرخ",
+            "مهره چرخ",
+            "wheel stud"
+          ],
+          "note": "رزوه، طول و گشتاور بستن با رینگ/توپی تطبیق شود.",
+          "serviceKey": null,
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "installedAt",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part",
+          "criticality": "standard"
+        },
+        "valve_cover_gasket": {
+          "label": "واشر درب سوپاپ",
+          "category": "engine",
+          "icon": "🧩",
+          "mode": "condition",
+          "aliases": [
+            "واشر قالپاق سوپاپ",
+            "واشر درب موتور",
+            "valve cover gasket"
+          ],
+          "note": "در صورت نشت روغن از اطراف درب سوپاپ، تاب‌داشتگی سطح و گشتاور بستن بررسی شود.",
+          "criticality": "powertrain",
+          "inspectionMethod": "بازدید نشتی اطراف درب سوپاپ و بررسی سطح آب‌بندی",
+          "symptoms": [
+            "بوی روغن سوخته",
+            "روغنی شدن اطراف سرسیلندر",
+            "نشتی روغن"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "intake_air_hose": {
+          "label": "شلنگ ورودی هوای موتور",
+          "category": "engine",
+          "icon": "🌬️",
+          "mode": "condition",
+          "aliases": [
+            "خرطومی هواکش",
+            "شلنگ هواکش",
+            "intake hose",
+            "air intake hose"
+          ],
+          "note": "پارگی یا نشتی هوا می‌تواند دور آرام و اصلاح سوخت را مختل کند؛ شکل و قطر اتصال با خودرو تطبیق داده شود.",
+          "criticality": "powertrain",
+          "inspectionMethod": "بازدید ترک، بست‌ها و نشتی هوا در مسیر فیلتر تا دریچه گاز",
+          "symptoms": [
+            "صدای مکش هوا",
+            "بدکارکردن موتور",
+            "نوسان دور آرام"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "oil_sump_gasket": {
+          "label": "واشر کارتل روغن",
+          "category": "engine",
+          "icon": "🛢️",
+          "mode": "condition",
+          "aliases": [
+            "واشر زیر موتور",
+            "واشر کارتل",
+            "oil pan gasket"
+          ],
+          "note": "پس از بازکردن کارتل، نوع آب‌بندی و زمان خشک‌شدن طبق ماده مصرفی رعایت شود.",
+          "criticality": "powertrain",
+          "inspectionMethod": "بازدید نشتی از لبه کارتل و پیچ تخلیه پس از گرم‌شدن موتور",
+          "symptoms": [
+            "چکه روغن زیر موتور",
+            "کاهش سطح روغن"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "cooling_fan_relay": {
+          "label": "رله فن خنک‌کننده",
+          "category": "electrical",
+          "icon": "🔌",
+          "mode": "condition",
+          "aliases": [
+            "رله دور فن",
+            "رله فن رادیاتور",
+            "cooling fan relay"
+          ],
+          "note": "مدار و پایه رله با نقشه سیم‌کشی همان تیپ تطبیق شود؛ پل‌زدن دائمی مدار راه‌حل تعمیر نیست.",
+          "criticality": "safety_related",
+          "fitmentStatus": "verify_by_fusebox_and_vin",
+          "inspectionMethod": "بررسی فرمان ECU، تغذیه، افت ولتاژ و سلامت پایه‌ها",
+          "symptoms": [
+            "روشن نشدن فن",
+            "کارکرد دائم فن",
+            "بالا رفتن دمای آب"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "cooling_fan_resistor": {
+          "label": "مقاومت / ماژول دور فن",
+          "category": "electrical",
+          "icon": "🌡️",
+          "mode": "condition",
+          "aliases": [
+            "مقاومت فن",
+            "ماژول فن",
+            "فن دور کند",
+            "cooling fan resistor"
+          ],
+          "note": "وجود و نوع قطعه به آرایش فن و سیم‌کشی خودرو وابسته است؛ قبل از خرید تطبیق داده شود.",
+          "criticality": "safety_related",
+          "fitmentStatus": "variant_dependent",
+          "inspectionMethod": "تست دورهای فن و بررسی مقاومت/ماژول و سوکت از نظر داغی",
+          "symptoms": [
+            "کار نکردن دور کند فن",
+            "بالا رفتن دما در ترافیک"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "ignition_switch": {
+          "label": "مغزی سوئیچ استارت",
+          "category": "electrical",
+          "icon": "🔑",
+          "mode": "condition",
+          "aliases": [
+            "مغزی سوئیچ",
+            "سوئیچ استارت",
+            "ignition switch"
+          ],
+          "note": "مدار ایموبلایزر و تطبیق کلید/قفل در نسخه‌های مجهز جداگانه بررسی شود.",
+          "criticality": "powertrain",
+          "inspectionMethod": "بررسی افت ولتاژ و پیوستگی ترمینال‌های ACC/IGN/START",
+          "symptoms": [
+            "قطع برق پشت آمپر",
+            "استارت نخوردن متناوب",
+            "خاموشی لحظه‌ای"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "battery_ground_cable": {
+          "label": "کابل اتصال بدنه و منفی باتری",
+          "category": "electrical",
+          "icon": "🔋",
+          "mode": "condition",
+          "aliases": [
+            "کابل منفی باتری",
+            "اتصال بدنه",
+            "تسمه اتصال بدنه",
+            "battery ground cable"
+          ],
+          "note": "سطح اتصال، خوردگی و افت ولتاژ زیر بار بررسی شود؛ اتصال بدنه نامناسب خطاهای متعدد ایجاد می‌کند.",
+          "criticality": "powertrain",
+          "inspectionMethod": "تست افت ولتاژ بین قطب منفی، بدنه و بلوک موتور هنگام استارت",
+          "symptoms": [
+            "استارت ضعیف",
+            "ریست ساعت و ECU",
+            "خطاهای الکتریکی پراکنده"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "alternator_regulator": {
+          "label": "رگلاتور ولتاژ دینام",
+          "category": "electrical",
+          "icon": "⚡",
+          "mode": "condition",
+          "aliases": [
+            "آفتامات دینام",
+            "رگلاتور شارژ",
+            "voltage regulator"
+          ],
+          "note": "سازگاری رگلاتور با مدل دینام و سوکت باید بررسی شود.",
+          "criticality": "powertrain",
+          "inspectionMethod": "اندازه‌گیری ولتاژ شارژ در دور آرام و زیر بار و تست ریپل در صورت امکان",
+          "symptoms": [
+            "چراغ باتری",
+            "شارژ کم یا بیش از حد",
+            "جوش آوردن باتری"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "drive_shaft_left": {
+          "label": "پلوس کامل سمت چپ",
+          "category": "transmission",
+          "icon": "🔩",
+          "mode": "condition",
+          "aliases": [
+            "پلوس چپ",
+            "پلوس راننده",
+            "left drive shaft",
+            "left axle shaft"
+          ],
+          "note": "طول، نوع خار، تعداد دندانه و اتصال گیربکس با کد گیربکس و قطعه قدیمی تطبیق شود.",
+          "criticality": "safety_related",
+          "fitmentStatus": "verify_by_gearbox_and_vin",
+          "inspectionMethod": "بازدید لقی مفصل‌ها، گردگیرها و نشتی کاسه‌نمد گیربکس",
+          "symptoms": [
+            "تق‌تق در پیچ",
+            "لرزش زیر شتاب",
+            "نشتی روغن گیربکس"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "drive_shaft_right": {
+          "label": "پلوس کامل سمت راست",
+          "category": "transmission",
+          "icon": "🔩",
+          "mode": "condition",
+          "aliases": [
+            "پلوس راست",
+            "پلوس شاگرد",
+            "right drive shaft",
+            "right axle shaft"
+          ],
+          "note": "طول و آرایش شفت میانی/بلبرینگ تکیه‌گاه در نسخه‌های مختلف متفاوت است.",
+          "criticality": "safety_related",
+          "fitmentStatus": "verify_by_gearbox_and_vin",
+          "inspectionMethod": "بازدید لقی مفصل‌ها، شفت میانی و گردگیرها",
+          "symptoms": [
+            "لرزش زیر شتاب",
+            "صدای مفصل پلوس",
+            "لقی شفت"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "inner_cv_boot": {
+          "label": "گردگیر پلوس داخلی",
+          "category": "transmission",
+          "icon": "🛡️",
+          "mode": "condition",
+          "aliases": [
+            "گردگیر سمت گیربکس",
+            "گردگیر پلوس داخلی",
+            "inner cv boot"
+          ],
+          "note": "پس از پارگی، آلودگی و کم‌شدن گریس می‌تواند به مفصل آسیب بزند.",
+          "criticality": "safety_related",
+          "inspectionMethod": "بازدید پارگی، بست‌ها و پاشش گریس در اطراف گیربکس",
+          "symptoms": [
+            "پاشش گریس",
+            "پارگی گردگیر",
+            "لرزش زیر بار"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "outer_cv_boot": {
+          "label": "گردگیر پلوس بیرونی",
+          "category": "transmission",
+          "icon": "🛡️",
+          "mode": "condition",
+          "aliases": [
+            "گردگیر سمت چرخ",
+            "گردگیر پلوس بیرونی",
+            "outer cv boot"
+          ],
+          "note": "قطرها و نوع بست را با مفصل نصب‌شده تطبیق بده.",
+          "criticality": "safety_related",
+          "inspectionMethod": "بازدید ترک و پارگی در حالت فرمان تمام‌چرخان",
+          "symptoms": [
+            "تق‌تق در پیچ",
+            "پاشش گریس",
+            "پارگی گردگیر"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "front_stabilizer_bushing": {
+          "label": "بوش میل موج‌گیر جلو",
+          "category": "suspension",
+          "icon": "🛞",
+          "mode": "condition",
+          "aliases": [
+            "لاستیک موجگیر",
+            "بوش موجگیر",
+            "stabilizer bushing"
+          ],
+          "note": "قطر میل موج‌گیر و شکل بوش بسته به نسخه و قطعه جایگزین می‌تواند متفاوت باشد.",
+          "criticality": "safety_related",
+          "fitmentStatus": "verify_by_measurement",
+          "inspectionMethod": "بررسی ترک، لقی و صدای ضربه روی دست‌انداز",
+          "symptoms": [
+            "تق‌تق جلو",
+            "صدای کوبش",
+            "لقی میل موج‌گیر"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "front_strut_bump_stop": {
+          "label": "ضربه‌گیر و گردگیر کمک جلو",
+          "category": "suspension",
+          "icon": "🛞",
+          "mode": "condition",
+          "aliases": [
+            "ضربه گیر کمک",
+            "گردگیر کمک جلو",
+            "کمک لاستیکی",
+            "strut bump stop"
+          ],
+          "note": "ارتفاع و فرم قطعه با کمک‌فنر نصب‌شده تطبیق داده شود.",
+          "criticality": "safety_related",
+          "inspectionMethod": "بازدید پارگی گردگیر و خردشدگی ضربه‌گیر پس از بازکردن مجموعه",
+          "symptoms": [
+            "صدای ضربه در انتهای کورس",
+            "خاک و گل روی شفت کمک"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
+        },
+        "front_wheel_hub": {
+          "label": "توپی چرخ جلو",
+          "category": "wheels",
+          "icon": "🛞",
+          "mode": "condition",
+          "aliases": [
+            "توپی چرخ",
+            "هاب چرخ جلو",
+            "front wheel hub"
+          ],
+          "note": "تعداد پیچ، قطر مرکزی، سنسور ABS و نوع بلبرینگ با مجموعه نصب‌شده تطبیق شود.",
+          "criticality": "safety_critical",
+          "fitmentStatus": "verify_by_abs_and_vin",
+          "inspectionMethod": "بررسی لقی، صدا، تاب و سطح نصب دیسک چرخ",
+          "symptoms": [
+            "صدای زوزه چرخ",
+            "لرزش فرمان",
+            "لقی چرخ"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "power_steering_pump": {
+          "label": "پمپ هیدرولیک فرمان",
+          "category": "steering",
+          "icon": "🧭",
+          "mode": "condition",
+          "aliases": [
+            "پمپ هیدرولیک",
+            "پمپ فرمان",
+            "power steering pump"
+          ],
+          "note": "نوع پولی، اتصالات و دبی/فشار با نسخه پمپ و شیلنگ‌ها تطبیق شود.",
+          "criticality": "safety_related",
+          "fitmentStatus": "verify_by_vehicle_configuration",
+          "inspectionMethod": "تست نشتی، صدای پمپ و فشار مدار با ابزار مناسب",
+          "symptoms": [
+            "سنگین شدن فرمان",
+            "زوزه پمپ",
+            "نشتی روغن هیدرولیک"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "steering_rack": {
+          "label": "جعبه فرمان / رک فرمان",
+          "category": "steering",
+          "icon": "🧭",
+          "mode": "condition",
+          "aliases": [
+            "جعبه فرمان",
+            "رک فرمان",
+            "steering rack"
+          ],
+          "note": "نوع هیدرولیک/مکانیکی، اتصالات و طول قرقری باید با خودرو تطبیق داده شود.",
+          "criticality": "safety_critical",
+          "fitmentStatus": "verify_by_vehicle_configuration",
+          "inspectionMethod": "بررسی لقی، نشتی گردگیر، خلاصی فرمان و نقاط اتصال",
+          "symptoms": [
+            "خلاصی فرمان",
+            "نشتی از گردگیر",
+            "صدای تقه در فرمان"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "brake_booster": {
+          "label": "بوستر ترمز",
+          "category": "brakes",
+          "icon": "🛑",
+          "mode": "condition",
+          "aliases": [
+            "بوستر",
+            "بوستر ترمز",
+            "brake booster"
+          ],
+          "note": "قطعه ایمنی؛ نشتی خلأ، نسبت تقویت و سازگاری با پمپ ترمز بررسی شود.",
+          "criticality": "safety_critical",
+          "fitmentStatus": "verify_by_vin_and_master_cylinder",
+          "inspectionMethod": "تست عملکرد بوستر و نشتی خلأ طبق دستورالعمل تعمیرگاهی",
+          "symptoms": [
+            "سفت شدن پدال",
+            "افت کمک ترمز",
+            "صدای نشتی هوا"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "front_brake_caliper": {
+          "label": "کالیپر ترمز جلو",
+          "category": "brakes",
+          "icon": "🛑",
+          "mode": "condition",
+          "aliases": [
+            "کالیپر جلو",
+            "سیلندر ترمز چرخ جلو",
+            "front brake caliper"
+          ],
+          "note": "قطر دیسک، نوع پایه و سمت چپ/راست باید با مجموعه نصب‌شده یکی باشد.",
+          "criticality": "safety_critical",
+          "fitmentStatus": "verify_by_brake_disc_and_vin",
+          "inspectionMethod": "بررسی گیرپاژ پیستون، نشتی، پین‌های لغزنده و یکنواختی سایش لنت",
+          "symptoms": [
+            "کشیدن خودرو هنگام ترمز",
+            "داغی یک چرخ",
+            "سایش نامتقارن لنت"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "instrument_cluster": {
+          "label": "صفحه کیلومتر و پشت‌آمپر",
+          "category": "interior",
+          "icon": "📟",
+          "mode": "condition",
+          "aliases": [
+            "پشت آمپر",
+            "صفحه کیلومتر",
+            "instrument cluster"
+          ],
+          "note": "سازگاری سوکت، ایموبلایزر و شماره سخت‌افزار/نرم‌افزار در نسخه‌های مختلف بررسی شود.",
+          "criticality": "standard",
+          "fitmentStatus": "verify_by_part_number_and_vin",
+          "inspectionMethod": "تست چراغ‌ها، نمایشگرها، عقربه‌ها و داده کیلومتر با دیاگ",
+          "symptoms": [
+            "خاموشی نمایشگر",
+            "خطای نشانگرها",
+            "قطع و وصل آمپر"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ]
+        },
+        "tyre_valve_stem": {
+          "label": "والو و مغزی باد لاستیک",
+          "category": "wheels",
+          "icon": "🛞",
+          "mode": "condition",
+          "aliases": [
+            "والو لاستیک",
+            "مغزی والف",
+            "tire valve stem"
+          ],
+          "note": "نوع والو فلزی/لاستیکی و فشار کاری با رینگ و تایر تطبیق داده شود.",
+          "criticality": "safety_related",
+          "inspectionMethod": "تست نشتی با محلول کف و بررسی ترک لاستیک والو",
+          "symptoms": [
+            "افت تدریجی فشار باد",
+            "نشتی از والو"
+          ],
+          "metadataFields": [
+            "brand",
+            "model",
+            "partNumber",
+            "serialNumber",
+            "specs",
+            "quantity",
+            "warrantyUntil",
+            "supplier",
+            "invoiceRef",
+            "position",
+            "condition"
+          ],
+          "fitmentStatus": "verify_by_vehicle_vin_or_existing_part"
         }
       },
       "services": {
@@ -1326,25 +4193,26 @@
           "note": "بررسی نشتی، فشار و عملکرد؛ شارژ گاز در صورت نیاز."
         },
         "ac_recharge": {
-          "label": "شارژ گاز کولر",
+          "label": "وکیوم و شارژ گاز کولر",
           "category": "climate",
-          "icon": "❄️",
+          "icon": "🧊",
           "aliases": [
             "شارژ گاز کولر",
-            "گاز کولر شارژ شد"
+            "وکیوم کولر",
+            "ac recharge"
           ],
-          "note": "مقدار گاز و آزمون نشتی را در توضیحات بنویس."
+          "note": "نوع مبرد، وزن شارژ و روغن کمپرسور با برچسب خودرو تطبیق داده شود."
         },
         "wheel_alignment": {
-          "label": "میزان فرمان و بالانس",
-          "category": "wheels",
-          "icon": "🛞",
+          "label": "میزان فرمان و تنظیم زوایا",
+          "category": "suspension",
+          "icon": "📐",
           "aliases": [
             "میزان فرمان",
-            "بالانس چرخ",
-            "بالانس لاستیک"
+            "تنظیم فرمان",
+            "wheel alignment"
           ],
-          "note": "پس از تعمیر جلوبندی یا مشاهده لاستیک‌سایی بررسی شود."
+          "note": "مقادیر toe/camber/caster قبل و بعد، فشار باد و وضعیت لاستیک ثبت شود."
         },
         "brake_service": {
           "label": "بازدید و سرویس ترمز",
@@ -1357,15 +4225,15 @@
           "note": "ضخامت لنت و دیسک و نشتی سیستم ثبت شود."
         },
         "suspension_inspection": {
-          "label": "بازدید جلوبندی",
+          "label": "بازدید کامل تعلیق و جلوبندی",
           "category": "suspension",
-          "icon": "🔩",
+          "icon": "🛞",
           "aliases": [
             "بازدید جلوبندی",
-            "سرویس جلوبندی",
-            "جلوبندی بررسی شد"
+            "بازدید تعلیق",
+            "suspension inspection"
           ],
-          "note": "موارد معیوب هرکدام به‌عنوان قطعه جداگانه ثبت شوند."
+          "note": "لقی هر مفصل، بوش، کمک‌فنر و وضعیت لاستیک جداگانه ثبت شود."
         },
         "cooling_service": {
           "label": "سرویس سیستم خنک‌کاری",
@@ -1388,15 +4256,16 @@
           "note": "پس از پاک‌سازی در صورت نیاز پارامترهای دریچه بررسی شود."
         },
         "injector_service": {
-          "label": "سرویس انژکتور",
+          "label": "بازدید و تست انژکتورها",
           "category": "fuel",
-          "icon": "💉",
+          "icon": "⛽",
           "aliases": [
-            "سرویس انژکتور",
+            "تست انژکتور",
             "شستشوی انژکتور",
-            "شست‌وشوی انژکتور"
+            "انژکتورشویی",
+            "injector cleaning"
           ],
-          "note": "روش و مواد استفاده‌شده و نتیجه را ثبت کن."
+          "note": "قبل/بعد، دبی و الگوی پاشش در صورت وجود دستگاه ثبت شود."
         },
         "ecu_repair": {
           "label": "بررسی یا تعمیر ECU",
@@ -1457,16 +4326,215 @@
             "تعویض روغن ترمز"
           ],
           "note": "نام دقیق مایع و مقدار/گرید/برند را در جزئیات رویداد ثبت کن."
+        },
+        "wheel_balancing": {
+          "label": "بالانس چرخ‌ها",
+          "category": "wheels",
+          "icon": "⚖️",
+          "aliases": [
+            "بالانس",
+            "بالانس چرخ",
+            "wheel balancing"
+          ],
+          "note": "محور/چرخ دارای لرزش و وزن اصلاح‌شده ثبت شود."
+        },
+        "brake_bleeding": {
+          "label": "هواگیری سیستم ترمز",
+          "category": "brakes",
+          "icon": "🛑",
+          "aliases": [
+            "هواگیری ترمز",
+            "bleed brakes"
+          ],
+          "note": "پس از کار، تست نشتی و عملکرد ترمز با روش ایمن انجام شود."
+        },
+        "battery_load_test": {
+          "label": "تست سلامت و بار باتری",
+          "category": "electrical",
+          "icon": "🔋",
+          "aliases": [
+            "تست باتری",
+            "تست بار باتری",
+            "battery load test"
+          ],
+          "note": "ولتاژ بی‌باری، ولتاژ استارت، CCA و دمای محیط ثبت شود."
+        },
+        "alternator_charge_test": {
+          "label": "تست شارژ دینام",
+          "category": "electrical",
+          "icon": "⚡",
+          "aliases": [
+            "تست دینام",
+            "ولتاژ شارژ",
+            "alternator test"
+          ],
+          "note": "ولتاژ شارژ در دور آرام و با مصرف‌کننده‌ها ثبت شود."
+        },
+        "throttle_service": {
+          "label": "بازدید و تمیزکاری دریچه گاز",
+          "category": "engine",
+          "icon": "🌀",
+          "aliases": [
+            "شستشوی دریچه گاز",
+            "تمیزکاری دریچه گاز",
+            "throttle cleaning"
+          ],
+          "note": "نوع دریچه و نیاز به تطبیق دور آرام/ریست ECU بررسی شود."
+        },
+        "ac_leak_test": {
+          "label": "تست نشتی کولر",
+          "category": "climate",
+          "icon": "❄️",
+          "aliases": [
+            "نشتی کولر",
+            "تست نشتی گاز",
+            "ac leak test"
+          ],
+          "note": "محل نشتی، فشار تست، نوع مبرد و وزن شارژ ثبت شود."
+        },
+        "emissions_test": {
+          "label": "آزمون آلایندگی و معاینه فنی",
+          "category": "exhaust",
+          "icon": "🌿",
+          "aliases": [
+            "آزمون آلایندگی",
+            "معاینه فنی",
+            "تست آلایندگی"
+          ],
+          "note": "CO، HC، Lambda، تاریخ و نتیجه آزمون در توضیح ثبت شود."
+        },
+        "headlamp_adjustment": {
+          "label": "تنظیم نور چراغ جلو",
+          "category": "exterior",
+          "icon": "💡",
+          "aliases": [
+            "تنظیم چراغ",
+            "تنظیم نور چراغ"
+          ],
+          "note": "ارتفاع، زاویه و نوع لامپ/کاسه چراغ بررسی شود."
+        },
+        "gearbox_inspection": {
+          "label": "بازدید نشتی و عملکرد گیربکس",
+          "category": "transmission",
+          "icon": "🔩",
+          "aliases": [
+            "بازدید گیربکس",
+            "نشتی گیربکس",
+            "بررسی واسکازین"
+          ],
+          "note": "سطح، گرید سیال، نقطه نشتی و وضعیت کاسه‌نمد ثبت شود."
+        },
+        "cooling_pressure_test": {
+          "label": "تست فشار مدار خنک‌کاری",
+          "category": "cooling",
+          "icon": "🌡️",
+          "aliases": [
+            "تست فشار آب",
+            "تست فشار رادیاتور"
+          ],
+          "note": "فشار تست و افت فشار در مدت مشخص ثبت شود."
+        },
+        "engine_compression_test": {
+          "label": "تست کمپرس سیلندرها",
+          "category": "engine",
+          "icon": "🧪",
+          "aliases": [
+            "تست کمپرس",
+            "کمپرس موتور",
+            "compression test"
+          ],
+          "note": "عدد هر سیلندر، دمای موتور، وضعیت دریچه گاز و اختلاف سیلندرها ثبت شود؛ حد مجاز طبق کد موتور است."
+        },
+        "cooling_circuit_pressure_test": {
+          "label": "تست فشار مدار خنک‌کاری",
+          "category": "cooling",
+          "icon": "🌡️",
+          "aliases": [
+            "تست فشار رادیاتور",
+            "تست نشتی آب",
+            "cooling pressure test"
+          ],
+          "note": "فشار تست از حد مجاز درپوش و مدار تجاوز نکند؛ نشتی سرد و گرم جداگانه ثبت شود."
+        },
+        "fuel_pressure_test": {
+          "label": "تست فشار سوخت‌رسانی",
+          "category": "fuel",
+          "icon": "⛽",
+          "aliases": [
+            "تست فشار بنزین",
+            "فشار پمپ بنزین",
+            "fuel pressure test"
+          ],
+          "note": "فشار و افت فشار با مشخصات ریل و رگلاتور همان نسخه تطبیق داده شود."
+        },
+        "charging_system_test": {
+          "label": "تست دینام و سیستم شارژ",
+          "category": "electrical",
+          "icon": "⚡",
+          "aliases": [
+            "تست دینام",
+            "تست شارژ باتری",
+            "alternator test"
+          ],
+          "note": "ولتاژ شارژ، افت ولتاژ کابل‌ها، ریپل AC و عملکرد زیر بار ثبت شود."
+        },
+        "brake_fluid_condition_test": {
+          "label": "تست کیفیت روغن ترمز",
+          "category": "brakes",
+          "icon": "🛑",
+          "aliases": [
+            "تست روغن ترمز",
+            "تست رطوبت روغن ترمز",
+            "brake fluid test"
+          ],
+          "note": "در صورت استفاده از تستر، درصد رطوبت/نقطه جوش و تاریخ کالیبراسیون دستگاه ثبت شود."
+        },
+        "ac_performance_test": {
+          "label": "تست عملکرد کولر و تهویه",
+          "category": "climate",
+          "icon": "❄️",
+          "aliases": [
+            "تست کولر",
+            "تست سرمایش کولر",
+            "ac performance test"
+          ],
+          "note": "دمای دریچه، دمای محیط، فشارهای Low/High و شرایط فن ثبت شود؛ فشارها به‌تنهایی شارژ گاز را تعیین نمی‌کنند."
+        },
+        "injector_balance_test": {
+          "label": "تست بالانس انژکتورها",
+          "category": "fuel",
+          "icon": "💉",
+          "aliases": [
+            "تست انژکتور",
+            "بالانس انژکتور",
+            "injector balance test"
+          ],
+          "note": "افت فشار/دبی هر انژکتور و روش آزمون ثبت شود؛ تمیزکاری بدون تشخیص الزام نیست."
+        },
+        "wheel_bearing_inspection": {
+          "label": "بازدید بلبرینگ و توپی چرخ",
+          "category": "wheels",
+          "icon": "🛞",
+          "aliases": [
+            "بازدید بلبرینگ چرخ",
+            "تست توپی چرخ",
+            "wheel bearing inspection"
+          ],
+          "note": "صدا، لقی، زبری و دمای هر سمت جداگانه ثبت شود؛ مقدار گشتاور طبق مشخصات خودرو است."
         }
       },
       "guidance": {
         "source": "Peugeot 206 TU maintenance manual and conservative planning defaults",
         "notice": "بازه‌ها برای یادآوری اولیه‌اند و جای دفترچه دقیق همان موتور/تیپ یا نظر تعمیرکار را نمی‌گیرند. در شرایط گردوغبار/ترافیک/گرمای زیاد، بازه‌های توصیه‌شده ممکن است کوتاه‌تر باشند. برای قطعات condition-based، سیستم فقط مدت/مسافت از ثبت نصب را محاسبه می‌کند و ادعای سلامت فیزیکی ندارد.",
         "serviceIntervalNote": "دفترچهٔ در دسترس برای 206 TU چند سرویس را هر 10,000 km یا یک سال و بعضی اقلام مثل تسمه تایم را با فاصله/زمان متفاوت ذکر می‌کند؛ تنظیمات موجود می‌تواند محافظه‌کارانه‌تر و قابل ویرایش باشد.",
-        "repairParsing": "خرابی/نشتی یک وضعیت است، نه قطعه. فقط فعل‌های تعویض/نصب باید سابقه قطعه نصب‌شده بسازند. مبلغ اجرت از قیمت قطعه جدا ثبت می‌شود. برای قطعات بدون بازه، عمر از نصب نمایش داده شود و تعویض دوره‌ای فرض نشود."
+        "repairParsing": "خرابی/نشتی یک وضعیت است، نه قطعه. فقط فعل‌های تعویض/نصب باید سابقه قطعه نصب‌شده بسازند. مبلغ اجرت از قیمت قطعه جدا ثبت می‌شود. برای قطعات بدون بازه، عمر از نصب نمایش داده شود و تعویض دوره‌ای فرض نشود.",
+        "partIdentity": "برای هر قطعه، سازگاری با VIN/کد موتور/گیربکس یا شماره قطعه قبلی را بررسی کن. برند، مدل، شماره OEM، سریال، تعداد، محل نصب، کیلومتر و تاریخ نصب، ضمانت، فروشنده و شماره فاکتور را در صورت وجود ثبت کن. هیچ شماره OEM یا عمر قطعه از روی حدس تکمیل نمی‌شود.",
+        "variantFitment": "قطعات مربوط به ABS، ECU، فرمان، گیربکس، فن، کالیپر و سنسورها می‌توانند بین تیپ‌ها متفاوت باشند؛ قبل از خرید، شماره شاسی و شماره قطعه موجود را تطبیق بده.",
+        "maintenanceEvidence": "برای سرویس‌های دوره‌ای، مقدار، نوع سیال، استاندارد/گرید، سازنده قطعه و مدرک انجام کار را در توضیح ثبت کن.",
+        "criticality": "موارد ترمز، فرمان، تسمه تایم، خنک‌کاری و تایر با اولویت ایمنی نمایش داده شوند؛ این فهرست تشخیص فنی یا جایگزین بازدید نیست."
       }
     },
-    "updatedAt": "2026-10-27T00:00:00+03:30",
+    "updatedAt": "2026-11-26T10:45:00+03:30",
     "fuelModel": {
       "tankCapacityLiters": 50,
       "minimumDistanceKm": 100,
@@ -4917,38 +7985,560 @@
       "fuelEstimateSampleIntervals": 3,
       "fuelEstimateSampleDistanceKm": 993,
       "fuelEstimateMethod": "partial-refuel-estimate"
+    },
+    {
+      "id": "ec53ec8d-4bc4-43ac-9d09-9005b6fd6606",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-20T16:18:44.137Z",
+      "occurredAt": "2026-11-20T19:48:00+03:30",
+      "date": "2026-11-20",
+      "time": "19:48",
+      "jalaliDate": "۱۴۰۵/۰۸/۲۹",
+      "odometerKm": 432310,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "1985760af209c207cd9243daf22e76ea9a7de9b61728255f87f6bda14109d1b4"
+      },
+      "previousOdometerKm": 432270,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 40,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 4.19,
+      "fuelEstimateCostRial": 82954,
+      "fuelEstimateMinCostRial": 68608,
+      "fuelEstimateMaxCostRial": 97299,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 3.46,
+      "fuelEstimateMaxLiters": 4.91,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
+    },
+    {
+      "id": "8a2760cd-b92b-4f9c-8bf1-9411e85a0b01",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-21T14:30:15.057Z",
+      "occurredAt": "2026-11-21T18:00:00+03:30",
+      "date": "2026-11-21",
+      "time": "18:00",
+      "jalaliDate": "۱۴۰۵/۰۸/۳۰",
+      "odometerKm": 432328,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "9d0c6902b6c2a8a93e152452f601cc427d1724b21a4a4a93231230f2383aa571"
+      },
+      "previousOdometerKm": 432310,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 18,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 1.88,
+      "fuelEstimateCostRial": 37329,
+      "fuelEstimateMinCostRial": 30873,
+      "fuelEstimateMaxCostRial": 43785,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 1.56,
+      "fuelEstimateMaxLiters": 2.21,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
+    },
+    {
+      "id": "07ea86bd-0098-4953-bdfd-25ee997fb659",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-22T16:27:03.341Z",
+      "occurredAt": "2026-11-22T19:56:00+03:30",
+      "date": "2026-11-22",
+      "time": "19:56",
+      "jalaliDate": "۱۴۰۵/۰۹/۰۱",
+      "odometerKm": 432357,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "433acbe9ace557727a59003093305087fc9fe647be12c71d0c97b0960bd8ab25"
+      },
+      "previousOdometerKm": 432328,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 29,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 3.04,
+      "fuelEstimateCostRial": 60141,
+      "fuelEstimateMinCostRial": 49741,
+      "fuelEstimateMaxCostRial": 70542,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 2.51,
+      "fuelEstimateMaxLiters": 3.56,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
+    },
+    {
+      "id": "b850b251-ce5a-4986-82ae-be0534556443",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-23T14:33:56.000Z",
+      "occurredAt": "2026-11-23T18:03:00+03:30",
+      "date": "2026-11-23",
+      "time": "18:03",
+      "jalaliDate": "۱۴۰۵/۰۹/۰۲",
+      "odometerKm": 432379,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "3d2d1c692b4ce19c16e2c03dc81bfe4bc8dfe0f90c967a767ce9cb98c9c3b439"
+      },
+      "previousOdometerKm": 432357,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 22,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 2.3,
+      "fuelEstimateCostRial": 45624,
+      "fuelEstimateMinCostRial": 37734,
+      "fuelEstimateMaxCostRial": 53515,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 1.9,
+      "fuelEstimateMaxLiters": 2.7,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
+    },
+    {
+      "id": "d2e3c63f-3dca-461c-8fc5-929554f8a34f",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-24T14:38:24.816Z",
+      "occurredAt": "2026-11-24T18:08:00+03:30",
+      "date": "2026-11-24",
+      "time": "18:08",
+      "jalaliDate": "۱۴۰۵/۰۹/۰۳",
+      "odometerKm": 432399,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "b75d0ea273f73d5c1a05a7e616729c20024ce3e985ab7533bcdbb02418d42833"
+      },
+      "previousOdometerKm": 432379,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 20,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 2.09,
+      "fuelEstimateCostRial": 41477,
+      "fuelEstimateMinCostRial": 34304,
+      "fuelEstimateMaxCostRial": 48650,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 1.73,
+      "fuelEstimateMaxLiters": 2.46,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
+    },
+    {
+      "id": "1b82bad2-c917-43fa-b80c-79110bff1f95",
+      "type": "odometer",
+      "title": "ثبت کیلومترشمار",
+      "description": "ثبت کیلومترشمار",
+      "actor": "من",
+      "note": "",
+      "updatedAt": null,
+      "revision": 1,
+      "editHistory": [],
+      "createdAt": "2026-11-25T14:54:32.165Z",
+      "occurredAt": "2026-11-25T18:24:00+03:30",
+      "date": "2026-11-25",
+      "time": "18:24",
+      "jalaliDate": "۱۴۰۵/۰۹/۰۴",
+      "odometerKm": 432428,
+      "distanceKm": null,
+      "liters": null,
+      "costRial": null,
+      "serviceKey": null,
+      "serviceLabel": null,
+      "serviceCatalogKey": null,
+      "componentKey": null,
+      "componentName": null,
+      "componentCategory": null,
+      "componentMode": null,
+      "componentReplaced": false,
+      "brand": null,
+      "model": null,
+      "partNumber": null,
+      "specs": null,
+      "quantity": 1,
+      "expenseCategory": null,
+      "repairGroupId": null,
+      "symptom": null,
+      "fullTank": false,
+      "paidAt": null,
+      "ticketNumber": null,
+      "ticketSerialNumber": null,
+      "ticketPaymentId": null,
+      "ticketType": null,
+      "fineLocation": null,
+      "vehicleDescription": null,
+      "vehiclePlate": null,
+      "violationDescription": null,
+      "ticketDateJalali": null,
+      "speedLimitKph": null,
+      "recordedSpeedKph": null,
+      "cameraCode": null,
+      "reportedUnpaidFineBalanceRial": null,
+      "reportedBalanceDate": null,
+      "amountCurrency": null,
+      "fineSource": null,
+      "originalSms": null,
+      "officialCurrentAmountRial": null,
+      "paidAmountRial": null,
+      "paymentReference": null,
+      "repairDescription": null,
+      "resolvedAt": null,
+      "metadata": {
+        "source": "telegram-or-api",
+        "messageFingerprint": "22d716cc16c81255a6e279f935d41e9a70f93404222d503a42a393257feae245"
+      },
+      "previousOdometerKm": 432399,
+      "distanceActor": "من",
+      "deltaSincePreviousKm": 29,
+      "odometerValidation": {
+        "accepted": true,
+        "sequence": 0
+      },
+      "fuelEstimateLiters": 3.04,
+      "fuelEstimateCostRial": 60141,
+      "fuelEstimateMinCostRial": 49741,
+      "fuelEstimateMaxCostRial": 70542,
+      "fuelEstimateLPer100": 10.47,
+      "fuelEstimateMinLPer100": 8.66,
+      "fuelEstimateMaxLPer100": 12.28,
+      "fuelEstimateMinLiters": 2.51,
+      "fuelEstimateMaxLiters": 3.56,
+      "fuelEstimatePriceTomanPerLiter": 1980.86,
+      "fuelEstimateConfidence": "medium",
+      "fuelEstimateConfidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
+      "fuelEstimateSampleRefuels": 5,
+      "fuelEstimateSampleIntervals": 1,
+      "fuelEstimateSampleDistanceKm": 1061,
+      "fuelEstimateMethod": "partial-tank-balance"
     }
   ],
   "computed": {
-    "calculationVersion": 9,
-    "eventCount": 64,
-    "currentOdometerKm": 432270,
+    "calculationVersion": 10,
+    "eventCount": 70,
+    "currentOdometerKm": 432428,
     "odometerDiagnostics": {
-      "acceptedReadingCount": 42,
+      "acceptedReadingCount": 48,
       "rejectedReadingCount": 0,
       "acceptedTripCount": 0,
       "rejectedTripCount": 0,
-      "lastValidReadingAt": "2026-11-20T06:07:00.000Z",
+      "lastValidReadingAt": "2026-11-25T14:54:00.000Z",
       "rejectedReasons": {}
     },
-    "currentMonth": "1405-08",
-    "currentMonthEventCount": 58,
-    "currentMonthCostRial": 47262750,
-    "currentMonthFuelLiters": 105.37,
-    "currentMonthFuelCount": 4,
+    "currentMonth": "1405-09",
+    "currentMonthEventCount": 4,
+    "currentMonthCostRial": 0,
+    "currentMonthFuelLiters": 0,
+    "currentMonthFuelCount": 0,
     "dueItems": [],
     "dueCount": 0,
     "eventTypes": {
       "fine": 3,
-      "odometer": 42,
+      "odometer": 48,
       "service": 6,
       "fuel": 5,
       "issue": 5,
       "part": 3
     },
     "serviceIntervalCount": 17,
-    "componentCount": 62,
-    "serviceCatalogCount": 17,
+    "componentCount": 126,
+    "serviceCatalogCount": 35,
     "distanceEntries": [
       {
         "date": null,
@@ -5320,13 +8910,67 @@
         "fromOdometerKm": 432235,
         "toOdometerKm": 432261,
         "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-20",
+        "occurredAt": "2026-11-20T19:48:00+03:30",
+        "distanceKm": 40,
+        "actor": "من",
+        "fromOdometerKm": 432270,
+        "toOdometerKm": 432310,
+        "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-21",
+        "occurredAt": "2026-11-21T18:00:00+03:30",
+        "distanceKm": 18,
+        "actor": "من",
+        "fromOdometerKm": 432310,
+        "toOdometerKm": 432328,
+        "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-22",
+        "occurredAt": "2026-11-22T19:56:00+03:30",
+        "distanceKm": 29,
+        "actor": "من",
+        "fromOdometerKm": 432328,
+        "toOdometerKm": 432357,
+        "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-23",
+        "occurredAt": "2026-11-23T18:03:00+03:30",
+        "distanceKm": 22,
+        "actor": "من",
+        "fromOdometerKm": 432357,
+        "toOdometerKm": 432379,
+        "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-24",
+        "occurredAt": "2026-11-24T18:08:00+03:30",
+        "distanceKm": 20,
+        "actor": "من",
+        "fromOdometerKm": 432379,
+        "toOdometerKm": 432399,
+        "source": "odometer_delta"
+      },
+      {
+        "date": "2026-11-25",
+        "occurredAt": "2026-11-25T18:24:00+03:30",
+        "distanceKm": 29,
+        "actor": "من",
+        "fromOdometerKm": 432399,
+        "toOdometerKm": 432428,
+        "source": "odometer_delta"
       }
     ],
     "vehicleCostModel": {
-      "distanceKm": 4270,
+      "distanceKm": 4428,
       "distanceBasis": "ثبت کیلومترشمار",
       "purchaseOdometerKm": 428000,
-      "currentOdometerKm": 432270,
+      "currentOdometerKm": 432428,
       "totalFuelToman": 281025,
       "totalWearToman": 4500000,
       "totalOtherToman": 0,
@@ -5335,10 +8979,10 @@
       "totalOperatingToman": 4781025,
       "totalRecordedToman": 4781025,
       "fuelCostPerKmToman": 207.38382240129434,
-      "wearCostPerKmToman": 1053.864168618267,
-      "operatingCostPerKmToman": 1261.2479910195614,
-      "recordedOperatingCostPerKmToman": 1119.6779859484777,
-      "allRecordedCostPerKmToman": 1119.6779859484777,
+      "wearCostPerKmToman": 1016.260162601626,
+      "operatingCostPerKmToman": 1223.6439850029203,
+      "recordedOperatingCostPerKmToman": 1079.7256097560976,
+      "allRecordedCostPerKmToman": 1079.7256097560976,
       "latestFuelUnitPriceToman": 3000,
       "fuelModel": {
         "consumptionLPer100": 10.469368520263902,
@@ -5352,11 +8996,11 @@
         "confidenceKey": "medium",
         "confidenceLabel": "اطمینان متوسط · تخمین موازنهٔ باک با بازهٔ خطا",
         "refuelCount": 5,
-        "odometerReadingCount": 42,
+        "odometerReadingCount": 48,
         "odometerReadingsInFuelWindow": 40,
         "inferredRefuelOdometerCount": 1,
-        "lastOdometerKm": 432270,
-        "odometerDistanceKm": 1055,
+        "lastOdometerKm": 432428,
+        "odometerDistanceKm": 1213,
         "sampleIntervals": 1,
         "sampleDistanceKm": 1061
       },

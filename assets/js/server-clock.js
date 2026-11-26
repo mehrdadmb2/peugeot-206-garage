@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage · authoritative Tehran clock · v3.23.0
+/* Peugeot 206 Garage · authoritative Tehran clock · v3.27.0
  * Uses the Cloudflare Worker clock as the time source for all date-sensitive
  * dashboard calculations. A monotonic timer keeps time moving even when the
  * device wall clock is incorrect or is changed while the page is open.

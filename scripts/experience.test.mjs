@@ -8,9 +8,9 @@ const experience = fs.readFileSync(new URL('../assets/js/experience.js', import.
 const css = fs.readFileSync(new URL('../assets/css/experience.css', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../.github/workflows/build-dashboard.yml', import.meta.url), 'utf8');
 
-test('v3.23 authoritative clock and shared engines load before dashboard and interaction layers', () => {
-  assert.match(html, /assets\/css\/experience\.css\?v=3\.23\.0/);
-  assert.match(html, /assets\/js\/experience\.js\?v=3\.23\.0/);
+test('v3.27 vehicle profile, chart interaction and authoritative clock and shared engines load before dashboard and interaction layers', () => {
+  assert.match(html, /assets\/css\/experience\.css\?v=3\.27\.0/);
+  assert.match(html, /assets\/js\/experience\.js\?v=3\.27\.0/);
   assert.ok(html.indexOf('assets/js/persian-calendar.js') < html.indexOf('assets/js/server-clock.js'));
   assert.ok(html.indexOf('assets/js/server-clock.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/server-clock.js') < html.indexOf('assets/js/app.js'));
@@ -64,6 +64,20 @@ test('new interaction layer respects reduced motion and responsive layouts', () 
 
 test('GitHub Actions runs a syntax check for the new browser experience module', () => {
   assert.match(workflow, /node --check assets\/js\/experience\.js/);
+});
+
+test('v3.27 vehicle identity and data quality metadata are exposed in the specifications view', () => {
+  assert.match(html, /id=\"vehicleSpecDynamicGrid\"/);
+  assert.match(html, /id=\"vehicleProfileQuality\"/);
+  assert.match(html, /EURO III/);
+  assert.match(html, /PEUGEOT/);
+});
+
+test('interactive charts expose keyboard-accessible selectable data points', () => {
+  assert.match(app, /class=\"garage-bar-column\"/);
+  assert.match(app, /aria-live=\"polite\"/);
+  assert.match(app, /button\.addEventListener\('focus', update\)/);
+  assert.match(app, /button\.addEventListener\('click', update\)/);
 });
 
 test('technical specifications appears once in each navigation layer', () => {

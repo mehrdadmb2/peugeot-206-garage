@@ -1,11 +1,11 @@
 {
   "name": "peugeot-206-garage-worker",
-  "version": "3.23.0",
+  "version": "3.27.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs ../scripts/*.test.mjs",
-    "check": "node --check src/index.js && node --check ../assets/js/app.js && node --check ../assets/js/data-loader.js && node --check ../assets/js/diagnostics.js && node --check ../assets/js/experience.js && node --check ../assets/js/server-clock.js && node --check ../assets/js/vehicle-documents.js && node --check ../assets/js/persian-calendar.js && node --check ../assets/js/odometer-intelligence.js && node --check ../assets/js/fuel-intelligence.mjs && node --check ../assets/js/vehicle-cost-intelligence.mjs && node --check ../assets/js/fine-intelligence.mjs && node --check ../scripts/build-dashboard.mjs"
+    "check": "node --check src/index.js && node --check ../assets/js/app.js && node --check ../assets/js/data-loader.js && node --check ../assets/js/diagnostics.js && node --check ../assets/js/experience.js && node --check ../assets/js/vehicle-profile.js && node --check ../assets/js/server-clock.js && node --check ../assets/js/vehicle-documents.js && node --check ../assets/js/persian-calendar.js && node --check ../assets/js/odometer-intelligence.js && node --check ../assets/js/fuel-intelligence.mjs && node --check ../assets/js/vehicle-cost-intelligence.mjs && node --check ../assets/js/fine-intelligence.mjs && node --check ../scripts/build-dashboard.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

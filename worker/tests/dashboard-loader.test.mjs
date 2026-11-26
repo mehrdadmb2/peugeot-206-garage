@@ -51,10 +51,10 @@ function payloadFor(url) {
 }
 
 test('HTML loads a cache-busted independent browser data loader before the app', () => {
-  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.23\.0/);
-  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.23\.0/);
-  assert.match(html, /assets\/js\/app\.js\?v=3\.23\.0/);
-  assert.match(html, /assets\/css\/style\.css\?v=3\.23\.0/);
+  assert.match(html, /assets\/js\/diagnostics\.js\?v=3\.27\.0/);
+  assert.match(html, /assets\/js\/data-loader\.js\?v=3\.27\.0/);
+  assert.match(html, /assets\/js\/app\.js\?v=3\.27\.0/);
+  assert.match(html, /assets\/css\/style\.css\?v=3\.27\.0/);
   assert.ok(html.indexOf('assets/js/diagnostics.js') < html.indexOf('assets/js/data-loader.js'));
   assert.ok(html.indexOf('assets/js/data-loader.js') < html.indexOf('assets/js/app.js'));
   assert.match(html, /window\.__garageBootScreen/);
@@ -68,7 +68,7 @@ test('HTML loads a cache-busted independent browser data loader before the app',
 test('private documents UI is separately loaded, token-gated and contains no document numbers in public HTML', () => {
   const docs = readFileSync(resolve(root, 'assets/js/vehicle-documents.js'), 'utf8');
   assert.match(html, /data-view-pane="documents"/);
-  assert.match(html, /assets\/js\/vehicle-documents\.js\?v=3\.23\.0/);
+  assert.match(html, /assets\/js\/vehicle-documents\.js\?v=3\.27\.0/);
   assert.ok(html.indexOf('assets/js/vehicle-documents.js') > html.indexOf('assets/js/app.js'));
   assert.match(html, /docsAccessToken/);
   assert.match(docs, /Authorization.*Bearer/);
@@ -105,7 +105,7 @@ test('browser data loader can recover through jsDelivr when Pages and GitHub Raw
   });
   const result = await loader.fetchJson('data/config.json', 'config mirror test');
   assert.equal(result.source, 'jsDelivr');
-  assert.equal(Object.keys(result.data.partCatalog.items).length, 62);
+  assert.equal(Object.keys(result.data.partCatalog.items).length, Object.keys(JSON.parse(readFileSync(resolve(root, "data/config.json"), "utf8")).partCatalog.items).length);
 });
 
 test('browser data loader validates snapshots and falls back to raw JSON when the snapshot is unavailable', async () => {
@@ -117,8 +117,8 @@ test('browser data loader validates snapshots and falls back to raw JSON when th
   assert.equal(result.mode, 'direct-fallback');
   assert.equal(result.precomputed, null);
   assert.equal(result.events.length, expectedEventCount);
-  assert.equal(Object.keys(result.config.partCatalog.items).length, 62);
-  assert.equal(Object.keys(result.config.partCatalog.services).length, 17);
+  assert.equal(Object.keys(result.config.partCatalog.items).length, Object.keys(JSON.parse(readFileSync(resolve(root, "data/config.json"), "utf8")).partCatalog.items).length);
+  assert.equal(Object.keys(result.config.partCatalog.services).length, Object.keys(JSON.parse(readFileSync(resolve(root, "data/config.json"), "utf8")).partCatalog.services).length);
   assert.ok(result.warnings.some(warning => warning.includes('محاسبهٔ مستقیم')));
 });
 

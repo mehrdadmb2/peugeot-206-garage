@@ -11,6 +11,7 @@ import * as fineEngine from '../../assets/js/fine-intelligence.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const appSource = readFileSync(resolve(root, 'assets/js/app.js'), 'utf8');
 const snapshot = JSON.parse(readFileSync(resolve(root, 'data/dashboard.json'), 'utf8'));
+const currentPersianMonthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', month: 'long' }).format(new Date(snapshot.generatedAt));
 
 class FakeClassList {
   constructor() { this.values = new Set(); }
@@ -107,14 +108,16 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#connectionBadge')?.innerHTML || '', /داده‌ها آماده/);
   assert.ok((elements.get('#serviceGrid')?.innerHTML || '').length > 1000, 'service cards should be populated');
   const expectedCurrentMonthFuel = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 1 }).format(snapshot.computed.currentMonthFuelLiters);
-  assert.equal(elements.get('#statFuel')?.textContent, expectedCurrentMonthFuel, 'Aban fuel metric must sum all current Persian-month refuels across Gregorian log files');
-  assert.ok((elements.get('#statCost')?.textContent || '').includes('۴'), 'Aban expense card must not show zero');
-  assert.match(elements.get('#statCostFoot')?.textContent || '', /آبان/);
-  assert.match(elements.get('#statFuelFoot')?.textContent || '', /آبان/);
-  assert.match(elements.get('#monthFilter')?.innerHTML || '', /آبان/);
+  assert.equal(elements.get('#statFuel')?.textContent, expectedCurrentMonthFuel, 'current Persian-month fuel metric must match the generated snapshot across Gregorian log files');
+  const costCard = elements.get('#statCost')?.textContent || '';
+  if (snapshot.computed.currentMonthCostRial > 0) assert.doesNotMatch(costCard, /^۰(?:\s|$)/, 'non-zero current Persian-month expenses must not render as zero');
+  else assert.match(costCard, /۰|—/, 'zero is valid when the current Persian month has no expense records');
+  assert.match(elements.get('#statCostFoot')?.textContent || '', new RegExp(currentPersianMonthName));
+  assert.match(elements.get('#statFuelFoot')?.textContent || '', new RegExp(currentPersianMonthName));
+  assert.match(elements.get('#monthFilter')?.innerHTML || '', new RegExp(currentPersianMonthName));
   assert.ok((elements.get('#fuelOnlyChart')?.innerHTML || '').includes(expectedCurrentMonthFuel), 'fuel chart must include the same current Persian-month total as the metric');
-  assert.match(elements.get('#expensePageMonthly')?.textContent || '', /۴/);
-  assert.match(elements.get('#expenseMonthlyChart')?.innerHTML || '', /۴/);
+  assert.ok((elements.get('#expensePageMonthly')?.textContent || '').length > 0, 'expense page must render a monthly total even when the selected month is zero');
+  assert.ok((elements.get('#expenseMonthlyChart')?.innerHTML || '').length > 80, 'expense history chart must show data or an informative empty state');
   const purchaseOdometerKm = Number(
     snapshot.config?.ownership?.purchaseOdometerKm ??
     snapshot.config?.ownership?.baselineOdometerKm ??
@@ -190,7 +193,7 @@ test('real project snapshot boots the app and all dashboard sections render with
   assert.match(elements.get('#fuelModelDiagnostics')?.textContent || '', /سوخت‌گیری‌های جزئی|سوخت‌گیری جزئی/, 'fuel diagnostics must identify that the partial-fill model is active');
   assert.ok((elements.get('#expenseEventList')?.innerHTML || '').length > 100, 'expense page should render');
   assert.equal(dataset.events.length, snapshot.events.length);
-  assert.equal(Object.keys(dataset.config.partCatalog.items).length, 62);
+  assert.equal(Object.keys(dataset.config.partCatalog.items).length, Object.keys(snapshot.config.partCatalog.items).length);
 
   const sampleEvent = snapshot.events[0];
   const globalMatches = window.GarageApp.searchEvents(String(sampleEvent.id), 5);

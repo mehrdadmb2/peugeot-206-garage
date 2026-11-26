@@ -19,7 +19,7 @@ test('real vehicle data reconciles the same-day entry timestamp anomaly and retu
   assert.ok(Date.parse(suspicious.createdAt) < Date.parse(latest.createdAt));
   assert.equal(Odometer.eventTimelineEpoch(suspicious), Date.parse(suspicious.createdAt));
   const state = Odometer.getOdometerState(events);
-  assert.equal(state.currentOdometerKm, 432270);
+  assert.equal(state.currentOdometerKm, 432428);
   assert.equal(state.rejectedOdometerCount, 0);
   assert.ok(state.odometerReadingCount >= 40);
 });

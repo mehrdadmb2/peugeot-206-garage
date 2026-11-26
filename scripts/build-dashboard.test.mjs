@@ -18,13 +18,13 @@ function writeJson(path, value) {
 test('real repository data builds a complete dashboard snapshot without dropping events or catalog data', () => {
   const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-10-30T06:00:00.000Z') });
   assert.equal(snapshot.schemaVersion, 1);
-  assert.equal(snapshot.computed.calculationVersion, 9);
+  assert.equal(snapshot.computed.calculationVersion, 10);
   assert.equal(snapshot.computed.currentOdometerKm >= 428000, true);
   assert.ok(snapshot.events.length >= 1);
   assert.equal(snapshot.computed.eventCount, snapshot.events.length);
-  assert.equal(snapshot.computed.componentCount, 62);
+  assert.equal(snapshot.computed.componentCount, Object.keys(snapshot.config.partCatalog.items).length);
   assert.equal(snapshot.computed.serviceIntervalCount, 17);
-  assert.equal(snapshot.computed.serviceCatalogCount, 17);
+  assert.equal(snapshot.computed.serviceCatalogCount, Object.keys(snapshot.config.partCatalog.services).length);
   assert.ok(snapshot.computed.currentOdometerKm > 428000);
   assert.ok(Array.isArray(snapshot.computed.dueItems));
   assert.ok(Array.isArray(snapshot.computed.distanceEntries));
@@ -152,13 +152,13 @@ test('as-of snapshot excludes future events from current month, odometer, due st
 });
 
 test('current vehicle data uses the highest chronologically valid odometer and rebuilds the latest Persian snapshot', () => {
-  const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-11-20T12:00:00+03:30') });
-  assert.equal(snapshot.generatedForLocalDate, '2026-11-20');
-  assert.equal(snapshot.computed.calculationVersion, 9);
-  assert.equal(snapshot.computed.currentOdometerKm, 432270);
-  assert.equal(snapshot.computed.odometerDiagnostics.acceptedReadingCount, 42);
+  const snapshot = buildDashboardData({ rootDir: projectRoot, now: new Date('2026-11-26T12:00:00+03:30') });
+  assert.equal(snapshot.generatedForLocalDate, '2026-11-26');
+  assert.equal(snapshot.computed.calculationVersion, 10);
+  assert.equal(snapshot.computed.currentOdometerKm, 432428);
+  assert.equal(snapshot.computed.odometerDiagnostics.acceptedReadingCount, 48);
   assert.equal(snapshot.computed.vehicleCostModel.fuelModel.refuelCount, 5);
-  assert.equal(snapshot.computed.vehicleCostModel.fuelModel.odometerReadingCount, 42);
+  assert.equal(snapshot.computed.vehicleCostModel.fuelModel.odometerReadingCount, 48);
   assert.ok(snapshot.computed.vehicleCostModel.fuelModel.inferredRefuelOdometerCount >= 1);
   assert.equal(snapshot.computed.vehicleCostModel.fuelModel.hasEstimate, true);
   assert.ok(snapshot.computed.vehicleCostModel.fuelModel.consumptionMinLPer100 > 0);

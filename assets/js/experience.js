@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage v3.23.0 — command palette, personalization and workspace utilities */
+/* Peugeot 206 Garage v3.27.0 — command palette, personalization and workspace utilities */
 (() => {
   'use strict';
 
