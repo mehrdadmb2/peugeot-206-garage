@@ -1,0 +1,83 @@
+:root{--upgrade-cyan:#5fe5ed;--upgrade-blue:#5d8cff;--upgrade-violet:#a58aff;--upgrade-lime:#8be7b1;--upgrade-amber:#ffbd70;--upgrade-glass:rgba(18,29,48,.74);--upgrade-line:rgba(157,190,227,.18)}
+.brand-mark-peugeot{position:relative;display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,#10233c,#1b3b5b 58%,#0c1728);border:1px solid rgba(150,205,240,.3);box-shadow:inset 0 1px rgba(255,255,255,.18),0 8px 30px rgba(23,111,170,.28)}
+.peugeot-official-mark{width:78%;height:78%;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4));border-radius:4px}
+.brand-mark-fallback{position:absolute;width:100%;height:100%;padding:14%;opacity:0;pointer-events:none}
+.peugeot-official-mark:not([src]),.peugeot-official-mark[src=""]{display:none}
+.brand-mark-peugeot:has(.peugeot-official-mark[src=""] ) .brand-mark-fallback{opacity:1}
+.brand-social-icon{width:17px;height:17px;vertical-align:-3px;margin-inline-end:5px;fill:currentColor;opacity:.9}
+.spec-badge-row,.hero-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.data-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid var(--upgrade-line);background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.025));font-size:.73rem;font-weight:800;letter-spacing:.015em;box-shadow:inset 0 1px rgba(255,255,255,.08),0 5px 18px rgba(0,0,0,.12);backdrop-filter:blur(14px)}
+.data-badge:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--upgrade-cyan);box-shadow:0 0 10px currentColor}
+.badge-reference{color:#ffd28a;border-color:rgba(255,189,112,.28);background:rgba(255,189,112,.08)}.badge-reference:before{background:var(--upgrade-amber)}
+.badge-confirm{color:#ff9fa8;border-color:rgba(255,135,150,.27);background:rgba(255,135,150,.08)}.badge-confirm:before{background:#ff8c9c}
+.badge-live{color:#9df2c5;border-color:rgba(123,231,177,.26);background:rgba(91,220,159,.08)}.badge-live:before{background:var(--upgrade-lime)}
+.vehicle-spec-dynamic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:18px 0}
+.spec-fact{position:relative;min-width:0;padding:15px;border-radius:17px;border:1px solid var(--upgrade-line);background:linear-gradient(145deg,rgba(29,47,72,.72),rgba(12,22,38,.55));box-shadow:inset 0 1px rgba(255,255,255,.055),0 14px 34px rgba(0,0,0,.14);overflow:hidden;transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.spec-fact:after{content:"";position:absolute;inset:auto -30% -55% 25%;height:90px;background:radial-gradient(ellipse,rgba(86,200,225,.12),transparent 70%);pointer-events:none}
+.spec-fact:hover{transform:translateY(-3px);border-color:rgba(95,229,237,.36);box-shadow:0 16px 35px rgba(0,0,0,.22),0 0 24px rgba(95,229,237,.07)}
+.spec-fact small{display:block;color:var(--text-muted,#9db0c4);font-size:.73rem;margin-bottom:8px}.spec-fact b{display:block;color:var(--text-primary,#eff7ff);font-size:1rem;line-height:1.6;overflow-wrap:anywhere}.spec-fact span{display:block;margin-top:5px;color:var(--text-secondary,#b3c4d7);font-size:.76rem;line-height:1.7}.spec-fact em{display:inline-block;margin-top:8px;color:var(--upgrade-amber);font-size:.67rem;font-style:normal}
+.spec-system-grid,.analytics-deep-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.spec-system-card{padding:17px;border:1px solid var(--upgrade-line);border-radius:18px;background:var(--upgrade-glass);box-shadow:0 15px 35px rgba(0,0,0,.13);backdrop-filter:blur(15px)}.spec-system-card h3{margin:0 0 9px;font-size:.95rem}.spec-system-card p{margin:0;color:var(--text-secondary,#b6c6d8);line-height:1.8;font-size:.79rem}
+.spec-note-panel,.analytics-interaction-note{padding:13px 16px;border:1px solid rgba(255,189,112,.22);border-radius:14px;background:linear-gradient(135deg,rgba(255,189,112,.09),rgba(93,140,255,.045));color:var(--text-secondary,#bac8d7);font-size:.8rem;line-height:1.8}
+.garage-chart-readout{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);font-size:.77rem;color:var(--text-secondary,#b4c5d8)}
+.garage-chart-readout strong{color:var(--text-primary,#f3f8ff);font-variant-numeric:tabular-nums}
+.garage-bar-column{appearance:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;min-width:0;text-align:center;border-radius:9px;padding:5px 3px;transition:background .18s ease,transform .18s ease,filter .18s ease;outline-offset:3px}
+.garage-bar-column:hover,.garage-bar-column:focus-visible,.garage-bar-column.is-selected{background:rgba(95,229,237,.09);transform:translateY(-2px);filter:brightness(1.14)}
+.garage-bar-column.is-selected{box-shadow:inset 0 0 0 1px rgba(95,229,237,.3)}
+.garage-bar-column .bar-fill,.garage-bar-column .bar-value{pointer-events:none}
+.chart-card,.panel{isolation:isolate}
+.chart-card{border-color:rgba(139,178,220,.16);box-shadow:inset 0 1px rgba(255,255,255,.04),0 18px 45px rgba(0,0,0,.18)}
+.chart-tag{border:1px solid rgba(255,255,255,.1);box-shadow:inset 0 1px rgba(255,255,255,.09)}
+.spec-engine-callout{border:1px solid rgba(95,229,237,.23)!important;background:linear-gradient(135deg,rgba(42,91,120,.35),rgba(16,28,49,.66))!important;box-shadow:inset 0 1px rgba(255,255,255,.08),0 10px 30px rgba(0,0,0,.16)}
+.spec-source-link{display:inline-flex;gap:7px;align-items:center;color:var(--upgrade-cyan);font-weight:700;text-decoration:none}.spec-source-link:hover{text-decoration:underline}
+@media(max-width:900px){.vehicle-spec-dynamic-grid,.spec-system-grid,.analytics-deep-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.vehicle-spec-dynamic-grid,.spec-system-grid,.analytics-deep-grid{grid-template-columns:1fr}.spec-fact{padding:13px}.data-badge{font-size:.68rem;padding:6px 9px}}
+@media(prefers-reduced-motion:reduce){.spec-fact,.garage-bar-column{transition:none}.spec-fact:hover,.garage-bar-column:hover{transform:none}}
+
+.brand-mark-peugeot.logo-failed .brand-mark-fallback{opacity:1}.brand-mark-peugeot.logo-failed .peugeot-official-mark{display:none}
+
+/* 3.28.0 · Vehicle identity, dense engineering profile and chart interactions */
+.brand-mark-peugeot{width:48px;height:48px;min-width:48px;border-radius:15px;isolation:isolate;background:radial-gradient(circle at 25% 18%,rgba(255,255,255,.2),transparent 37%),linear-gradient(145deg,#0d1a2d,#182f4c 55%,#07101d)}
+.brand-mark-peugeot:before{content:"";position:absolute;inset:3px;border:1px solid rgba(216,239,255,.16);border-radius:12px;pointer-events:none}
+.peugeot-official-mark{position:relative;z-index:1;width:82%;height:82%;object-fit:contain;filter:drop-shadow(0 3px 9px rgba(0,0,0,.48));border-radius:3px}
+.brand-mark-fallback{position:absolute;z-index:2;inset:0;width:100%;height:100%;padding:9px;opacity:0;fill:none;stroke:#e9f6ff;stroke-width:2.7;stroke-linecap:round;stroke-linejoin:round}
+.brand-mark-fallback text{fill:#e9f6ff;stroke:none;font:900 12px/1 Arial,sans-serif;letter-spacing:.7px}
+.brand-mark-peugeot.logo-failed .brand-mark-fallback{opacity:1}
+.brand-mark-peugeot.logo-failed .peugeot-official-mark{display:none}
+.vehicle-profile-quality{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.vehicle-profile-quality .data-badge{padding:6px 10px;font-size:.68rem}
+.specs-hero{position:relative;overflow:hidden}
+.specs-hero:after{content:"";position:absolute;inset:-30% auto auto -10%;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(66,190,229,.11),transparent 68%);pointer-events:none}
+.specs-hero-art img{filter:drop-shadow(0 20px 28px rgba(0,0,0,.34));transform:translateZ(0);transition:transform .45s ease,filter .45s ease}
+.specs-hero:hover .specs-hero-art img{transform:translateY(-4px) scale(1.025);filter:drop-shadow(0 24px 35px rgba(0,0,0,.42))}
+.spec-engine-callout{position:relative;overflow:hidden}
+.spec-engine-callout:after{content:"";position:absolute;inset:0 auto 0 -40%;width:30%;transform:skewX(-22deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);animation:garage-spec-sheen 8s ease-in-out infinite;pointer-events:none}
+@keyframes garage-spec-sheen{0%,72%,100%{left:-40%}85%{left:120%}}
+.data-badge{position:relative;overflow:hidden}
+.data-badge:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 25%,rgba(255,255,255,.08) 48%,transparent 70%);transform:translateX(130%);transition:transform .55s ease;pointer-events:none}
+.data-badge:hover:after{transform:translateX(-130%)}
+.spec-fact{min-height:112px;display:flex;flex-direction:column;justify-content:flex-start}
+.spec-fact b{font-variant-numeric:tabular-nums}
+.spec-fact em{margin-top:auto;padding-top:7px}
+.spec-system-card{position:relative;overflow:hidden;transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.spec-system-card:after{content:"";position:absolute;inset:auto -18% -65% 18%;height:110px;background:radial-gradient(ellipse,rgba(82,170,255,.13),transparent 70%);pointer-events:none}
+.spec-system-card:hover{transform:translateY(-3px);border-color:rgba(95,229,237,.3);box-shadow:0 19px 42px rgba(0,0,0,.23),0 0 24px rgba(95,229,237,.045)}
+.spec-card,.spec-capacity-card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.spec-card:hover,.spec-capacity-card:hover{transform:translateY(-3px);border-color:rgba(95,229,237,.28);box-shadow:0 16px 34px rgba(0,0,0,.2)}
+.analytics-interaction-note{position:relative;overflow:hidden}
+.analytics-interaction-note:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(180deg,var(--upgrade-cyan),var(--upgrade-violet),var(--upgrade-lime));box-shadow:0 0 17px rgba(95,229,237,.45)}
+.garage-bars{scrollbar-width:thin;scrollbar-color:rgba(95,229,237,.3) transparent}
+.garage-bar-column{position:relative;min-height:136px}
+.garage-bar-column:focus-visible{outline:2px solid var(--upgrade-cyan);outline-offset:2px}
+.garage-bar-column .garage-bar-track{border-radius:9px 9px 3px 3px;overflow:hidden;background:rgba(255,255,255,.045)}
+.garage-bar-column .garage-bar-fill{border-radius:9px 9px 3px 3px;box-shadow:0 0 19px rgba(95,229,237,.18);transition:height .4s cubic-bezier(.2,.8,.2,1)}
+.garage-chart-readout{min-height:42px;flex-wrap:wrap}
+.chart-card{position:relative;overflow:hidden}
+.chart-card:before{content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,transparent,rgba(132,220,255,.34),transparent);opacity:.55;pointer-events:none}
+.chart-tag{backdrop-filter:blur(12px)}
+.spec-note-panel{position:relative;overflow:hidden}
+.spec-note-panel b{color:#ffd28a}
+.spec-source-list a{transition:color .18s ease,transform .18s ease}
+.spec-source-list a:hover{color:#fff;transform:translateX(-3px)}
+@media(max-width:900px){.spec-fact{min-height:104px}}
+@media(max-width:560px){.brand-mark-peugeot{width:42px;height:42px;min-width:42px;border-radius:13px}.spec-fact{min-height:auto}.garage-bar-column{min-height:118px}}
+@media(prefers-reduced-motion:reduce){.specs-hero-art img,.spec-engine-callout:after,.data-badge:after,.spec-system-card,.spec-card,.spec-capacity-card,.spec-source-list a{transition:none;animation:none}.specs-hero:hover .specs-hero-art img,.spec-system-card:hover,.spec-card:hover,.spec-capacity-card:hover{transform:none}}

@@ -84,3 +84,14 @@
 ### یکپارچگی و راهنما
 - موتور سوخت و موتور جریمه میان داشبورد و Worker مشترک‌اند.
 - مستندات کاربری، سوخت، جریمه، معماری و انتشار به‌روز شده‌اند.
+
+## 3.28.0 — Visual containment & service identities
+
+- Fixed oversized PEUGEOT logo in the home hero tag by constraining its image box and line-height; header logo is now a fixed-size thumbnail.
+- Rebuilt the vehicle profile hero layout with a compact, contained vehicle image and a wider information column.
+- Added a lightweight CSS animated light field behind the interface; glass cards receive subtle ambient color/reflection while all motion honors reduced-motion preferences.
+- Added nine locally hosted AI-generated service illustrations for engine, brakes, cooling, electrical, transmission, suspension, climate, fuel and wheels.
+- Added category-aware service card icon, badge, palette, artwork and typography for scheduled maintenance, installed maintenance and service catalog cards.
+- Updated README and BotFather command descriptions; added visual regression tests.
+- Added explicit disclosure that generated service artwork is decorative and not an OEM reference.
+- Added visual regression coverage; final suite: 132/132 passing, syntax checks and Worker smoke test passing.

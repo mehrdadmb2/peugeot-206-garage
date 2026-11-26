@@ -1,4 +1,4 @@
-/* Peugeot 206 Garage · private vehicle documents UI · v3.27.0 */
+/* Peugeot 206 Garage · private vehicle documents UI · v3.28.0 */
 (() => {
   'use strict';
   const WORKER = 'https://peugeot-206-garage-bot.game-developer-mb.workers.dev';

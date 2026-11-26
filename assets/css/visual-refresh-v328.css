@@ -1,0 +1,265 @@
+/* Peugeot 206 Garage OS 3.28.0 — visual containment, animated light field and service identity system. */
+:root {
+  --scene-cyan: rgba(30, 205, 235, .16);
+  --scene-violet: rgba(126, 91, 255, .13);
+  --scene-amber: rgba(255, 167, 72, .10);
+  --scene-green: rgba(63, 224, 166, .09);
+}
+
+/* Background atmosphere: all motion is transform/opacity only, with no pointer interception. */
+.garage-lightfield {
+  position: fixed;
+  inset: -12vh -10vw;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  opacity: .86;
+}
+.garage-lightfield::before,
+.garage-lightfield::after {
+  content: "";
+  position: absolute;
+  width: min(58vw, 760px);
+  height: min(58vw, 760px);
+  border-radius: 50%;
+  filter: blur(58px);
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
+}
+.garage-lightfield::before {
+  top: -20%;
+  left: -12%;
+  background: radial-gradient(circle, var(--scene-cyan) 0%, rgba(19, 124, 180, .08) 34%, transparent 70%);
+  animation: garage-light-drift-a 34s ease-in-out infinite alternate;
+}
+.garage-lightfield::after {
+  right: -14%;
+  bottom: -26%;
+  background: radial-gradient(circle, var(--scene-violet) 0%, rgba(175, 81, 155, .07) 34%, transparent 70%);
+  animation: garage-light-drift-b 42s ease-in-out infinite alternate;
+}
+@keyframes garage-light-drift-a {
+  0% { transform: translate3d(0, 0, 0) scale(.88); opacity: .56; }
+  50% { transform: translate3d(18vw, 12vh, 0) scale(1.08); opacity: .92; }
+  100% { transform: translate3d(7vw, 25vh, 0) scale(.96); opacity: .68; }
+}
+@keyframes garage-light-drift-b {
+  0% { transform: translate3d(0, 0, 0) scale(1.02); opacity: .6; }
+  55% { transform: translate3d(-17vw, -10vh, 0) scale(.86); opacity: .9; }
+  100% { transform: translate3d(-5vw, -22vh, 0) scale(1.12); opacity: .65; }
+}
+
+/* Brand marks are thumbnails by contract; a remote logo may never control layout size. */
+.brand-mark-peugeot {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  flex: 0 0 46px !important;
+  overflow: hidden;
+  contain: layout paint size;
+}
+.brand-mark-peugeot > .peugeot-official-mark {
+  display: block;
+  width: 29px !important;
+  height: 29px !important;
+  min-width: 0 !important;
+  max-width: 29px !important;
+  min-height: 0 !important;
+  max-height: 29px !important;
+  object-fit: contain;
+  flex: 0 0 29px;
+}
+.hero-brand-pill {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: max-content;
+  min-height: 29px;
+  padding: 5px 9px !important;
+  overflow: hidden;
+  line-height: 1;
+  white-space: nowrap;
+}
+.hero-brand-monogram {
+  display: inline-grid !important;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  max-width: 17px;
+  border: 1px solid rgba(217,239,255,.42);
+  border-radius: 5px 5px 7px 7px;
+  background: linear-gradient(145deg, rgba(255,255,255,.17), rgba(255,255,255,.035));
+  color: #eef8ff;
+  font: 900 10px/1 Arial, sans-serif;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 3px 9px rgba(0,0,0,.2);
+}
+.hero-brand-pill > span:last-child { font: 800 9px/1 Arial, sans-serif; letter-spacing: .9px; }
+
+/* The technical profile art is intentionally compact; copy owns the available space. */
+.specs-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  gap: clamp(16px, 2.8vw, 32px);
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+}
+.specs-hero-art {
+  width: 100%;
+  min-width: 0;
+  max-width: 270px;
+  min-height: 164px !important;
+  max-height: 184px;
+  justify-self: center;
+  padding: 8px;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 60%, rgba(77, 190, 232, .16), transparent 64%),
+    linear-gradient(145deg, rgba(255,255,255,.055), rgba(0,0,0,.16));
+}
+.specs-hero-art img {
+  display: block;
+  width: 100% !important;
+  max-width: 238px !important;
+  height: 148px !important;
+  max-height: 148px !important;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 13px 17px rgba(0,0,0,.38));
+}
+.specs-hero-copy { min-width: 0; width: 100%; }
+.specs-hero-copy > * { max-width: 100%; }
+.specs-hero-copy h2 { overflow-wrap: anywhere; }
+.vehicle-spec-dynamic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .specs-hero { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .specs-hero-art { grid-row: 1; min-height: 132px !important; max-height: 148px; }
+  .specs-hero-art img { height: 124px !important; max-height: 124px !important; }
+  .specs-hero-copy { grid-row: 2; }
+}
+@media (max-width: 420px) {
+  .brand-mark-peugeot { width: 40px !important; height: 40px !important; min-width: 40px !important; max-width: 40px !important; flex-basis: 40px !important; }
+  .brand-mark-peugeot > .peugeot-official-mark { width: 25px !important; height: 25px !important; max-width: 25px !important; max-height: 25px !important; }
+  .vehicle-spec-dynamic-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Category-specific service cards. Artwork is a subtle identity layer, never a text background. */
+.service-card[data-category],
+.service-catalog-card[data-category] {
+  --category-accent: var(--component-color, #55c8e8);
+  --category-tint: rgba(70, 180, 220, .11);
+  border-color: color-mix(in srgb, var(--category-accent) 30%, rgba(145,180,210,.13));
+  background-color: rgba(7, 16, 29, .88);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 16px 42px rgba(0,0,0,.2), 0 0 24px color-mix(in srgb, var(--category-accent) 8%, transparent);
+  isolation: isolate;
+}
+.service-card[data-category] { padding: 18px 19px 16px; }
+.service-card[data-category]::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48%;
+  opacity: .26;
+  pointer-events: none;
+  background-image: linear-gradient(90deg, rgba(7,16,29,1) 0%, rgba(7,16,29,.73) 38%, rgba(7,16,29,.18) 100%), var(--category-art, none);
+  background-size: cover;
+  background-position: center right;
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.65) 32%, #000 100%);
+}
+.service-card[data-category] > * { position: relative; z-index: 1; }
+.service-card[data-category]::after { z-index: 0; opacity: .8; }
+.service-card[data-category]:hover {
+  border-color: color-mix(in srgb, var(--category-accent) 54%, rgba(255,255,255,.18));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 21px 48px rgba(0,0,0,.28), 0 0 34px color-mix(in srgb, var(--category-accent) 15%, transparent);
+}
+.service-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.service-category-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--category-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--category-accent) 13%, rgba(4,11,20,.8));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--category-accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,.08);
+  font-size: 16px;
+  font-style: normal;
+}
+.service-name > span { min-width: 0; line-height: 1.7; }
+.service-category-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--category-accent) 28%, transparent);
+  border-radius: 99px;
+  color: color-mix(in srgb, var(--category-accent) 82%, #fff);
+  background: color-mix(in srgb, var(--category-accent) 8%, rgba(0,0,0,.18));
+  font-size: 8px;
+  font-weight: 700;
+}
+.service-card[data-font="engine"] .service-name > span { font-family: Tahoma, "Vazirmatn", sans-serif; font-weight: 900; }
+.service-card[data-font="technical"] .service-name > span { font-family: "Arial", Tahoma, sans-serif; font-weight: 800; letter-spacing: -.15px; }
+.service-card[data-font="mono"] .service-name > span { font-family: "Consolas", "Courier New", monospace; font-size: 12px; }
+.service-card[data-font="clean"] .service-name > span { font-family: "Vazirmatn", Tahoma, sans-serif; font-weight: 750; }
+.service-card[data-category] .service-description { max-width: 92%; color: #a5b8ca; }
+.service-card[data-category] .service-metric strong { color: color-mix(in srgb, var(--category-accent) 42%, #f1f7fc); }
+.service-card[data-category] .service-progress span { background: linear-gradient(90deg, color-mix(in srgb, var(--category-accent) 55%, #4b86ff), var(--category-accent)); box-shadow: 0 0 14px color-mix(in srgb, var(--category-accent) 28%, transparent); }
+.service-card[data-category] .service-status { position: relative; z-index: 2; }
+
+.service-catalog-card[data-category] {
+  background-image: linear-gradient(90deg, rgba(6,14,25,.98) 0%, rgba(6,14,25,.9) 56%, rgba(6,14,25,.64) 100%), var(--category-art, none);
+  background-size: cover;
+  background-position: center;
+  min-height: 174px;
+  transition: transform .24s ease, border-color .24s ease, box-shadow .24s ease, background-position .5s ease;
+}
+.service-catalog-card[data-category]:hover { background-position: 58% center; }
+.service-catalog-card .service-catalog-icon {
+  border-color: color-mix(in srgb, var(--category-accent) 50%, transparent);
+  background: color-mix(in srgb, var(--category-accent) 14%, rgba(4,10,18,.5));
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--category-accent) 12%, transparent);
+}
+.service-catalog-card .service-catalog-body h3 { font-family: "Vazirmatn", Tahoma, sans-serif; font-weight: 850; }
+.service-catalog-card .service-last-entry { color: color-mix(in srgb, var(--category-accent) 55%, #9caec0); }
+
+/* nine locally hosted AI-generated service illustrations */
+.service-card[data-category="engine"], .service-catalog-card[data-category="engine"] { --category-accent: #43bff3; --category-art: url("../img/services/engine.webp"); }
+.service-card[data-category="brakes"], .service-catalog-card[data-category="brakes"] { --category-accent: #ff647b; --category-art: url("../img/services/brakes.webp"); }
+.service-card[data-category="cooling"], .service-catalog-card[data-category="cooling"] { --category-accent: #38d5df; --category-art: url("../img/services/cooling.webp"); }
+.service-card[data-category="electrical"], .service-catalog-card[data-category="electrical"] { --category-accent: #f5c65d; --category-art: url("../img/services/electrical.webp"); }
+.service-card[data-category="transmission"], .service-catalog-card[data-category="transmission"] { --category-accent: #ab8cff; --category-art: url("../img/services/transmission.webp"); }
+.service-card[data-category="suspension"], .service-catalog-card[data-category="suspension"] { --category-accent: #f5a76c; --category-art: url("../img/services/suspension.webp"); }
+.service-card[data-category="climate"], .service-catalog-card[data-category="climate"] { --category-accent: #83dafa; --category-art: url("../img/services/climate.webp"); }
+.service-card[data-category="fuel"], .service-catalog-card[data-category="fuel"] { --category-accent: #ffc35e; --category-art: url("../img/services/fuel.webp"); }
+.service-card[data-category="wheels"], .service-catalog-card[data-category="wheels"] { --category-accent: #a8df68; --category-art: url("../img/services/wheels.webp"); }
+.service-card[data-category="steering"], .service-catalog-card[data-category="steering"] { --category-accent: #ee83c2; --category-art: url("../img/services/suspension.webp"); }
+.service-card[data-category="fluids"], .service-catalog-card[data-category="fluids"] { --category-accent: #51c8f0; --category-art: url("../img/services/engine.webp"); }
+.service-card[data-category="exhaust"], .service-catalog-card[data-category="exhaust"] { --category-accent: #a6b4c4; --category-art: url("../img/services/cooling.webp"); }
+.service-card[data-category="service"], .service-catalog-card[data-category="service"] { --category-accent: #76d5a7; --category-art: url("../img/services/electrical.webp"); }
+
+/* Ambient reflections make the glass surface feel connected to the moving scene. */
+.panel, .service-card, .service-catalog-card, .component-directory, .mini-panel, .chart-card {
+  backdrop-filter: blur(18px) saturate(1.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+}
+.panel, .mini-panel, .chart-card { box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 20px 52px rgba(0,0,0,.22), 0 0 32px rgba(54,177,232,.025); }
+@media (max-width: 760px) {
+  .service-card[data-category] { padding: 15px; }
+  .service-card[data-category]::before { width: 58%; opacity: .2; }
+  .service-card[data-category] .service-description { max-width: 100%; }
+  .service-catalog-card[data-category] { min-height: 160px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .garage-lightfield::before, .garage-lightfield::after { animation: none !important; }
+  .service-card[data-category], .service-catalog-card[data-category] { transition: none !important; }
+}
+:root[data-motion="off"] .garage-lightfield::before,
+:root[data-motion="off"] .garage-lightfield::after { animation: none !important; }

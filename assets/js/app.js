@@ -403,7 +403,7 @@
         if (latest.actor) footParts.push(`انجام‌دهنده: ${escapeHtml(latest.actor)}`);
         if (latest.note) footParts.push(`توضیح: ${escapeHtml(latest.note)}`);
       }
-      return { key, stage, rank: maintenanceStageRank(stage), kmSort: remainingKm ?? Infinity, card: serviceCard({ key, service, latest: reference, status, statusClass, headline, subline, progress, foot: footParts.join(' · ') }) };
+      return { key, stage, rank: maintenanceStageRank(stage), kmSort: remainingKm ?? Infinity, card: serviceCard({ key, service, latest: reference, status, statusClass, headline, subline, progress, visualCategory: serviceVisualCategory(key, service), foot: footParts.join(' · ') }) };
     }).sort((a, b) => a.rank - b.rank || a.kmSort - b.kmSort || a.key.localeCompare(b.key));
     renderServiceReconciliation(config, events, currentOdo);
     const dynamicCards = renderInstalledMaintenanceCards(config, events, currentOdo);
@@ -489,7 +489,7 @@
       }
       const intervalLabel = hasInterval ? [intervalKm ? `${formatNumber(intervalKm)} km` : '', intervalDays ? `${formatNumber(intervalDays)} روز` : ''].filter(Boolean).join(' · ') : 'عمرمحور / بازدیدمحور؛ بازه ثابت تعریف نشده';
       const progress = hasInterval && intervalKm > 0 && kmSince != null ? clamp(kmSince / intervalKm * 100,0,100) : hasInterval && intervalDays > 0 && daysSince != null ? clamp(daysSince / intervalDays * 100,0,100) : 0;
-      cards.push({ rank: maintenanceStageRank(stage), sortKm: remainingKm ?? Infinity, key, html: `<article class="service-card installed-lifetime-card maintenance-${stage}" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(item.note || 'وضعیت از روی سوابق و بازدید واقعی پایش شود.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(hasInterval ? 'وضعیت بازه' : (baseline ? 'از مبنای خرید، نه لزوماً از نصب' : 'از آخرین نصب/تعمیر ثبت‌شده'))}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${escapeHtml(hasInterval ? 'بازهٔ قابل تنظیم' : 'تعریف نشده')}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${footParts.join(' · ')} · ${baseline ? 'تأیید نصب/تعویض با ثبت عملیات لازم است' : `شناسه <code>${escapeHtml(String(reference.id).slice(0,8))}</code>`}</div></article>` });
+      cards.push({ rank: maintenanceStageRank(stage), sortKm: remainingKm ?? Infinity, key, html: `<article class="service-card installed-lifetime-card maintenance-${stage} category-${escapeAttr(serviceVisualCategory(key, item))}" data-category="${escapeAttr(serviceVisualCategory(key, item))}" style="--service-glow:rgba(64,229,244,.07);--component-color:${escapeAttr(category.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name">${escapeHtml(item.icon || category.icon || '🔩')} ${escapeHtml(item.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${escapeHtml(category.label || item.category || 'قطعه')} · ${escapeHtml(item.note || 'وضعیت از روی سوابق و بازدید واقعی پایش شود.')}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(hasInterval ? 'وضعیت بازه' : (baseline ? 'از مبنای خرید، نه لزوماً از نصب' : 'از آخرین نصب/تعمیر ثبت‌شده'))}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>${escapeHtml(hasInterval ? 'بازهٔ قابل تنظیم' : 'تعریف نشده')}</small></div></div><div class="service-progress"><span style="width:${progress}%"></span></div><div class="service-foot">${footParts.join(' · ')} · ${baseline ? 'تأیید نصب/تعویض با ثبت عملیات لازم است' : `شناسه <code>${escapeHtml(String(reference.id).slice(0,8))}</code>`}</div></article>` });
     }
     // Include completed catalog services that do not already have their own primary interval card.
     const serviceCatalog = catalog.services || {};
@@ -502,7 +502,7 @@
       const category = categories[service.category] || { label: service.category || 'سرویس', icon: '🧰', theme: '#4ade80' };
       const kmSince = currentOdo != null && latest.odometerKm != null ? Math.max(0, Number(currentOdo)-Number(latest.odometerKm)) : null;
       const daysSince = latest.date ? Math.max(0, daysBetween(latest.date, localDateString(garageNow()))) : null;
-      cards.push({ rank: 4, sortKm: Infinity, key: `service-${key}`, html: `<article class="service-card installed-lifetime-card maintenance-monitor" style="--service-glow:rgba(93,230,176,.07);--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.icon || category.icon || '🧰')} ${escapeHtml(service.label || key)}</span><span class="service-status ok">🧾 آخرین سرویس ثبت‌شده</span></div><p class="service-description">${escapeHtml(service.note || 'شرح و نتیجهٔ عملیات را در دفتر وقایع بررسی کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${kmSince == null ? '—' : `${formatNumber(kmSince)} km`}</strong><small>از آخرین سرویس</small></div><div class="service-metric"><strong>${daysSince == null ? '—' : `${formatNumber(daysSince)} روز`}</strong><small>از تاریخ ثبت</small></div></div><div class="service-foot">تاریخ: ${escapeHtml(formatEventDate(latest))} · ${latest.odometerKm != null ? `کیلومتر: ${formatNumber(latest.odometerKm)} km · ` : ''}شناسه <code>${escapeHtml(String(latest.id).slice(0,8))}</code></div></article>` });
+      cards.push({ rank: 4, sortKm: Infinity, key: `service-${key}`, html: `<article class="service-card installed-lifetime-card maintenance-monitor category-${escapeAttr(serviceVisualCategory(key, service))}" data-category="${escapeAttr(serviceVisualCategory(key, service))}" style="--service-glow:rgba(93,230,176,.07);--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.icon || category.icon || '🧰')} ${escapeHtml(service.label || key)}</span><span class="service-status ok">🧾 آخرین سرویس ثبت‌شده</span></div><p class="service-description">${escapeHtml(service.note || 'شرح و نتیجهٔ عملیات را در دفتر وقایع بررسی کن.')}</p><div class="service-metrics"><div class="service-metric"><strong>${kmSince == null ? '—' : `${formatNumber(kmSince)} km`}</strong><small>از آخرین سرویس</small></div><div class="service-metric"><strong>${daysSince == null ? '—' : `${formatNumber(daysSince)} روز`}</strong><small>از تاریخ ثبت</small></div></div><div class="service-foot">تاریخ: ${escapeHtml(formatEventDate(latest))} · ${latest.odometerKm != null ? `کیلومتر: ${formatNumber(latest.odometerKm)} km · ` : ''}شناسه <code>${escapeHtml(String(latest.id).slice(0,8))}</code></div></article>` });
     }
     cards.sort((a,b)=>a.rank-b.rank || a.sortKm-b.sortKm || a.key.localeCompare(b.key));
     return cards.map(item=>item.html);
@@ -570,16 +570,49 @@
     root.innerHTML = services.map(([key,item]) => {
       const category = catalog.categories?.[item.category] || {label:item.category || 'سرویس',icon:'🧰',theme:'#4ade80'};
       const latest = state.events.filter(event => event.type === 'service' && event.serviceCatalogKey === key).sort((a,b)=>eventEpoch(b)-eventEpoch(a))[0];
-      return `<article class="service-catalog-card" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین ثبت: ${escapeHtml(formatEventDate(latest))}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز سابقه ثبت نشده'}</small></div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
+      return `<article class="service-catalog-card category-${escapeAttr(serviceVisualCategory(key, item))}" data-category="${escapeAttr(serviceVisualCategory(key, item))}" style="--component-color:${escapeAttr(category.theme || '#4ade80')}"><div class="service-catalog-icon">${escapeHtml(item.icon || category.icon || '🧰')}</div><div class="service-catalog-body"><div class="service-catalog-tags"><span>${escapeHtml(category.label || 'سرویس')}</span><small>${escapeHtml(key)}</small></div><h3>${escapeHtml(item.label || key)}</h3><p>${escapeHtml(item.note || 'شرح کار و نتیجه را در توضیحات ذخیره کن.')}</p><small class="service-last-entry">${latest ? `آخرین ثبت: ${escapeHtml(formatEventDate(latest))}${latest.odometerKm != null ? ` · ${formatNumber(latest.odometerKm)} km` : ''}` : 'هنوز سابقه ثبت نشده'}</small></div><button type="button" class="component-command-copy" data-component-command="/service ${key} km=${calculateOdometer(state.events) || ''}">نمونه ثبت</button></article>`;
     }).join('');
   }
 
+  const SERVICE_VISUAL_META = {
+    engine: { icon: '⚙️', label: 'موتور', font: 'engine' }, brakes: { icon: '🛑', label: 'ترمز و ایمنی', font: 'technical' },
+    cooling: { icon: '🌡️', label: 'خنک‌کاری', font: 'technical' }, electrical: { icon: '⚡', label: 'برق خودرو', font: 'mono' },
+    transmission: { icon: '⚙️', label: 'انتقال قدرت', font: 'technical' }, suspension: { icon: '🛞', label: 'جلوبندی', font: 'technical' },
+    climate: { icon: '❄️', label: 'تهویه', font: 'clean' }, fuel: { icon: '⛽', label: 'سوخت‌رسانی', font: 'mono' },
+    wheels: { icon: '🛞', label: 'چرخ و تایر', font: 'technical' }, steering: { icon: '🧭', label: 'فرمان', font: 'clean' },
+    fluids: { icon: '🧪', label: 'مایعات', font: 'clean' }, exhaust: { icon: '💨', label: 'اگزوز', font: 'mono' },
+    service: { icon: '🧰', label: 'سرویس عمومی', font: 'clean' }
+  };
+  const SERVICE_KEY_CATEGORY = {
+    engine_oil: 'engine', oil_filter: 'engine', air_filter: 'engine', spark_plugs: 'engine', timing_belt: 'engine', alternator_belt: 'engine',
+    crankshaft_position_sensor: 'engine', crankshaft_sensor_wiring: 'electrical', fuel_filter: 'fuel', cabin_filter: 'climate', coolant: 'cooling',
+    brake_fluid: 'brakes', brake_inspection: 'brakes', tyre_inspection: 'wheels', battery_check: 'electrical', gearbox_oil: 'transmission',
+    power_steering_fluid: 'steering'
+  };
+  function serviceVisualCategory(key, item = {}) {
+    const id = String(key || '').toLowerCase();
+    if (SERVICE_KEY_CATEGORY[id]) return SERVICE_KEY_CATEGORY[id];
+    const raw = String(item.category || '').toLowerCase();
+    if (raw && raw !== 'service' && raw !== 'critical' && raw !== 'safety') return raw;
+    if (/brake|ترمز/.test(id)) return 'brakes';
+    if (/tyre|tire|wheel|لاستیک|چرخ/.test(id)) return 'wheels';
+    if (/cool|radiator|water|آب|رادیات/.test(id)) return 'cooling';
+    if (/fuel|inject|بنزین|سوخت/.test(id)) return 'fuel';
+    if (/gear|clutch|transmission|گیربکس|کلاچ/.test(id)) return 'transmission';
+    if (/steer|hydraulic|فرمان|هیدرولیک/.test(id)) return 'steering';
+    if (/battery|alternator|wire|sensor_wiring|برق|باتری|سیم/.test(id)) return 'electrical';
+    if (/ac_|air_condition|cabin|کولر|تهویه/.test(id)) return 'climate';
+    if (/oil|plug|belt|engine|motor|موتور|روغن|شمع|تسمه/.test(id)) return 'engine';
+    return 'service';
+  }
   function serviceCard(data) {
     const { key, service, latest, status, statusClass, headline, subline, progress, foot } = data;
+    const categoryKey = data.visualCategory || serviceVisualCategory(key, service);
+    const visual = SERVICE_VISUAL_META[categoryKey] || SERVICE_VISUAL_META.service;
     const intervalLabel = [Number(service.intervalKm) ? `${formatNumber(service.intervalKm)} km` : '', Number(service.intervalDays) ? `${formatNumber(service.intervalDays)} روز` : ''].filter(Boolean).join(' · ') || 'بدون بازه پیش‌فرض';
     const note = service.note ? escapeHtml(service.note) : 'بازه قابل تنظیم';
     const glow = serviceColors[service.category] || serviceColors.service;
-    return `<article class="service-card" style="--service-glow:${glow}"><div class="service-card-head"><span class="service-name">${escapeHtml(service.label || key)}</span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${note}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>بازه تنظیم‌شده</small></div></div><div class="service-progress"><span style="width:${clamp(Number(progress) || 0, 0, 100)}%"></span></div><div class="service-foot">${latest ? foot : 'سابقه پیدا نشد؛ مبنای خرید برای محاسبه کیلومتر استفاده می‌شود.'}</div></article>`;
+    return `<article class="service-card category-${escapeAttr(categoryKey)}" data-category="${escapeAttr(categoryKey)}" data-font="${escapeAttr(visual.font)}" style="--service-glow:${glow};--component-color:${escapeAttr(service.theme || '#36c7e8')}"><div class="service-card-head"><span class="service-name"><i class="service-category-icon" aria-hidden="true">${visual.icon}</i><span>${escapeHtml(service.label || key)}</span><small class="service-category-label">${visual.label}</small></span><span class="service-status ${statusClass}">${escapeHtml(status)}</span></div><p class="service-description">${note}</p><div class="service-metrics"><div class="service-metric"><strong>${escapeHtml(headline)}</strong><small>${escapeHtml(subline)}</small></div><div class="service-metric"><strong>${escapeHtml(intervalLabel)}</strong><small>بازه تنظیم‌شده</small></div></div><div class="service-progress"><span style="width:${clamp(Number(progress) || 0, 0, 100)}%"></span></div><div class="service-foot">${latest ? foot : 'سابقه پیدا نشد؛ مبنای خرید برای محاسبه کیلومتر استفاده می‌شود.'}</div></article>`;
   }
 
   function calculateDue(events, config, currentOdo) {

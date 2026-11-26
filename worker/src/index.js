@@ -51,7 +51,7 @@ export default {
       return json({
         ok: true,
         service: "206 Garage API",
-        version: "3.27.0",
+        version: "3.28.0",
         timezone: TZ,
         mode: "request-driven",
         dashboard: SITE_URL,
@@ -93,7 +93,7 @@ export default {
       return corsResponse(json({
         ok: true,
         service: "206 Garage API",
-        version: "3.27.0",
+        version: "3.28.0",
         time: nowTehran().iso,
         serverTime: new Date().toISOString(),
         epochMs: Date.now(),
