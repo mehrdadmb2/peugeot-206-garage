@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-27T21:09:00+03:30",
+  "updatedAt": "2026-11-27T21:11:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -2429,10 +2429,21 @@
       "title": "ثبت کیلومترشمار",
       "description": "ثبت کیلومترشمار",
       "actor": "من",
-      "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "note": "SkyBit",
+      "updatedAt": "2026-11-27T21:11:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-11-27T21:11:00+03:30",
+          "by": "telegram",
+          "before": {
+            "note": ""
+          },
+          "after": {
+            "note": "SkyBit"
+          }
+        }
+      ],
       "createdAt": "2026-11-27T17:39:34.528Z",
       "occurredAt": "2026-11-27T21:09:00+03:30",
       "date": "2026-11-27",
