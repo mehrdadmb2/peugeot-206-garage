@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "month": "2026-11",
-  "updatedAt": "2026-11-28T19:42:00+03:30",
+  "updatedAt": "2026-11-28T19:44:00+03:30",
   "events": [
     {
       "id": "946a973f-fef9-4d93-9ee2-41bd4988cff2",
@@ -2630,10 +2630,21 @@
       "title": "ثبت کیلومترشمار",
       "description": "ثبت کیلومترشمار",
       "actor": "من",
-      "note": "",
-      "updatedAt": null,
-      "revision": 1,
-      "editHistory": [],
+      "note": "نامه جناب زارع حفاارشد",
+      "updatedAt": "2026-11-28T19:44:00+03:30",
+      "revision": 2,
+      "editHistory": [
+        {
+          "at": "2026-11-28T19:44:00+03:30",
+          "by": "telegram",
+          "before": {
+            "note": ""
+          },
+          "after": {
+            "note": "نامه جناب زارع حفاارشد"
+          }
+        }
+      ],
       "createdAt": "2026-11-28T16:12:48.231Z",
       "occurredAt": "2026-11-28T19:42:00+03:30",
       "date": "2026-11-28",
